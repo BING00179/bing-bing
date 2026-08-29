@@ -334,7 +334,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 (function(){
   "use strict";
   var KEY = "daily-english-words/v1";
-  var state = { words: [], settings: { voiceURI:"", rate:1, autoSpeak:true, theme:"", netDict:false, tab:"mine", goal:10, cheeredOn:"" } };
+  var state = { words: [], settings: { voiceURI:"", rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"" } };
 
   /* ---------- 저장소 ---------- */
   function load(){
@@ -353,6 +353,13 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 
   /* ---------- 유틸 ---------- */
   var $ = function(id){ return document.getElementById(id); };
+  var lastStamp = 0;
+  function stamp(){
+    var t = Date.now();
+    if(t <= lastStamp) t = lastStamp + 1;
+    lastStamp = t;
+    return new Date(t).toISOString();
+  }
   function dayKey(d){
     d = d || new Date();
     var m = ("0"+(d.getMonth()+1)).slice(-2), day = ("0"+d.getDate()).slice(-2);
@@ -635,12 +642,13 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     }else{
       state.words.push({
         id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-        word: w, meaning: m, createdAt: new Date().toISOString(), plays: 0
+        word: w, meaning: m, createdAt: stamp(), plays: 0
       });
       save(); render();
       if(state.settings.autoSpeak) speak(w);
       toast(prefix + "저장했어요: " + w);
     }
+    if(curTabId !== "recent" && curTabId !== "mine"){ curTabId = "recent"; render(); }
     $("word").value = ""; $("meaning").value = "";
     meaningTouched = false; netEntry = null;
     closeSuggest(); showDictNote(null);
@@ -704,37 +712,53 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     return false;
   }
   var shownCount = 60;                        // 단계 목록은 조금씩 늘려 보여 준다
-  function curTab(){ return state.settings.tab || "mine"; }
-  function tabName(t){ return t === "mine" ? "내 단어장" : LV[t] + " 필수"; }
+  var curTabId = "recent";                    // 앱을 열면 항상 최근 단어부터 (탭은 기억하지 않는다)
+  function curTab(){ return curTabId; }
+  function tabName(t){
+    if(t === "recent") return "최근 " + goal() + "단어";
+    if(t === "mine") return "내 단어장";
+    return LV[t] + " 필수";
+  }
+
+  /* 가장 최근에 담은 단어 — 오늘 외울 활성 목록 */
+  function recentWords(){
+    return state.words.slice().sort(function(a,b){ return a.createdAt < b.createdAt ? 1 : -1; }).slice(0, goal());
+  }
 
   /* 지금 활성화된 탭이 학습 대상 — 모두 듣기와 듣기 퀴즈가 이 목록을 씁니다 */
   function activeWords(){
-    if(curTab() === "mine") return state.words.map(function(w){ return { w:w.word, m:w.meaning }; });
-    return levelWords(curTab()).map(function(e){ return { w:e.w, m:e.m }; });
+    var t = curTab();
+    if(t === "recent") return recentWords().map(function(w){ return { w:w.word, m:w.meaning }; });
+    if(t === "mine") return state.words.map(function(w){ return { w:w.word, m:w.meaning }; });
+    return levelWords(t).map(function(e){ return { w:e.w, m:e.m }; });
   }
   function addFromDict(word){
     var e = lookup(word);
     if(!e || isSaved(e.w)) return false;
     state.words.push({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-      word: e.w, meaning: e.m, createdAt: new Date().toISOString(), plays: 0
+      word: e.w, meaning: e.m, createdAt: stamp(), plays: 0
     });
     return true;
   }
 
   function renderTabs(){
     var t = curTab();
-    var html = '<button type="button" data-tab="mine"' + (t === "mine" ? ' class="on"' : "") +
-               ">내 단어장<b>" + state.words.length + "</b></button>";
+    var html = '<button type="button" data-tab="recent"' + (t === "recent" ? ' class="on"' : "") +
+               ">최근 " + goal() + "단어<b>" + recentWords().length + "</b></button>";
+    html += '<button type="button" data-tab="mine"' + (t === "mine" ? ' class="on"' : "") +
+            ">내 단어장<b>" + state.words.length + "</b></button>";
     html += LV_ORDER.map(function(k){
       return '<button type="button" data-tab="' + k + '"' + (t === k ? ' class="on"' : "") + ">" +
              LV[k] + "<b>" + levelWords(k).length + "</b></button>";
     }).join("");
     $("tabs").innerHTML = html;
     var left = Math.max(0, goal() - todayCount());
-    $("addTen").hidden = (t === "mine");
+    $("addTen").hidden = (t === "mine" || t === "recent");
     $("addTen").textContent = left > 0 ? "＋ 오늘 남은 " + left + "개 담기" : "＋ " + goal() + "개 더 담기";
-    $("speakAll").textContent = t === "mine" ? "📚 오늘 단어 듣기" : "🔊 이 화면 듣기";
+    $("speakAll").textContent = t === "recent" ? "📚 최근 " + goal() + "단어 듣기"
+                             : t === "mine"   ? "📚 오늘 단어 듣기"
+                                              : "🔊 이 화면 듣기";
     $("quizTarget").textContent = tabName(t);
   }
 
@@ -747,6 +771,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     renderGoal();
     renderTabs();
 
+    if(curTab() === "recent"){ renderRecent(q); return; }
     if(curTab() !== "mine"){ renderLevel(q); return; }
 
     var list = state.words.filter(function(w){
@@ -787,6 +812,45 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       html += "</ul></div>";
     });
     el.innerHTML = html;
+  }
+
+  function renderRecent(q){
+    var all = recentWords();
+    var list = !q ? all : all.filter(function(w){
+      return w.word.toLowerCase().indexOf(q) > -1 || (w.meaning||"").toLowerCase().indexOf(q) > -1;
+    });
+    var today = dayKey();
+    var todayN = all.filter(function(w){ return dayKey(new Date(w.createdAt)) === today; }).length;
+
+    if(!state.words.length){
+      $("list").innerHTML = '<div class="card"><div class="empty">' +
+        "오늘의 단어를 담아 보세요. 하루 " + goal() + "단어면 충분합니다.<br>" +
+        "위에 직접 적거나, <em>초등 · 중등 · 고등 · 토익토플</em> 탭에서 골라 담으세요.</div></div>";
+      return;
+    }
+    var html = '<div class="daygroup"><div class="dayhead">' +
+      '<span class="today">최근 ' + goal() + "단어</span>" +
+      "<span>" + (q ? list.length + "개 찾음" : "가장 최근에 담은 " + all.length + "개") + "</span>" +
+      "<span>오늘 담은 것 " + todayN + "개</span>" +
+      '<span class="rule"></span></div><ul class="words">';
+    if(!list.length){
+      $("list").innerHTML = '<div class="card"><div class="empty">찾는 단어가 없어요.</div></div>';
+      return;
+    }
+    list.forEach(function(w){
+      var isToday = dayKey(new Date(w.createdAt)) === today;
+      html += '<li class="w" data-id="' + w.id + '">' +
+        '<div class="wmain">' +
+          '<div class="wword" data-act="play" title="눌러서 발음 듣기">' + esc(w.word) + "</div>" +
+          '<div class="wmean">' + (w.meaning ? esc(w.meaning) + " · " : "") +
+            (isToday ? "오늘" : dayLabel(dayKey(new Date(w.createdAt)))) + "</div>" +
+        "</div>" +
+        '<div class="wacts">' +
+          '<button class="icon" data-act="play" title="발음 듣기">🔊</button>' +
+          '<button class="icon ghost" data-act="del" title="삭제">🗑</button>' +
+        "</div></li>";
+    });
+    $("list").innerHTML = html + "</ul></div>";
   }
 
   function renderLevel(q){
@@ -834,7 +898,10 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   /* ---------- 모두 듣기 (활성 탭 기준) ---------- */
   function speakAll(){
     var items;
-    if(curTab() === "mine"){
+    if(curTab() === "recent"){
+      items = recentWords().map(function(w){ return w.word; });
+      if(!items.length){ toast("담은 단어가 없어요."); return; }
+    }else if(curTab() === "mine"){
       var today = dayKey();
       items = state.words.filter(function(w){ return dayKey(new Date(w.createdAt)) === today; })
                          .map(function(w){ return w.word; });
@@ -945,13 +1012,12 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     $("tabs").onclick = function(e){
       var b = e.target.closest("button[data-tab]");
       if(!b) return;
-      state.settings.tab = b.getAttribute("data-tab");
-      save();
+      curTabId = b.getAttribute("data-tab");
       shownCount = 60;
       $("search").value = "";
       render();
       window.scrollTo({ top: $("tabs").offsetTop - 12, behavior: "smooth" });
-      toast(tabName(state.settings.tab) + " 단어로 바꿨어요.");
+      toast(tabName(curTabId) + " 단어로 바꿨어요.");
     };
     $("addTen").onclick = function(){
       var pool = levelWords(curTab()).filter(function(e){ return !isSaved(e.w); });
@@ -1058,7 +1124,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   $("netDict").checked = !!state.settings.netDict;
   if(!state.settings.goal) state.settings.goal = 10;
   $("goal").value = String(goal());
-  if(!state.settings.tab || (state.settings.tab !== "mine" && LV_ORDER.indexOf(state.settings.tab) < 0)) state.settings.tab = "mine";
+  curTabId = "recent";   // 앱을 열면 언제나 최근 단어부터
   $("dictCount").textContent = DICT.length.toLocaleString();
   render();
 
