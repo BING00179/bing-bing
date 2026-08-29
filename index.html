@@ -125,22 +125,17 @@ button.icon{padding:7px 9px; font-size:14px; line-height:1}
   font-size:10px; font-weight:600; color:var(--ink-2); border:1px solid var(--line);
   border-radius:4px; padding:0 4px; line-height:1.5; flex:0 0 auto;
 }
-.seg{display:flex; gap:0; border:1px solid var(--line); border-radius:9px; overflow:hidden}
-.seg button{flex:1 1 0; border:0; border-radius:0; background:var(--sunk); font-size:13.5px; padding:10px 6px}
-.seg button + button{border-left:1px solid var(--line)}
-.seg button.on{background:var(--accent); color:var(--accent-ink)}
-.seg button.on:hover{color:var(--accent-ink)}
-.levelbar{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin:14px 0 12px}
-.levelbar button{padding:9px 4px; font-size:13px; line-height:1.35}
-.levelbar button.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
-.levelbar button.on:hover{color:var(--accent-ink)}
-.levelbar b{display:block; font-family:var(--mono); font-size:11px; font-weight:500; opacity:.75}
-.levellist{max-height:min(420px,55vh); overflow-y:auto; -webkit-overflow-scrolling:touch; margin:0; padding:0; list-style:none;
-  display:flex; flex-direction:column; gap:5px}
-.levellist li{display:flex; align-items:center; gap:9px; padding:8px 10px; border:1px solid var(--line); border-radius:9px}
-.levellist li.have{background:var(--sunk); border-style:dashed}
-.levellist .lw{font-family:var(--serif); font-size:17px; font-weight:500; flex:0 0 auto; cursor:pointer}
-.levellist .lm{font-size:12.5px; color:var(--ink-2); flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.tabs{
+  display:flex; gap:6px; margin-bottom:12px; padding-bottom:4px;
+  overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:0 0 auto; padding:9px 14px; font-size:13.5px; border-radius:999px}
+.tabs button.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
+.tabs button.on:hover{color:var(--accent-ink)}
+.tabs b{font-family:var(--mono); font-size:11px; font-weight:500; opacity:.72; margin-left:6px}
+li.w.have{background:var(--sunk); border-style:dashed}
+li.w.have .wword{opacity:.7}
 .dictnote .src{margin-left:auto; font-size:10.5px; color:var(--ink-2); letter-spacing:.06em; text-transform:uppercase}
 .warn{color:var(--bad)}
 
@@ -253,16 +248,9 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       <summary>⚙️ 발음 설정 · 내보내기</summary>
       <div class="setgrid">
         <div>
-          <label class="f">발음 (기본: 미국식)</label>
-          <div class="seg" id="accentSeg">
-            <button type="button" data-a="en-US">🇺🇸 미국식</button>
-            <button type="button" data-a="en-GB">🇬🇧 영국식</button>
-          </div>
-          <p class="hint" id="accentHint" style="margin-top:6px"></p>
-        </div>
-        <div>
-          <label class="f" for="voice">목소리 (원어민)</label>
+          <label class="f" for="voice">목소리 (미국식 원어민)</label>
           <select id="voice"></select>
+          <p class="hint" id="voiceNote" style="margin-top:6px"></p>
         </div>
         <div>
           <label class="f" for="rate">말하기 속도 <span id="rateVal">1.0</span>x</label>
@@ -294,6 +282,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   <div class="card">
     <details id="quizBox">
       <summary>🎧 듣기 퀴즈 — 들리는 단어 받아쓰기</summary>
+      <p class="hint" style="margin-top:8px">지금 고른 <b id="quizTarget">내 단어장</b> 단어로 출제합니다. 위에서 탭을 바꾸면 퀴즈 범위도 바뀝니다.</p>
       <div id="quizBody" style="margin-top:12px">
         <div class="toolbar" style="margin:0">
           <button id="quizStart" class="primary">퀴즈 시작</button>
@@ -313,23 +302,12 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     </details>
   </div>
 
-  <div class="card">
-    <details id="levelBox">
-      <summary>📗 단계별 필수 단어 — 초등 · 중등 · 고등 · 토익토플</summary>
-      <div class="levelbar" id="levelBar"></div>
-      <input id="levelSearch" type="search" enterkeyhint="search" placeholder="🔍 이 단계에서 찾기 (한글도 됩니다)" autocomplete="off" autocorrect="off">
-      <ul id="levelList" class="levellist" style="margin-top:10px"></ul>
-      <div class="toolbar" style="margin:12px 0 0">
-        <button id="levelAdd">안 담은 단어 10개 담기</button>
-        <button id="levelPlay">이 화면 단어 듣기</button>
-        <span class="hint" id="levelInfo" style="margin:0 0 0 auto"></span>
-      </div>
-    </details>
-  </div>
+  <nav class="tabs" id="tabs" aria-label="단어 목록 선택"></nav>
 
   <div class="toolbar">
-    <input id="search" type="search" enterkeyhint="search" placeholder="🔍 단어 · 뜻 검색" autocomplete="off" autocorrect="off">
-    <button id="speakAll">📚 오늘 단어 모두 듣기</button>
+    <input id="search" type="search" enterkeyhint="search" placeholder="🔍 단어 · 뜻 검색 (한글도 됩니다)" autocomplete="off" autocorrect="off">
+    <button id="addTen" hidden>＋ 10개 담기</button>
+    <button id="speakAll">📚 모두 듣기</button>
   </div>
 
   <div id="list"></div>
@@ -341,7 +319,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 (function(){
   "use strict";
   var KEY = "daily-english-words/v1";
-  var state = { words: [], settings: { accent:"en-US", voices:{}, rate:1, autoSpeak:true, theme:"", netDict:false } };
+  var state = { words: [], settings: { voiceURI:"", rate:1, autoSpeak:true, theme:"", netDict:false, tab:"mine" } };
 
   /* ---------- 저장소 ---------- */
   function load(){
@@ -464,61 +442,42 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 
   /* ---------- 음성 ---------- */
   var synth = window.speechSynthesis;
-  var allVoices = [], byAccent = { "en-US":[], "en-GB":[] };
+  var voices = [], usOnly = true;
   var supported = !!synth && typeof SpeechSynthesisUtterance !== "undefined";
 
-  function accentOf(v){
-    var lang = (v.lang || "").replace("_", "-");
-    if(/^en-US/i.test(lang)) return "en-US";
-    if(/^en-(GB|UK)/i.test(lang)) return "en-GB";
-    return null;
-  }
   function pickVoices(){
-    allVoices = (synth.getVoices() || []).filter(function(v){ return /^en[-_]/i.test(v.lang || ""); });
-    byAccent = { "en-US":[], "en-GB":[] };
-    allVoices.forEach(function(v){
-      var a = accentOf(v);
-      if(a) byAccent[a].push(v);
-    });
-    /* 해당 억양의 목소리가 없는 기기에서는 다른 영어 목소리로 대신한다 */
-    ["en-US","en-GB"].forEach(function(a){
-      if(!byAccent[a].length) byAccent[a] = allVoices.slice();
-    });
+    var english = (synth.getVoices() || []).filter(function(v){ return /^en[-_]/i.test(v.lang || ""); });
+    var us = english.filter(function(v){ return /^en[-_]US/i.test(v.lang || ""); });
+    usOnly = us.length > 0;
+    voices = usOnly ? us : english;          /* 미국식 목소리가 없는 기기에서만 다른 영어 목소리를 쓴다 */
     renderVoiceSelect();
-    renderAccent();
   }
   function renderVoiceSelect(){
-    var sel = $("voice"), list = byAccent[state.settings.accent] || [];
+    var sel = $("voice");
     sel.innerHTML = "";
-    if(!list.length){
+    if(!voices.length){
       sel.innerHTML = '<option value="">사용 가능한 목소리 없음</option>';
+      $("voiceNote").textContent = "";
       return;
     }
-    list.forEach(function(v){
+    voices.forEach(function(v){
       var o = document.createElement("option");
       o.value = v.voiceURI;
       o.textContent = v.name + " (" + v.lang + ")";
       sel.appendChild(o);
     });
-    var want = state.settings.voices[state.settings.accent];
-    if(!want || !list.some(function(v){ return v.voiceURI === want; })){
-      want = list[0].voiceURI;
-      state.settings.voices[state.settings.accent] = want;
+    var want = state.settings.voiceURI;
+    if(!want || !voices.some(function(v){ return v.voiceURI === want; })){
+      want = voices[0].voiceURI;
+      state.settings.voiceURI = want;
       save();
     }
     sel.value = want;
+    $("voiceNote").textContent = usOnly ? "" : "이 기기에는 미국식 목소리가 없어 다른 영어 목소리로 재생합니다.";
   }
-  function renderAccent(){
-    var btns = $("accentSeg").querySelectorAll("button");
-    for(var i=0;i<btns.length;i++) btns[i].classList.toggle("on", btns[i].getAttribute("data-a") === state.settings.accent);
-    var miss = supported && byAccent["en-GB"].length && !byAccent["en-GB"].some(function(v){ return accentOf(v) === "en-GB"; });
-    $("accentHint").textContent = miss ? "이 기기에는 영국식 목소리가 없어 다른 영어 목소리로 대신 재생됩니다." : "";
-  }
-  function voiceFor(accent){
-    var list = byAccent[accent] || [];
-    var want = state.settings.voices[accent];
-    for(var i=0;i<list.length;i++) if(list[i].voiceURI === want) return list[i];
-    return list[0] || null;
+  function currentVoice(){
+    for(var i=0;i<voices.length;i++) if(voices[i].voiceURI === state.settings.voiceURI) return voices[i];
+    return voices[0] || null;
   }
   /* iOS·일부 태블릿은 첫 사용자 조작 안에서 한 번 소리를 내야 이후 재생이 허용된다 */
   var unlocked = false;
@@ -530,13 +489,13 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       u.volume = 0; synth.speak(u);
     }catch(e){ /* 실패해도 이후 재생 시도에 영향 없음 */ }
   }
-  function speak(text, onend, accent){
+  function speak(text, onend){
     if(!supported || !text){ if(onend) onend(); return; }
     unlocked = true;
     synth.cancel();
     var u = new SpeechSynthesisUtterance(text);
-    var v = voiceFor(accent || state.settings.accent);
-    if(v){ u.voice = v; u.lang = v.lang; } else { u.lang = accent || state.settings.accent; }
+    var v = currentVoice();
+    if(v){ u.voice = v; u.lang = v.lang; } else { u.lang = "en-US"; }
     u.rate = state.settings.rate;
     if(onend){ u.onend = onend; u.onerror = onend; }
     synth.speak(u);
@@ -593,8 +552,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       (e.pos ? '<i class="pos">' + posLabel(e.pos) + "</i>" : "") +
       (e.lv ? '<i class="lv">' + lvLabel(e.lv) + "</i>" : "") +
       "<span>" + esc(e.m) + "</span>" +
-      '<button type="button" class="mini" data-a="en-US">🇺🇸 미국식</button>' +
-      '<button type="button" class="mini" data-a="en-GB">🇬🇧 영국식</button>' +
+      '<button type="button" class="mini" data-act="say">🔊 발음 듣기</button>' +
       '<span class="src">' + (e.net ? "인터넷 사전" : "내장 사전") + "</span>";
     n.hidden = false;
   }
@@ -703,7 +661,48 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     return n;
   }
 
-  /* ---------- 화면 ---------- */
+  /* ---------- 목록 (내 단어장 / 단계별) ---------- */
+  function levelWords(tag){
+    return DICT.filter(function(e){ return e.lv.indexOf(tag) > -1; });
+  }
+  function isSaved(word){
+    var w = String(word).toLowerCase();
+    for(var i=0;i<state.words.length;i++) if(state.words[i].word.toLowerCase() === w) return true;
+    return false;
+  }
+  var shownCount = 60;                        // 단계 목록은 조금씩 늘려 보여 준다
+  function curTab(){ return state.settings.tab || "mine"; }
+  function tabName(t){ return t === "mine" ? "내 단어장" : LV[t] + " 필수"; }
+
+  /* 지금 활성화된 탭이 학습 대상 — 모두 듣기와 듣기 퀴즈가 이 목록을 씁니다 */
+  function activeWords(){
+    if(curTab() === "mine") return state.words.map(function(w){ return { w:w.word, m:w.meaning }; });
+    return levelWords(curTab()).map(function(e){ return { w:e.w, m:e.m }; });
+  }
+  function addFromDict(word){
+    var e = lookup(word);
+    if(!e || isSaved(e.w)) return false;
+    state.words.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+      word: e.w, meaning: e.m, createdAt: new Date().toISOString(), plays: 0
+    });
+    return true;
+  }
+
+  function renderTabs(){
+    var t = curTab();
+    var html = '<button type="button" data-tab="mine"' + (t === "mine" ? ' class="on"' : "") +
+               ">내 단어장<b>" + state.words.length + "</b></button>";
+    html += LV_ORDER.map(function(k){
+      return '<button type="button" data-tab="' + k + '"' + (t === k ? ' class="on"' : "") + ">" +
+             LV[k] + "<b>" + levelWords(k).length + "</b></button>";
+    }).join("");
+    $("tabs").innerHTML = html;
+    $("addTen").hidden = (t === "mine");
+    $("speakAll").textContent = t === "mine" ? "📚 오늘 단어 듣기" : "🔊 이 화면 듣기";
+    $("quizTarget").textContent = tabName(t);
+  }
+
   function render(){
     var q = $("search").value.trim().toLowerCase();
     var today = dayKey();
@@ -711,11 +710,13 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     $("stTotal").textContent = state.words.length;
     $("stToday").textContent = state.words.filter(function(w){ return dayKey(new Date(w.createdAt)) === today; }).length;
     $("stStreak").textContent = streak();
+    renderTabs();
+
+    if(curTab() !== "mine"){ renderLevel(q); return; }
 
     var list = state.words.filter(function(w){
       return !q || w.word.toLowerCase().indexOf(q) > -1 || (w.meaning||"").toLowerCase().indexOf(q) > -1;
     });
-
     var groups = {}, order = [];
     list.slice().sort(function(a,b){ return a.createdAt < b.createdAt ? 1 : -1; })
       .forEach(function(w){
@@ -724,12 +725,11 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
         groups[k].push(w);
       });
 
-    if(DICT.length) renderLevelList();   // 담은 단어 표시(✓)를 함께 갱신
-
     var el = $("list");
     if(!list.length){
       el.innerHTML = '<div class="card"><div class="empty">' +
-        (state.words.length ? "검색 결과가 없어요." : "아직 저장된 단어가 없어요.<br>위에 오늘의 단어를 적어보세요 — <em>serendipity</em> 같은 것도 좋고요.") +
+        (state.words.length ? "검색 결과가 없어요."
+          : "아직 담은 단어가 없어요.<br>위에 오늘의 단어를 적거나, <em>초등 · 중등 · 고등 · 토익토플</em> 탭에서 골라 담아 보세요.") +
         "</div></div>";
       return;
     }
@@ -741,7 +741,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       groups[k].forEach(function(w){
         html += '<li class="w" data-id="' + w.id + '">' +
           '<div class="wmain">' +
-            '<div class="wword" data-act="play" title="클릭해서 발음 듣기">' + esc(w.word) + "</div>" +
+            '<div class="wword" data-act="play" title="눌러서 발음 듣기">' + esc(w.word) + "</div>" +
             (w.meaning ? '<div class="wmean">' + esc(w.meaning) + "</div>" : "") +
           "</div>" +
           '<div class="wacts">' +
@@ -754,84 +754,90 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     el.innerHTML = html;
   }
 
-  /* ---------- 오늘 단어 모두 듣기 ---------- */
-  function speakToday(){
-    var today = dayKey();
-    var todays = state.words.filter(function(w){ return dayKey(new Date(w.createdAt)) === today; });
-    if(!todays.length){ toast("오늘 저장한 단어가 없어요."); return; }
-    var i = 0;
-    (function next(){
-      if(i >= todays.length){ toast("오늘 단어 " + todays.length + "개를 모두 들었어요 👏"); return; }
-      var w = todays[i++];
-      var li = document.querySelector('li.w[data-id="'+w.id+'"]');
-      if(li) li.classList.add("speaking");
-      speak(w.word, function(){ if(li) li.classList.remove("speaking"); setTimeout(next, 350); });
-    })();
-  }
-
-  /* ---------- 단계별 필수 단어 ---------- */
-  var curLevel = "e";
-
-  function levelWords(tag){
-    return DICT.filter(function(e){ return e.lv.indexOf(tag) > -1; });
-  }
-  function isSaved(word){
-    var w = word.toLowerCase();
-    for(var i=0;i<state.words.length;i++) if(state.words[i].word.toLowerCase() === w) return true;
-    return false;
-  }
-  function renderLevelBar(){
-    $("levelBar").innerHTML = LV_ORDER.map(function(t){
-      return '<button type="button" data-lv="' + t + '"' + (t === curLevel ? ' class="on"' : "") + ">" +
-             LV[t] + "<b>" + levelWords(t).length + "개</b></button>";
-    }).join("");
-  }
-  function renderLevelList(){
-    var q = $("levelSearch").value.trim().toLowerCase();
-    var all = levelWords(curLevel);
+  function renderLevel(q){
+    var tag = curTab();
+    var all = levelWords(tag);
+    var have = 0;
+    all.forEach(function(e){ if(isSaved(e.w)) have++; });
     var list = !q ? all : all.filter(function(e){
       return e.w.toLowerCase().indexOf(q) > -1 || e.m.indexOf(q) > -1;
     });
-    var shown = list.slice(0, 300);
-    $("levelList").innerHTML = shown.map(function(e){
-      var have = isSaved(e.w);
-      return '<li class="' + (have ? "have" : "") + '" data-w="' + esc(e.w) + '">' +
-        '<span class="lw" data-act="say">' + esc(e.w) + "</span>" +
-        (e.pos ? '<i class="pos">' + posLabel(e.pos) + "</i>" : "") +
-        '<span class="lm">' + esc(e.m) + "</span>" +
-        '<button type="button" class="icon" data-act="say" title="발음 듣기">🔊</button>' +
-        '<button type="button" class="icon" data-act="add"' + (have ? " disabled" : "") +
-        ' title="단어장에 담기">' + (have ? "✓" : "＋") + "</button></li>";
-    }).join("");
-    var left = list.length - shown.length;
-    $("levelInfo").textContent = q
-      ? LV[curLevel] + " " + all.length + "개 중 " + list.length + "개 찾음"
-      : LV[curLevel] + " " + all.length + "개" + (left > 0 ? " · " + shown.length + "개까지 표시 (검색으로 찾으세요)" : "");
-  }
-  function renderLevel(){ renderLevelBar(); renderLevelList(); }
+    var shown = list.slice(0, shownCount);
 
-  function addFromDict(word){
-    var e = lookup(word);
-    if(!e || isSaved(e.w)) return false;
-    state.words.push({
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-      word: e.w, meaning: e.m, createdAt: new Date().toISOString(), plays: 0
+    var head = '<div class="daygroup"><div class="dayhead">' +
+      '<span class="today">' + LV[tag] + "</span>" +
+      "<span>" + (q ? list.length + "개 찾음" : all.length + "개") + "</span>" +
+      "<span>담은 단어 " + have + "개</span>" +
+      '<span class="rule"></span></div>';
+
+    if(!shown.length){
+      $("list").innerHTML = head + '<div class="card"><div class="empty">찾는 단어가 없어요.</div></div></div>';
+      return;
+    }
+    var html = head + '<ul class="words">';
+    shown.forEach(function(e){
+      var got = isSaved(e.w);
+      html += '<li class="w' + (got ? " have" : "") + '" data-w="' + esc(e.w) + '">' +
+        '<div class="wmain">' +
+          '<div class="wword" data-act="play" title="눌러서 발음 듣기">' + esc(e.w) + "</div>" +
+          '<div class="wmean">' + (e.pos ? "〈" + posLabel(e.pos) + "〉 " : "") + esc(e.m) + "</div>" +
+        "</div>" +
+        '<div class="wacts">' +
+          '<button class="icon" data-act="play" title="발음 듣기">🔊</button>' +
+          '<button class="icon' + (got ? "" : " ghost") + '" data-act="add"' + (got ? " disabled" : "") +
+          ' title="' + (got ? "이미 담았어요" : "내 단어장에 담기") + '">' + (got ? "✓" : "＋") + "</button>" +
+        "</div></li>";
     });
-    return true;
+    html += "</ul>";
+    if(list.length > shown.length){
+      html += '<div class="toolbar" style="justify-content:center; margin:12px 0 0">' +
+        '<button type="button" id="more">더 보기 (' + (list.length - shown.length) + "개 남음)</button></div>";
+    }
+    $("list").innerHTML = html + "</div>";
   }
 
-  /* ---------- 듣기 퀴즈 ---------- */
+  /* ---------- 모두 듣기 (활성 탭 기준) ---------- */
+  function speakAll(){
+    var items;
+    if(curTab() === "mine"){
+      var today = dayKey();
+      items = state.words.filter(function(w){ return dayKey(new Date(w.createdAt)) === today; })
+                         .map(function(w){ return w.word; });
+      if(!items.length){ toast("오늘 담은 단어가 없어요."); return; }
+    }else{
+      var els = $("list").querySelectorAll("li.w[data-w]");
+      items = [];
+      for(var i=0;i<Math.min(els.length, 30);i++) items.push(els[i].getAttribute("data-w"));
+      if(!items.length){ toast("들을 단어가 없어요."); return; }
+    }
+    var k = 0;
+    (function next(){
+      if(k >= items.length){ toast(items.length + "개를 모두 들었어요 👏"); return; }
+      var word = items[k++];
+      var li = document.querySelector('li.w[data-w="' + word + '"]') ||
+               (function(){
+                 var all = $("list").querySelectorAll("li.w");
+                 for(var j=0;j<all.length;j++) if(all[j].querySelector(".wword").textContent === word) return all[j];
+                 return null;
+               })();
+      if(li) li.classList.add("speaking");
+      speak(word, function(){ if(li) li.classList.remove("speaking"); setTimeout(next, 320); });
+    })();
+  }
+
+  /* ---------- 듣기 퀴즈 (활성 탭 기준) ---------- */
   var quiz = { word:null, right:0, total:0 };
   function quizNext(){
-    if(!state.words.length){ toast("먼저 단어를 저장해 주세요."); return; }
-    quiz.word = state.words[Math.floor(Math.random() * state.words.length)];
+    var pool = activeWords();
+    if(!pool.length){ toast("먼저 단어를 담거나 단계를 골라 주세요."); return; }
+    quiz.word = pool[Math.floor(Math.random() * pool.length)];
     $("quizPlay").hidden = false;
     $("quizReplay").disabled = false;
     $("quizResult").innerHTML = "";
     $("quizResult").className = "result";
     $("quizInput").value = "";
     $("quizInput").focus();
-    speak(quiz.word.word);
+    speak(quiz.word.w);
   }
   function quizCheck(){
     if(!quiz.word) return;
@@ -839,12 +845,12 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     if(!a){ $("quizInput").focus(); return; }
     quiz.total++;
     var r = $("quizResult");
-    if(a === quiz.word.word.toLowerCase()){
+    if(a === quiz.word.w.toLowerCase()){
       quiz.right++;
-      r.innerHTML = "정답! 🎉 <b>" + esc(quiz.word.word) + "</b>" + (quiz.word.meaning ? " — " + esc(quiz.word.meaning) : "");
+      r.innerHTML = "정답! 🎉 <b>" + esc(quiz.word.w) + "</b>" + (quiz.word.m ? " — " + esc(quiz.word.m) : "");
       r.className = "result ok";
     }else{
-      r.innerHTML = "아쉬워요. 정답은 <b>" + esc(quiz.word.word) + "</b>" + (quiz.word.meaning ? " — " + esc(quiz.word.meaning) : "");
+      r.innerHTML = "아쉬워요. 정답은 <b>" + esc(quiz.word.w) + "</b>" + (quiz.word.m ? " — " + esc(quiz.word.m) : "");
       r.className = "result no";
     }
     $("quizScore").textContent = quiz.right + " / " + quiz.total + " 정답";
@@ -876,72 +882,59 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     };
     $("meaning").oninput = function(){ meaningTouched = true; };
     $("meaning").onkeydown = function(e){ if(e.key === "Enter") addWord(); };
-    $("search").oninput = render;
-    $("speakAll").onclick = speakToday;
+    $("search").oninput = function(){ shownCount = 60; render(); };
+    $("list").addEventListener("click", function(e){
+      if(e.target.id === "more"){ shownCount += 60; render(); }
+    });
+    $("speakAll").onclick = speakAll;
 
     $("list").onclick = function(e){
       var t = e.target.closest("[data-act]"); if(!t) return;
       var li = e.target.closest("li.w"); if(!li) return;
-      if(t.getAttribute("data-act") === "play") playWord(li.getAttribute("data-id"));
+      var act = t.getAttribute("data-act");
+      var word = li.getAttribute("data-w");
+
+      if(word){                                   // 단계별 목록
+        if(act === "play"){ speak(word); return; }
+        if(act === "add" && addFromDict(word)){
+          save(); render();
+          if(state.settings.autoSpeak) speak(word);
+          toast("내 단어장에 담았어요: " + word);
+        }
+        return;
+      }
+      if(act === "play") playWord(li.getAttribute("data-id"));
       else if(confirm("삭제할까요?\n\n" + li.querySelector(".wword").textContent)) removeWord(li.getAttribute("data-id"));
     };
 
-    $("voice").onchange = function(){
-      state.settings.voices[state.settings.accent] = this.value; save();
-      speak("Hello, this is my voice.");
-    };
-    $("accentSeg").onclick = function(e){
-      var b = e.target.closest("button[data-a]");
+    $("tabs").onclick = function(e){
+      var b = e.target.closest("button[data-tab]");
       if(!b) return;
-      state.settings.accent = b.getAttribute("data-a");
-      save(); renderVoiceSelect(); renderAccent();
-      speak("This is how I sound.");
-      toast(state.settings.accent === "en-US" ? "미국식 발음으로 바꿨어요." : "영국식 발음으로 바꿨어요.");
+      state.settings.tab = b.getAttribute("data-tab");
+      save();
+      shownCount = 60;
+      $("search").value = "";
+      render();
+      window.scrollTo({ top: $("tabs").offsetTop - 12, behavior: "smooth" });
+      toast(tabName(state.settings.tab) + " 단어로 바꿨어요.");
     };
-    $("dictNote").onclick = function(e){
-      var b = e.target.closest("button[data-a]");
-      if(b) speak($("word").value.trim() || b.parentNode.querySelector("b").textContent, null, b.getAttribute("data-a"));
-    };
-
-    $("levelBar").onclick = function(e){
-      var b = e.target.closest("button[data-lv]");
-      if(!b) return;
-      curLevel = b.getAttribute("data-lv");
-      $("levelSearch").value = "";
-      renderLevel();
-    };
-    $("levelSearch").oninput = renderLevelList;
-    $("levelList").onclick = function(e){
-      var b = e.target.closest("[data-act]");
-      var li = e.target.closest("li[data-w]");
-      if(!b || !li) return;
-      var w = li.getAttribute("data-w");
-      if(b.getAttribute("data-act") === "say"){ speak(w); return; }
-      if(addFromDict(w)){
-        save(); render(); renderLevelList();
-        if(state.settings.autoSpeak) speak(w);
-        toast("단어장에 담았어요: " + w);
-      }
-    };
-    $("levelAdd").onclick = function(){
-      var pool = levelWords(curLevel).filter(function(e){ return !isSaved(e.w); });
-      if(!pool.length){ toast(LV[curLevel] + " 단어를 모두 담았어요 👏"); return; }
-      for(var i=pool.length-1;i>0;i--){ var j = Math.floor(Math.random()*(i+1)), t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
+    $("addTen").onclick = function(){
+      var pool = levelWords(curTab()).filter(function(e){ return !isSaved(e.w); });
+      if(!pool.length){ toast(LV[curTab()] + " 단어를 모두 담았어요 👏"); return; }
+      for(var i=pool.length-1;i>0;i--){ var j = Math.floor(Math.random()*(i+1)), t2 = pool[i]; pool[i] = pool[j]; pool[j] = t2; }
       var picked = pool.slice(0, 10);
       picked.forEach(function(e){ addFromDict(e.w); });
-      save(); render(); renderLevelList();
-      toast(LV[curLevel] + " 단어 " + picked.length + "개를 담았어요.");
+      save(); render();
+      toast(LV[curTab()] + " 단어 " + picked.length + "개를 담았어요.");
     };
-    $("levelPlay").onclick = function(){
-      var els = $("levelList").querySelectorAll("li[data-w]");
-      if(!els.length){ toast("들을 단어가 없어요."); return; }
-      var words = [], i;
-      for(i=0;i<Math.min(els.length, 30);i++) words.push(els[i].getAttribute("data-w"));
-      var k = 0;
-      (function next(){
-        if(k >= words.length){ toast(words.length + "개를 모두 들었어요 👏"); return; }
-        speak(words[k++], function(){ setTimeout(next, 300); });
-      })();
+
+    $("voice").onchange = function(){
+      state.settings.voiceURI = this.value; save();
+      speak("Hello, this is my voice.");
+    };
+    $("dictNote").onclick = function(e){
+      var b = e.target.closest("button[data-act='say']");
+      if(b) speak($("word").value.trim() || b.parentNode.querySelector("b").textContent);
     };
     $("rate").oninput = function(){
       state.settings.rate = parseFloat(this.value);
@@ -999,7 +992,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     };
 
     $("quizStart").onclick = function(){ quiz.right = 0; quiz.total = 0; $("quizScore").textContent = ""; quizNext(); };
-    $("quizReplay").onclick = function(){ if(quiz.word) speak(quiz.word.word); };
+    $("quizReplay").onclick = function(){ if(quiz.word) speak(quiz.word.w); };
     $("quizCheck").onclick = quizCheck;
     $("quizSkip").onclick = quizNext;
     $("quizInput").onkeydown = function(e){ if(e.key === "Enter") quizCheck(); };
@@ -1021,9 +1014,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   $("rateVal").textContent = Number(state.settings.rate).toFixed(2).replace(/0$/,"");
   $("autoSpeak").checked = !!state.settings.autoSpeak;
   $("netDict").checked = !!state.settings.netDict;
-  if(!state.settings.voices) state.settings.voices = {};
-  if(!state.settings.accent) state.settings.accent = "en-US";
-  renderLevel();
+  if(!state.settings.tab || (state.settings.tab !== "mine" && LV_ORDER.indexOf(state.settings.tab) < 0)) state.settings.tab = "mine";
   $("dictCount").textContent = DICT.length.toLocaleString();
   render();
 
