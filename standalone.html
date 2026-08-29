@@ -3159,6 +3159,7 @@ zoo|n|동물원|e
   }
   function renderVoiceSelect(){
     var sel = $("voice"), a = curAccent(), list = byAccent[a] || [];
+    if(!sel) return;
     sel.innerHTML = "";
     if(!list.length){
       sel.innerHTML = '<option value="">사용 가능한 목소리 없음</option>';
@@ -3806,7 +3807,7 @@ zoo|n|동물원|e
   }
 
   /* ---------- 홈 화면 설치 ---------- */
-  var APP_VERSION = "2026.08.29-6";
+  var APP_VERSION = "2026.08.29-7";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
@@ -4165,7 +4166,12 @@ zoo|n|동물원|e
     document.addEventListener("pointerdown", unlockAudio, { once:true });
     document.addEventListener("touchstart", unlockAudio, { once:true });
   }else{
-    $("voiceHint").innerHTML = '<span class="warn">이 브라우저는 음성 합성을 지원하지 않아요. Chrome · Edge · Safari에서 열어주세요.</span> 저장 기능은 그대로 쓸 수 있습니다.';
+    renderAccentSeg();          /* 목소리가 없어도 선택은 미리 해 둘 수 있게 */
+    renderVoiceSelect();
+    $("voiceHint").innerHTML =
+      '<span class="warn">이 화면에서는 소리가 나오지 않습니다.</span> ' +
+      '앱 주소를 <b>Chrome · 삼성 인터넷 · Safari</b>에서 직접 열면 발음이 재생됩니다. ' +
+      '단어를 담는 기능은 여기서도 그대로 쓸 수 있습니다.';
     $("speakBtn").disabled = true; $("speakAll").disabled = true;
   }
   if(!window.matchMedia || !window.matchMedia("(pointer:coarse)").matches) $("word").focus();
