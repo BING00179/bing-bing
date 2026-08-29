@@ -1,2319 +1,2601 @@
 /*
- * 내장 영한 사전 — 단어|품사|뜻
+ * 내장 영한 사전 — 단어|품사|뜻|단계
  * 품사: n 명사 · v 동사 · a 형용사 · ad 부사 · prep 전치사 · conj 접속사 · pron 대명사 · int 감탄사 · num 수사
- * 단어를 더 넣고 싶으면 아래 목록에 같은 형식으로 한 줄씩 추가하면 됩니다 (순서는 상관없습니다).
+ * 단계: e 초등 · m 중등 · h 고등 · t 토익토플 (여러 단계에 속하면 "mt" 처럼 이어 씁니다)
+ * 철자는 미국식으로 통일했습니다. 단어를 더 넣으려면 같은 형식으로 한 줄씩 추가하면 됩니다.
  */
 window.WORD_DICT = `
-ability|n|능력, 재능
-able|a|~할 수 있는
-about|prep|~에 대하여, 약
-above|prep|~ 위에
-abroad|ad|해외로, 외국에
-absent|a|결석한, 없는
-absolutely|ad|절대적으로, 전적으로
-accept|v|받아들이다, 수락하다
-accident|n|사고, 우연
-according to|prep|~에 따르면
-account|n|계좌, 설명
-accurate|a|정확한
-achieve|v|이루다, 달성하다
-across|prep|~을 가로질러
-act|v|행동하다, 연기하다
-action|n|행동, 조치
-active|a|활동적인, 적극적인
-activity|n|활동
-actor|n|배우
-actually|ad|사실은, 실제로
-add|v|더하다, 추가하다
-address|n|주소
-adjust|v|조정하다, 적응하다
-admire|v|존경하다, 감탄하다
-admit|v|인정하다, 입장을 허락하다
-adult|n|어른, 성인
-advance|v|전진하다, 발전시키다
-advantage|n|이점, 장점
-adventure|n|모험
-advertise|v|광고하다
-advice|n|충고, 조언
-advise|v|조언하다
-affect|v|영향을 미치다
-afford|v|~할 여유가 있다
-afraid|a|두려워하는, 걱정하는
-after|prep|~ 후에
-afternoon|n|오후
-again|ad|다시, 또
-against|prep|~에 반대하여, ~에 맞서
-age|n|나이, 시대
-agency|n|대행사, 기관
-agent|n|대리인, 요원
-ago|ad|~ 전에
-agree|v|동의하다
-agreement|n|합의, 계약
-ahead|ad|앞으로, 미리
-aim|n|목표, 겨냥
-air|n|공기, 하늘
-airplane|n|비행기
-airport|n|공항
-alarm|n|경보, 알람
-alike|a|비슷한
-alive|a|살아 있는
-allow|v|허락하다, 허용하다
-almost|ad|거의
-alone|a|혼자인
-along|prep|~을 따라
-aloud|ad|소리 내어
-already|ad|이미, 벌써
-also|ad|또한, 역시
-although|conj|비록 ~일지라도
-always|ad|항상, 언제나
-amazing|a|놀라운, 굉장한
-ambition|n|야망, 포부
-among|prep|~ 사이에
-amount|n|양, 총액
-ancient|a|고대의, 아주 오래된
-anger|n|분노, 화
-angle|n|각도, 관점
-angry|a|화난
-animal|n|동물
-ankle|n|발목
-anniversary|n|기념일
-announce|v|발표하다, 알리다
-annoy|v|짜증나게 하다
-annual|a|매년의, 연례의
-another|a|또 하나의, 다른
-answer|n|대답, 답
-anxious|a|불안한, 몹시 바라는
-anybody|pron|누구든지, 아무나
-anyone|pron|누구든지
-anything|pron|무엇이든
-anyway|ad|어쨌든
-anywhere|ad|어디든지
-apart|ad|떨어져, 따로
-apartment|n|아파트
-apologize|v|사과하다
-appeal|v|호소하다, 항소하다
-appear|v|나타나다, ~처럼 보이다
-appearance|n|외모, 등장
-apple|n|사과
-apply|v|지원하다, 적용하다
-appointment|n|약속, 예약
-appreciate|v|감사하다, 진가를 알다
-approach|v|다가가다, 접근하다
-appropriate|a|적절한, 알맞은
-approve|v|승인하다, 찬성하다
-architect|n|건축가
-area|n|지역, 면적
-argue|v|말다툼하다, 주장하다
-argument|n|논쟁, 주장
-arm|n|팔
-army|n|군대, 육군
-around|prep|~ 주위에, 약
-arrange|v|정리하다, 준비하다
-arrest|v|체포하다
-arrive|v|도착하다
-arrow|n|화살, 화살표
-art|n|예술, 미술
-article|n|기사, 물품
-artist|n|예술가, 화가
-ashamed|a|부끄러운
-ask|v|묻다, 부탁하다
-asleep|a|잠든
-aspect|n|측면, 양상
-assist|v|돕다, 보조하다
-assume|v|가정하다, 추정하다
-athlete|n|운동선수
-atmosphere|n|대기, 분위기
-attach|v|붙이다, 첨부하다
-attack|v|공격하다
-attempt|v|시도하다
-attend|v|참석하다, 다니다
-attention|n|주의, 관심
-attitude|n|태도, 자세
-attract|v|끌어당기다, 매혹하다
-attractive|a|매력적인
-audience|n|청중, 관객
-aunt|n|이모, 고모, 숙모
-author|n|작가, 저자
-authority|n|권위, 당국
-automatic|a|자동의
-autumn|n|가을
-available|a|이용할 수 있는, 시간이 되는
-average|n|평균
-avoid|v|피하다
-awake|a|깨어 있는
-award|n|상, 상금
-aware|a|알고 있는, 인식하는
-away|ad|떨어져, 멀리
-awesome|a|굉장한, 멋진
-awful|a|끔찍한, 지독한
-awkward|a|어색한, 곤란한
-baby|n|아기
-back|n|등, 뒤
-background|n|배경
-backward|ad|뒤로, 거꾸로
-bad|a|나쁜, 심한
-bag|n|가방, 봉지
-bake|v|굽다
-balance|n|균형, 잔액
-ball|n|공
-balloon|n|풍선
-ban|v|금지하다
-band|n|밴드, 무리
-bank|n|은행, 강둑
-bar|n|막대, 술집
-barely|ad|간신히, 거의 ~않다
-bargain|n|싼 물건, 흥정
-base|n|기초, 기지
-basic|a|기본적인
-basis|n|근거, 기준
-basket|n|바구니
-bath|n|목욕, 욕조
-battery|n|건전지, 배터리
-battle|n|전투, 싸움
-beach|n|해변
-bear|v|참다, 낳다
-beard|n|턱수염
-beat|v|이기다, 때리다
-beautiful|a|아름다운
-beauty|n|아름다움, 미인
-because|conj|왜냐하면, ~ 때문에
-become|v|~이 되다
-bed|n|침대
-bee|n|벌
-beef|n|소고기
-before|prep|~ 전에
-beg|v|간청하다, 구걸하다
-begin|v|시작하다
-beginner|n|초보자
-behave|v|행동하다, 처신하다
-behavior|n|행동, 태도
-behind|prep|~ 뒤에
-belief|n|믿음, 신념
-believe|v|믿다
-bell|n|종, 벨
-belong|v|속하다, ~의 것이다
-below|prep|~ 아래에
-belt|n|벨트, 띠
-bend|v|구부리다, 굽히다
-benefit|n|혜택, 이익
-beside|prep|~ 옆에
-besides|ad|게다가, ~ 외에도
-best|a|가장 좋은, 최고의
-bet|v|내기하다, 장담하다
-better|a|더 좋은
-between|prep|~ 사이에
-beyond|prep|~ 너머, ~을 넘어서
-bicycle|n|자전거
-big|a|큰
-bill|n|계산서, 지폐, 법안
-bird|n|새
-birth|n|출생, 탄생
-birthday|n|생일
-bit|n|조금, 약간
-bite|v|물다, 베어 물다
-bitter|a|쓴, 쓰라린
-black|a|검은
-blame|v|탓하다, 비난하다
-blank|a|빈, 백지의
-blanket|n|담요
-bleed|v|피가 나다
-blind|a|눈이 먼
-block|v|막다, 차단하다
-blood|n|피, 혈액
-blow|v|불다, 날리다
-blue|a|파란, 우울한
-board|n|판, 이사회
-boat|n|배, 보트
-body|n|몸, 신체
-boil|v|끓이다, 삶다
-bomb|n|폭탄
-bone|n|뼈
-book|n|책
-boot|n|장화, 부츠
-border|n|국경, 경계
-bored|a|지루해하는
-boring|a|지루한
-borrow|v|빌리다
-boss|n|상사, 사장
-both|a|둘 다의
-bother|v|귀찮게 하다, 신경 쓰다
-bottle|n|병
-bottom|n|바닥, 맨 아래
-bowl|n|그릇, 사발
-box|n|상자
-boy|n|소년
-brain|n|뇌, 두뇌
-branch|n|나뭇가지, 지점
-brand|n|상표, 브랜드
-brave|a|용감한
-bread|n|빵
-break|v|깨다, 부수다, 어기다
-breakfast|n|아침 식사
-breath|n|숨, 호흡
-breathe|v|숨 쉬다
-bridge|n|다리, 교량
-brief|a|간단한, 짧은
-bright|a|밝은, 영리한
-bring|v|가져오다, 데려오다
-broad|a|넓은
-broadcast|v|방송하다
-broken|a|고장 난, 부서진
-brother|n|형, 오빠, 남동생
-brown|a|갈색의
-brush|n|붓, 솔
-budget|n|예산
-build|v|짓다, 세우다
-building|n|건물
-bull|n|황소
-burn|v|타다, 태우다
-burst|v|터지다, 터뜨리다
-bury|v|묻다, 매장하다
-bus|n|버스
-business|n|사업, 일
-busy|a|바쁜
-but|conj|그러나
-butter|n|버터
-button|n|단추, 버튼
-buy|v|사다
-cabinet|n|캐비닛, 내각
-cage|n|새장, 우리
-cake|n|케이크
-calculate|v|계산하다
-calendar|n|달력
-call|v|부르다, 전화하다
-calm|a|침착한, 고요한
-camera|n|카메라
-camp|n|캠프, 야영지
-campaign|n|캠페인, 운동
-can|v|~할 수 있다
-cancel|v|취소하다
-cancer|n|암
-candidate|n|후보자, 지원자
-candle|n|양초
-candy|n|사탕
-cap|n|모자, 뚜껑
-capable|a|~할 수 있는, 유능한
-capital|n|수도, 자본
-captain|n|선장, 주장
-capture|v|사로잡다, 포착하다
-car|n|자동차
-card|n|카드
-care|n|돌봄, 주의
-career|n|경력, 직업
-careful|a|조심스러운, 신중한
-careless|a|부주의한
-carpet|n|카펫, 양탄자
-carry|v|나르다, 지니다
-case|n|경우, 사건, 상자
-cash|n|현금
-cast|v|던지다, 배역을 정하다
-castle|n|성
-cat|n|고양이
-catch|v|잡다, 붙잡다
-cause|n|원인, 이유
-ceiling|n|천장
-celebrate|v|축하하다, 기념하다
-cell|n|세포, 감방
-center|n|중심, 센터
-century|n|세기, 100년
-ceremony|n|의식, 예식
-certain|a|확실한, 어떤
-certainly|ad|확실히, 물론
-chain|n|사슬, 연쇄
-chair|n|의자
-challenge|n|도전, 난제
-champion|n|우승자, 챔피언
-chance|n|기회, 가능성
-change|v|바꾸다, 변하다
-character|n|성격, 등장인물, 글자
-charge|v|청구하다, 충전하다
-charity|n|자선, 자선 단체
-chart|n|도표, 차트
-chase|v|쫓다, 추격하다
-cheap|a|싼
-cheat|v|속이다, 부정행위를 하다
-check|v|확인하다, 점검하다
-cheek|n|뺨, 볼
-cheer|v|응원하다, 환호하다
-cheese|n|치즈
-chef|n|요리사, 주방장
-chemical|n|화학 물질
-chest|n|가슴, 상자
-chew|v|씹다
-chicken|n|닭, 닭고기
-chief|a|주요한, 최고의
-child|n|아이, 자녀
-childhood|n|어린 시절
-chin|n|턱
-choice|n|선택
-choose|v|고르다, 선택하다
-church|n|교회
-cigarette|n|담배
-circle|n|원, 동그라미
-circumstance|n|상황, 환경
-citizen|n|시민
-city|n|도시
-civil|a|시민의, 민간의
-claim|v|주장하다, 요구하다
-class|n|수업, 학급, 계급
-classic|a|고전적인, 전형적인
-clean|a|깨끗한
-clear|a|분명한, 맑은
-clerk|n|점원, 사무원
-clever|a|영리한, 똑똑한
-click|v|클릭하다
-client|n|고객, 의뢰인
-cliff|n|절벽
-climate|n|기후
-climb|v|오르다, 등반하다
-clinic|n|진료소, 병원
-clock|n|시계
-close|v|닫다
-closet|n|벽장, 옷장
-cloth|n|천, 옷감
-clothes|n|옷, 의복
-cloud|n|구름
-club|n|동아리, 클럽
-clue|n|단서, 실마리
-coach|n|코치, 감독
-coal|n|석탄
-coast|n|해안
-coat|n|외투, 코트
-code|n|암호, 규정, 코드
-coffee|n|커피
-coin|n|동전
-cold|a|추운, 차가운
-collapse|v|무너지다, 쓰러지다
-colleague|n|동료
-collect|v|모으다, 수집하다
-college|n|대학
-color|n|색깔
-column|n|기둥, 칼럼
-comb|n|빗
-combine|v|결합하다, 섞다
-come|v|오다
-comfort|n|편안함, 위로
-comfortable|a|편안한
-command|n|명령, 지휘
-comment|n|논평, 의견
-commercial|a|상업적인
-commit|v|저지르다, 헌신하다
-committee|n|위원회
-common|a|흔한, 공통의
-communicate|v|의사소통하다
-community|n|지역 사회, 공동체
-company|n|회사, 동료
-compare|v|비교하다
-compete|v|경쟁하다
-competition|n|경쟁, 대회
-complain|v|불평하다
-complete|a|완전한
-complex|a|복잡한
-complicated|a|복잡한
-computer|n|컴퓨터
-concentrate|v|집중하다
-concept|n|개념
-concern|n|걱정, 관심사
-concert|n|연주회, 콘서트
-conclude|v|결론짓다, 끝내다
-condition|n|상태, 조건
-conduct|v|수행하다, 지휘하다
-confidence|n|자신감, 신뢰
-confident|a|자신 있는, 확신하는
-confirm|v|확인하다, 확정하다
-conflict|n|갈등, 충돌
-confuse|v|혼란스럽게 하다
-congratulate|v|축하하다
-connect|v|연결하다
-conscious|a|의식하는, 자각하는
-consider|v|고려하다, 여기다
-consist|v|구성되다
-constant|a|끊임없는, 일정한
-construct|v|건설하다, 구성하다
-consult|v|상담하다, 상의하다
-consume|v|소비하다, 먹다
-contact|v|연락하다
-contain|v|담고 있다, 포함하다
-content|n|내용, 내용물
-contest|n|대회, 경연
-context|n|맥락, 문맥
-continue|v|계속하다
-contract|n|계약, 계약서
-contrast|n|대조, 차이
-contribute|v|기여하다, 기부하다
-control|v|통제하다, 조종하다
-convenient|a|편리한
-conversation|n|대화
-convince|v|설득하다, 납득시키다
-cook|v|요리하다
-cookie|n|과자, 쿠키
-cool|a|시원한, 멋진
-copy|v|복사하다, 베끼다
-corner|n|모퉁이, 구석
-correct|a|올바른, 정확한
-cost|n|비용, 값
-cotton|n|면, 목화
-couch|n|소파
-cough|v|기침하다
-could|v|~할 수 있었다, ~할 수도 있다
-council|n|의회, 협의회
-count|v|세다, 중요하다
-country|n|나라, 시골
-countryside|n|시골, 교외
-couple|n|커플, 두 사람
-courage|n|용기
-course|n|과정, 강좌, 코스
-court|n|법정, 코트
-cousin|n|사촌
-cover|v|덮다, 다루다
-cow|n|암소, 젖소
-crash|v|충돌하다, 추락하다
-crazy|a|미친, 정신 나간
-cream|n|크림
-create|v|만들다, 창조하다
-creative|a|창의적인
-creature|n|생물, 생명체
-credit|n|신용, 학점
-crime|n|범죄
-criminal|n|범죄자
-crisis|n|위기
-critic|n|비평가
-critical|a|비판적인, 중대한
-criticize|v|비판하다
-crop|n|농작물, 수확량
-cross|v|건너다, 교차하다
-crowd|n|군중, 무리
-crown|n|왕관
-cruel|a|잔인한
-cry|v|울다, 외치다
-culture|n|문화
-cup|n|컵, 잔
-cure|v|치료하다, 고치다
-curious|a|궁금한, 호기심 많은
-current|a|현재의, 지금의
-curtain|n|커튼
-curve|n|곡선, 커브
-custom|n|관습, 풍습
-customer|n|고객, 손님
-cut|v|자르다, 베다
-cute|a|귀여운
-cycle|n|주기, 순환
-daily|a|매일의, 일상의
-damage|n|손상, 피해
-dance|v|춤추다
-danger|n|위험
-dangerous|a|위험한
-dark|a|어두운
-data|n|자료, 데이터
-date|n|날짜, 데이트
-daughter|n|딸
-dawn|n|새벽, 동틀 녘
-day|n|날, 하루, 낮
-dead|a|죽은
-deaf|a|귀가 들리지 않는
-deal|v|다루다, 거래하다
-dear|a|친애하는, 소중한
-death|n|죽음
-debate|n|토론, 논쟁
-debt|n|빚, 부채
-decade|n|10년
-decide|v|결정하다
-decision|n|결정
-declare|v|선언하다, 신고하다
-decline|v|감소하다, 거절하다
-decorate|v|장식하다
-decrease|v|감소하다, 줄이다
-deep|a|깊은
-deer|n|사슴
-defeat|v|패배시키다, 이기다
-defend|v|방어하다, 변호하다
-define|v|정의하다
-definitely|ad|분명히, 틀림없이
-degree|n|정도, 학위, 도
-delay|v|미루다, 지연시키다
-delete|v|삭제하다, 지우다
-delicious|a|맛있는
-deliver|v|배달하다, 전달하다
-demand|n|요구, 수요
-democracy|n|민주주의
-demonstrate|v|보여 주다, 시위하다
-deny|v|부인하다, 거절하다
-department|n|부서, 학과
-depend|v|의존하다, ~에 달려 있다
-deposit|n|보증금, 예금
-depressed|a|우울한
-depth|n|깊이
-describe|v|묘사하다, 설명하다
-desert|n|사막
-deserve|v|~을 받을 만하다
-design|n|디자인, 설계
-desire|n|욕구, 바람
-desk|n|책상
-desperate|a|필사적인, 절박한
-despite|prep|~에도 불구하고
-dessert|n|후식, 디저트
-destroy|v|파괴하다
-detail|n|세부 사항
-detect|v|탐지하다, 발견하다
-determine|v|결정하다, 알아내다
-develop|v|발전시키다, 개발하다
-development|n|발전, 개발
-device|n|장치, 기기
-devote|v|바치다, 헌신하다
-diary|n|일기
-dictionary|n|사전
-die|v|죽다
-diet|n|식단, 식이 요법
-differ|v|다르다
-difference|n|차이
-different|a|다른
-difficult|a|어려운
-difficulty|n|어려움, 곤란
-dig|v|파다
-digital|a|디지털의
-dinner|n|저녁 식사
-direct|a|직접적인
-direction|n|방향, 지시
-director|n|감독, 이사
-dirty|a|더러운
-disabled|a|장애가 있는
-disagree|v|동의하지 않다
-disappear|v|사라지다
-disappointed|a|실망한
-disaster|n|재난, 참사
-discount|n|할인
-discover|v|발견하다
-discuss|v|논의하다
-discussion|n|토론, 논의
-disease|n|질병
-dish|n|접시, 요리
-dislike|v|싫어하다
-distance|n|거리
-distant|a|먼, 떨어진
-distinguish|v|구별하다
-distribute|v|분배하다, 유통시키다
-district|n|지구, 구역
-disturb|v|방해하다
-divide|v|나누다, 분할하다
-divorce|n|이혼
-dizzy|a|어지러운
-do|v|하다
-doctor|n|의사, 박사
-document|n|서류, 문서
-dog|n|개
-doll|n|인형
-dollar|n|달러
-domestic|a|국내의, 가정의
-door|n|문
-double|a|두 배의, 이중의
-doubt|n|의심
-down|ad|아래로
-download|v|내려받다
-downtown|n|도심, 시내
-dozen|n|12개, 다스
-draft|n|초안, 원고
-drag|v|끌다, 끌어당기다
-drama|n|드라마, 연극
-draw|v|그리다, 끌어당기다
-drawer|n|서랍
-dream|n|꿈
-dress|n|드레스, 옷
-drink|v|마시다
-drive|v|운전하다, 몰다
-driver|n|운전자, 기사
-drop|v|떨어뜨리다, 떨어지다
-drug|n|약, 마약
-drum|n|북, 드럼
-drunk|a|술 취한
-dry|a|마른, 건조한
-duck|n|오리
-due|a|~하기로 예정된, ~ 때문인
-dull|a|따분한, 무딘
-during|prep|~ 동안
-dust|n|먼지
-duty|n|의무, 임무
-each|a|각각의
-eager|a|열망하는, 간절한
-ear|n|귀
-early|a|이른, 초기의
-earn|v|벌다, 얻다
-earth|n|지구, 흙
-earthquake|n|지진
-ease|n|쉬움, 편안함
-easily|ad|쉽게
-east|n|동쪽
-easy|a|쉬운
-eat|v|먹다
-economy|n|경제
-edge|n|가장자리, 끝
-edit|v|편집하다, 수정하다
-education|n|교육
-effect|n|효과, 영향
-effective|a|효과적인
-efficient|a|효율적인
-effort|n|노력
-egg|n|달걀, 알
-either|a|둘 중 어느 하나의
-elbow|n|팔꿈치
-elderly|a|나이 드신, 연세가 많은
-elect|v|선출하다
-electric|a|전기의
-electricity|n|전기
-element|n|요소, 성분
-elementary|a|초등의, 기초적인
-elephant|n|코끼리
-elevator|n|승강기, 엘리베이터
-else|ad|그 밖에, 다른
-email|n|이메일
-embarrassed|a|당황한, 창피한
-emergency|n|비상사태, 응급
-emotion|n|감정
-emphasize|v|강조하다
-employ|v|고용하다
-employee|n|직원, 종업원
-empty|a|텅 빈
-enable|v|가능하게 하다
-encourage|v|격려하다, 장려하다
-end|n|끝, 마지막
-enemy|n|적
-energy|n|에너지, 활력
-engage|v|참여시키다, 약혼하다
-engine|n|엔진, 기관
-engineer|n|기술자, 공학자
-enjoy|v|즐기다
-enough|a|충분한
-enter|v|들어가다, 입력하다
-entertain|v|즐겁게 하다, 대접하다
-enthusiasm|n|열정, 열의
-entire|a|전체의, 온
-entrance|n|입구, 입학
-envelope|n|봉투
-environment|n|환경
-envy|v|부러워하다
-equal|a|같은, 동등한
-equipment|n|장비, 설비
-error|n|실수, 오류
-escape|v|탈출하다, 벗어나다
-especially|ad|특히
-essay|n|수필, 과제물
-essential|a|필수적인, 본질적인
-establish|v|설립하다, 확립하다
-estimate|v|추정하다, 견적을 내다
-even|ad|심지어, ~조차
-evening|n|저녁
-event|n|사건, 행사
-eventually|ad|결국, 마침내
-ever|ad|언젠가, 한 번이라도
-every|a|모든, 매 ~
-everybody|pron|모든 사람
-everyday|a|일상의, 매일의
-everyone|pron|모든 사람
-everything|pron|모든 것
-everywhere|ad|어디에나
-evidence|n|증거
-evil|a|사악한, 악한
-exact|a|정확한
-exam|n|시험
-examine|v|조사하다, 검사하다
-example|n|예, 본보기
-excellent|a|훌륭한, 탁월한
-except|prep|~을 제외하고
-exchange|v|교환하다, 환전하다
-excited|a|신이 난, 흥분한
-exciting|a|흥미진진한
-excuse|n|변명, 핑계
-exercise|n|운동, 연습
-exhausted|a|기진맥진한
-exhibition|n|전시회
-exist|v|존재하다
-exit|n|출구
-expand|v|확장하다, 넓히다
-expect|v|기대하다, 예상하다
-expensive|a|비싼
-experience|n|경험
-experiment|n|실험
-expert|n|전문가
-explain|v|설명하다
-explode|v|폭발하다
-explore|v|탐험하다, 탐구하다
-export|v|수출하다
-express|v|표현하다
-expression|n|표현, 표정
-extend|v|연장하다, 확대하다
-extra|a|추가의, 여분의
-extreme|a|극단적인, 극심한
-eye|n|눈
-face|n|얼굴, 표면
-fact|n|사실
-factor|n|요인, 요소
-factory|n|공장
-fail|v|실패하다, 낙제하다
-failure|n|실패
-fair|a|공정한, 상당한
-faith|n|믿음, 신앙
-fake|a|가짜의, 위조의
-fall|v|떨어지다, 넘어지다
-false|a|틀린, 거짓의
-familiar|a|익숙한, 친숙한
-family|n|가족
-famous|a|유명한
-fan|n|팬, 선풍기
-fancy|a|화려한, 고급의
-fantastic|a|환상적인, 굉장한
-far|ad|멀리
-farm|n|농장
-farmer|n|농부
-fashion|n|유행, 패션
-fast|a|빠른
-fat|a|뚱뚱한
-fate|n|운명
-father|n|아버지
-fault|n|잘못, 결함
-favor|n|호의, 부탁
-favorite|a|가장 좋아하는
-fear|n|두려움, 공포
-feature|n|특징, 이목구비
-fee|n|요금, 수수료
-feed|v|먹이다, 먹이를 주다
-feel|v|느끼다
-feeling|n|느낌, 감정
-female|a|여성의, 암컷의
-fence|n|울타리
-festival|n|축제
-fever|n|열
-few|a|거의 없는, 몇몇의
-field|n|들판, 분야
-fight|v|싸우다
-figure|n|숫자, 인물, 모습
-file|n|파일, 서류철
-fill|v|채우다
-film|n|영화, 필름
-final|a|마지막의, 최종의
-finally|ad|마침내, 마지막으로
-finance|n|재정, 금융
-find|v|찾다, 알아내다
-fine|a|좋은, 괜찮은, 미세한
-finger|n|손가락
-finish|v|끝내다, 마치다
-fire|n|불, 화재
-firm|n|회사
-first|a|첫 번째의
-fish|n|물고기, 생선
-fit|v|맞다, 어울리다
-fix|v|고치다, 고정하다
-flag|n|깃발
-flame|n|불꽃, 불길
-flash|n|섬광, 번쩍임
-flat|a|평평한
-flavor|n|맛, 풍미
-flight|n|비행, 항공편
-float|v|뜨다, 떠다니다
-flood|n|홍수
-floor|n|바닥, 층
-flour|n|밀가루
-flow|v|흐르다
-flower|n|꽃
-flu|n|독감
-fly|v|날다
-focus|v|집중하다, 초점을 맞추다
-fog|n|안개
-fold|v|접다, 개다
-follow|v|따라가다, 따르다
-food|n|음식, 식량
-fool|n|바보
-foot|n|발
-football|n|축구, 미식축구
-for|prep|~을 위해, ~ 동안
-force|n|힘, 무력
-forecast|n|예보, 예측
-foreign|a|외국의
-forest|n|숲, 삼림
-forever|ad|영원히
-forget|v|잊다
-forgive|v|용서하다
-fork|n|포크
-form|n|형태, 서식
-formal|a|공식적인, 격식을 차린
-former|a|이전의, 전자의
-fortunately|ad|다행히
-fortune|n|행운, 재산
-forward|ad|앞으로
-found|v|설립하다
-fountain|n|분수, 샘
-frame|n|틀, 액자
-free|a|자유로운, 무료의
-freedom|n|자유
-freeze|v|얼다, 얼리다
-frequent|a|잦은, 빈번한
-fresh|a|신선한, 새로운
-friend|n|친구
-friendly|a|친절한, 다정한
-frighten|v|겁먹게 하다
-from|prep|~에서, ~로부터
-front|n|앞, 정면
-frozen|a|얼어붙은, 냉동의
-fruit|n|과일, 열매
-fry|v|튀기다, 볶다
-fuel|n|연료
-full|a|가득 찬, 완전한
-fun|n|재미, 즐거움
-function|n|기능, 함수
-fund|n|기금, 자금
-funeral|n|장례식
-funny|a|웃기는, 재미있는
-fur|n|털, 모피
-furniture|n|가구
-further|a|더 이상의, 더 먼
-future|n|미래
-gain|v|얻다, 늘리다
-gallery|n|미술관, 화랑
-game|n|게임, 경기
-garage|n|차고, 정비소
-garbage|n|쓰레기
-garden|n|정원
-gas|n|기체, 가스, 휘발유
-gate|n|문, 출입구
-gather|v|모으다, 모이다
-general|a|일반적인, 전반적인
-generation|n|세대
-generous|a|너그러운, 후한
-gentle|a|온화한, 부드러운
-gentleman|n|신사
-gesture|n|몸짓, 제스처
-get|v|얻다, ~하게 되다
-ghost|n|유령
-gift|n|선물, 재능
-girl|n|소녀
-give|v|주다
-glad|a|기쁜
-glass|n|유리, 잔
-glasses|n|안경
-global|a|세계적인, 전 세계의
-glove|n|장갑
-glue|n|풀, 접착제
-go|v|가다
-goal|n|목표, 골
-god|n|신, 하느님
-gold|n|금
-golf|n|골프
-good|a|좋은, 착한
-goods|n|상품, 물건
-govern|v|통치하다, 다스리다
-government|n|정부
-grab|v|움켜쥐다, 붙잡다
-grade|n|성적, 학년, 등급
-gradually|ad|점차, 서서히
-graduate|v|졸업하다
-grain|n|곡물, 알갱이
-grammar|n|문법
-grand|a|웅장한, 위대한
-grandfather|n|할아버지
-grandmother|n|할머니
-grant|v|승인하다, 주다
-grape|n|포도
-grass|n|풀, 잔디
-grateful|a|고마워하는, 감사하는
-grave|n|무덤
-gravity|n|중력, 심각성
-great|a|위대한, 훌륭한
-green|a|초록색의
-greet|v|인사하다, 맞이하다
-grey|a|회색의
-grocery|n|식료품, 식료품점
-ground|n|땅, 지면
-group|n|무리, 집단
-grow|v|자라다, 기르다
-growth|n|성장, 증가
-guarantee|v|보장하다, 보증하다
-guard|n|경비원, 보호
-guess|v|추측하다, 짐작하다
-guest|n|손님
-guide|n|안내, 안내인
-guilty|a|죄책감을 느끼는, 유죄의
-guitar|n|기타
-gun|n|총
-guy|n|남자, 사람
-habit|n|습관, 버릇
-hair|n|머리카락, 털
-half|n|반, 절반
-hall|n|복도, 회관
-hand|n|손
-handle|v|다루다, 처리하다
-handsome|a|잘생긴
-hang|v|걸다, 매달다
-happen|v|일어나다, 발생하다
-happy|a|행복한, 기쁜
-harbor|n|항구
-hard|a|어려운, 딱딱한
-hardly|ad|거의 ~않다
-harm|n|해, 피해
-harmony|n|조화, 화합
-harvest|n|수확, 추수
-hat|n|모자
-hate|v|싫어하다, 미워하다
-have|v|가지다, 먹다
-head|n|머리, 우두머리
-headache|n|두통
-heal|v|낫다, 치유하다
-health|n|건강
-healthy|a|건강한
-hear|v|듣다, 들리다
-heart|n|심장, 마음
-heat|n|열, 더위
-heaven|n|천국, 하늘
-heavy|a|무거운, 심한
-heel|n|발뒤꿈치, 굽
-height|n|키, 높이
-hell|n|지옥
-hello|int|안녕하세요
-help|v|돕다
-helpful|a|도움이 되는
-hero|n|영웅, 주인공
-hesitate|v|망설이다, 주저하다
-hide|v|숨기다, 숨다
-high|a|높은
-highway|n|고속도로
-hill|n|언덕
-hire|v|고용하다, 빌리다
-history|n|역사
-hit|v|치다, 때리다
-hobby|n|취미
-hold|v|잡다, 열다, 유지하다
-hole|n|구멍
-holiday|n|휴일, 휴가
-holy|a|신성한, 거룩한
-home|n|집, 가정
-homework|n|숙제
-honest|a|정직한, 솔직한
-honey|n|꿀, 여보
-honor|n|명예, 영광
-hope|v|바라다, 희망하다
-horizon|n|수평선, 지평선
-horrible|a|끔찍한
-horse|n|말
-hospital|n|병원
-host|n|주인, 진행자
-hot|a|뜨거운, 더운, 매운
-hotel|n|호텔
-hour|n|시간
-house|n|집, 주택
-housework|n|집안일
-however|ad|그러나, 아무리 ~해도
-hug|v|껴안다, 포옹하다
-huge|a|거대한
-human|n|인간, 사람
-humor|n|유머, 익살
-hundred|num|백, 100
-hungry|a|배고픈
-hunt|v|사냥하다, 찾다
-hurry|v|서두르다
-hurt|v|다치게 하다, 아프다
-husband|n|남편
-ice|n|얼음
-idea|n|생각, 발상
-ideal|a|이상적인
-identify|v|확인하다, 알아보다
-identity|n|정체성, 신원
-if|conj|만약 ~라면
-ignore|v|무시하다
-ill|a|아픈, 병든
-illegal|a|불법의
-illness|n|병, 질병
-image|n|이미지, 인상
-imagine|v|상상하다
-immediately|ad|즉시, 곧바로
-immigrant|n|이민자
-impact|n|영향, 충격
-importance|n|중요성
-important|a|중요한
-impossible|a|불가능한
-impress|v|깊은 인상을 주다
-improve|v|개선하다, 향상시키다
-include|v|포함하다
-income|n|소득, 수입
-increase|v|증가하다, 늘리다
-indeed|ad|정말로, 실제로
-independent|a|독립적인
-indicate|v|나타내다, 가리키다
-individual|n|개인
-industry|n|산업, 업계
-influence|n|영향, 영향력
-inform|v|알리다, 통지하다
-information|n|정보
-ingredient|n|재료, 성분
-injure|v|다치게 하다, 부상을 입히다
-injury|n|부상, 상처
-ink|n|잉크
-inner|a|내부의, 내면의
-innocent|a|무죄인, 순진한
-input|n|입력, 투입
-insect|n|곤충
-inside|prep|~ 안에
-insist|v|주장하다, 고집하다
-inspire|v|영감을 주다, 고무하다
-install|v|설치하다
-instance|n|사례, 경우
-instead|ad|대신에
-instruction|n|지시, 설명
-instrument|n|악기, 기구
-insurance|n|보험
-intelligent|a|똑똑한, 지적인
-intend|v|의도하다, 작정하다
-interest|n|관심, 흥미, 이자
-interesting|a|흥미로운, 재미있는
-international|a|국제적인
-internet|n|인터넷
-interpret|v|해석하다, 통역하다
-interrupt|v|방해하다, 가로막다
-interview|n|면접, 인터뷰
-introduce|v|소개하다, 도입하다
-invent|v|발명하다
-invest|v|투자하다
-investigate|v|조사하다, 수사하다
-invitation|n|초대, 초대장
-invite|v|초대하다
-involve|v|포함하다, 관련시키다
-iron|n|철, 다리미
-island|n|섬
-issue|n|문제, 쟁점, 발행
-item|n|항목, 물품
-jacket|n|재킷, 상의
-jail|n|감옥
-jam|n|잼, 교통 체증
-jar|n|병, 단지
-jealous|a|질투하는, 시기하는
-jeans|n|청바지
-jewelry|n|보석, 장신구
-job|n|일, 직업
-join|v|참여하다, 합치다
-joke|n|농담
-journal|n|일지, 학술지
-journey|n|여행, 여정
-joy|n|기쁨
-judge|n|판사, 심사위원
-juice|n|주스, 즙
-jump|v|뛰다, 점프하다
-jungle|n|밀림, 정글
-junior|a|손아래의, 하급의
-just|ad|막, 단지, 정확히
-justice|n|정의, 사법
-keep|v|유지하다, 계속하다
-key|n|열쇠, 핵심
-kick|v|차다
-kid|n|아이
-kill|v|죽이다
-kind|a|친절한
-kindergarten|n|유치원
-king|n|왕
-kiss|v|입 맞추다
-kitchen|n|부엌, 주방
-knee|n|무릎
-knife|n|칼
-knock|v|두드리다, 노크하다
-know|v|알다
-knowledge|n|지식
-lab|n|실험실, 연구실
-label|n|상표, 라벨
-labor|n|노동, 노동력
-lack|n|부족, 결핍
-ladder|n|사다리
-lady|n|숙녀, 여성
-lake|n|호수
-lamp|n|등, 램프
-land|n|땅, 육지
-language|n|언어
-large|a|큰, 넓은
-last|a|마지막의, 지난
-late|a|늦은
-lately|ad|최근에
-later|ad|나중에
-laugh|v|웃다
-laundry|n|세탁물, 빨래
-law|n|법, 법칙
-lawyer|n|변호사
-lay|v|놓다, 눕히다
-layer|n|층, 겹
-lazy|a|게으른
-lead|v|이끌다, 안내하다
-leader|n|지도자, 대표
-leaf|n|잎
-league|n|리그, 연맹
-lean|v|기대다, 기울다
-learn|v|배우다, 알게 되다
-least|a|가장 적은
-leather|n|가죽
-leave|v|떠나다, 남기다
-lecture|n|강의, 강연
-left|n|왼쪽
-leg|n|다리
-legal|a|합법적인, 법률의
-lemon|n|레몬
-lend|v|빌려주다
-length|n|길이, 기간
-less|a|더 적은
-lesson|n|수업, 교훈
-let|v|~하게 하다, 허락하다
-letter|n|편지, 글자
-level|n|수준, 높이
-library|n|도서관
-license|n|면허, 자격증
-lie|v|눕다, 거짓말하다
-life|n|삶, 생명
-lift|v|들어 올리다
-light|n|빛, 조명
-lightning|n|번개
-like|v|좋아하다
-likely|a|~할 것 같은
-limit|n|한계, 제한
-line|n|선, 줄
-lip|n|입술
-liquid|n|액체
-list|n|목록, 명단
-listen|v|듣다, 귀 기울이다
-literature|n|문학
-little|a|작은, 조금의
-live|v|살다, 생활하다
-lively|a|활기찬, 생기 넘치는
-living|n|생계, 생활
-load|n|짐, 부하
-loan|n|대출, 융자
-local|a|지역의, 현지의
-locate|v|위치시키다, 찾아내다
-location|n|위치, 장소
-lock|v|잠그다
-lonely|a|외로운
-long|a|긴, 오랜
-look|v|보다, ~처럼 보이다
-loose|a|헐거운, 느슨한
-lose|v|잃다, 지다
-loss|n|손실, 패배
-lot|n|많음, 다수
-loud|a|시끄러운, 큰
-love|v|사랑하다
-lovely|a|사랑스러운, 멋진
-low|a|낮은
-loyal|a|충성스러운
-luck|n|운, 행운
-lucky|a|운이 좋은
-lunch|n|점심 식사
-lung|n|폐, 허파
-luxury|n|사치, 호화
-machine|n|기계
-mad|a|화난, 미친
-magazine|n|잡지
-magic|n|마법, 마술
-mail|n|우편, 메일
-main|a|주요한, 주된
-maintain|v|유지하다, 주장하다
-major|a|주요한, 대다수의
-make|v|만들다, ~하게 하다
-male|a|남성의, 수컷의
-mall|n|쇼핑몰
-man|n|남자, 사람
-manage|v|관리하다, 해내다
-manager|n|관리자, 매니저
-manner|n|방식, 태도
-manufacture|v|제조하다, 생산하다
-many|a|많은
-map|n|지도
-march|v|행진하다
-mark|n|표시, 자국, 점수
-market|n|시장
-marriage|n|결혼
-marry|v|결혼하다
-mass|n|덩어리, 대중
-master|n|주인, 달인
-match|n|경기, 성냥, 어울림
-material|n|재료, 자료
-math|n|수학
-matter|n|문제, 사안
-may|v|~일지도 모른다, ~해도 된다
-maybe|ad|아마도
-meal|n|식사, 끼니
-mean|v|의미하다, 의도하다
-meaning|n|의미, 뜻
-means|n|수단, 방법
-meanwhile|ad|그동안에, 한편
-measure|v|측정하다, 재다
-meat|n|고기
-medal|n|메달, 훈장
-media|n|매체, 언론
-medical|a|의학의, 의료의
-medicine|n|약, 의학
-medium|a|중간의, 보통의
-meet|v|만나다, 충족시키다
-meeting|n|회의, 만남
-melt|v|녹다, 녹이다
-member|n|구성원, 회원
-memory|n|기억, 추억
-mention|v|언급하다
-menu|n|메뉴, 차림표
-merely|ad|단지, 그저
-mess|n|엉망, 혼란
-message|n|메시지, 전갈
-metal|n|금속
-method|n|방법
-middle|n|중간, 가운데
-midnight|n|자정, 한밤중
-might|v|~일지도 모른다
-mild|a|온화한, 순한
-military|a|군사의, 군대의
-milk|n|우유
-million|num|백만
-mind|n|마음, 정신
-mine|pron|나의 것
-mineral|n|광물, 무기질
-minister|n|장관, 목사
-minor|a|사소한, 작은
-minute|n|분, 잠깐
-miracle|n|기적
-mirror|n|거울
-miss|v|그리워하다, 놓치다
-mission|n|임무, 사명
-mistake|n|실수, 잘못
-mix|v|섞다, 혼합하다
-mobile|a|이동하는, 휴대의
-model|n|모형, 모델
-modern|a|현대의, 근대의
-modest|a|겸손한, 수수한
-moment|n|순간, 잠깐
-money|n|돈
-monitor|n|화면, 감시 장치
-monkey|n|원숭이
-month|n|달, 월
-mood|n|기분, 분위기
-moon|n|달
-moral|a|도덕적인
-more|a|더 많은
-morning|n|아침, 오전
-most|a|대부분의, 가장 많은
-mostly|ad|주로, 대체로
-mother|n|어머니
-motion|n|움직임, 동작
-motivate|v|동기를 부여하다
-motor|n|모터, 발동기
-mountain|n|산
-mouse|n|쥐, 마우스
-mouth|n|입
-move|v|움직이다, 이사하다
-movement|n|움직임, 운동
-movie|n|영화
-much|a|많은
-mud|n|진흙
-multiply|v|곱하다, 증가시키다
-murder|n|살인
-muscle|n|근육
-museum|n|박물관, 미술관
-mushroom|n|버섯
-music|n|음악
-musician|n|음악가
-must|v|~해야 한다, ~임에 틀림없다
-mystery|n|수수께끼, 신비
-nail|n|손톱, 못
-naked|a|벌거벗은
-name|n|이름
-narrow|a|좁은
-nation|n|국가, 국민
-national|a|국가의, 전국의
-native|a|토박이의, 모국의
-natural|a|자연의, 자연스러운
-nature|n|자연, 본성
-near|prep|~ 가까이에
-nearly|ad|거의
-neat|a|깔끔한, 정돈된
-necessary|a|필요한, 필수의
-neck|n|목
-need|v|필요하다
-needle|n|바늘
-negative|a|부정적인, 음성의
-neighbor|n|이웃
-neither|a|둘 다 아닌
-nephew|n|조카
-nerve|n|신경, 용기
-nervous|a|긴장한, 불안한
-nest|n|둥지
-net|n|그물, 망
-network|n|망, 네트워크
-never|ad|결코 ~않다
-nevertheless|ad|그럼에도 불구하고
-new|a|새로운
-news|n|소식, 뉴스
-newspaper|n|신문
-next|a|다음의
-nice|a|좋은, 친절한
-niece|n|조카딸
-night|n|밤
-no|ad|아니오, 없는
-nobody|pron|아무도 ~않다
-noise|n|소음, 소리
-none|pron|아무것도 ~않다
-noon|n|정오, 낮 열두 시
-nor|conj|~도 아니다
-normal|a|정상의, 보통의
-north|n|북쪽
-nose|n|코
-not|ad|~아니다
-note|n|메모, 음표
-nothing|pron|아무것도 ~않다
-notice|v|알아차리다
-novel|n|소설
-now|ad|지금, 이제
-nowadays|ad|요즘에는
-nowhere|ad|어디에도 ~없다
-nuclear|a|핵의, 원자력의
-number|n|숫자, 번호
-nurse|n|간호사
-nut|n|견과, 너트
-obey|v|복종하다, 따르다
-object|n|물체, 목적
-observe|v|관찰하다, 지키다
-obtain|v|얻다, 획득하다
-obvious|a|명백한, 분명한
-occasion|n|경우, 행사
-occupy|v|차지하다, 점령하다
-occur|v|일어나다, 발생하다
-ocean|n|바다, 대양
-odd|a|이상한, 홀수의
-of|prep|~의
-off|ad|떨어져, 꺼진
-offer|v|제안하다, 제공하다
-office|n|사무실, 관청
-officer|n|장교, 공무원
-official|a|공식적인
-often|ad|자주, 흔히
-oil|n|기름, 석유
-old|a|나이 든, 오래된
-once|ad|한 번, 예전에
-only|a|유일한, 단지
-onto|prep|~ 위로
-open|v|열다
-operate|v|작동하다, 수술하다
-opinion|n|의견, 견해
-opportunity|n|기회
-oppose|v|반대하다
-opposite|a|반대의, 맞은편의
-option|n|선택, 선택권
-or|conj|또는, 혹은
-orange|n|오렌지, 주황색
-order|n|주문, 명령, 순서
-ordinary|a|평범한, 보통의
-organ|n|장기, 기관
-organize|v|조직하다, 정리하다
-origin|n|기원, 출신
-original|a|원래의, 독창적인
-other|a|다른
-otherwise|ad|그렇지 않으면
-ought|v|~해야 한다
-ours|pron|우리의 것
-out|ad|밖으로, 밖에
-outcome|n|결과
-outdoor|a|야외의
-outline|n|개요, 윤곽
-output|n|생산량, 출력
-outside|prep|~ 밖에
-oven|n|오븐
-over|prep|~ 위에, ~ 넘어
-overcome|v|극복하다
-overseas|ad|해외로, 해외에
-owe|v|빚지다, 신세를 지다
-own|v|소유하다
-owner|n|주인, 소유자
-oxygen|n|산소
-pack|v|싸다, 포장하다
-package|n|소포, 꾸러미
-page|n|쪽, 페이지
-pain|n|고통, 아픔
-paint|v|칠하다, 그리다
-pair|n|한 쌍, 한 켤레
-palace|n|궁전
-pale|a|창백한, 옅은
-palm|n|손바닥, 야자나무
-pan|n|냄비, 프라이팬
-panic|n|공황, 공포
-pants|n|바지
-paper|n|종이, 논문
-parent|n|부모
-park|n|공원
-part|n|부분, 역할
-participate|v|참가하다
-particular|a|특정한, 특별한
-partner|n|동반자, 동업자
-party|n|파티, 정당
-pass|v|지나가다, 통과하다
-passenger|n|승객
-passion|n|열정
-passport|n|여권
-password|n|비밀번호
-past|n|과거
-path|n|길, 경로
-patient|n|환자
-pattern|n|무늬, 양식
-pause|v|잠시 멈추다
-pay|v|지불하다, 내다
-peace|n|평화
-peak|n|정상, 절정
-pen|n|펜
-pencil|n|연필
-people|n|사람들, 국민
-pepper|n|후추, 고추
-per|prep|~당, ~마다
-percent|n|퍼센트, 백분율
-perfect|a|완벽한
-perform|v|공연하다, 수행하다
-performance|n|공연, 성과
-perhaps|ad|아마, 어쩌면
-period|n|기간, 시기
-permanent|a|영구적인
-permission|n|허락, 허가
-person|n|사람, 개인
-personal|a|개인적인
-personality|n|성격, 개성
-perspective|n|관점, 시각
-persuade|v|설득하다
-pet|n|반려동물
-phone|n|전화
-photograph|n|사진
-phrase|n|구절, 표현
-physical|a|신체의, 물리적인
-piano|n|피아노
-pick|v|고르다, 따다
-picture|n|그림, 사진
-piece|n|조각, 한 개
-pig|n|돼지
-pile|n|더미, 무더기
-pill|n|알약
-pillow|n|베개
-pilot|n|조종사
-pin|n|핀, 압정
-pink|a|분홍색의
-pipe|n|관, 파이프
-pity|n|연민, 유감
-place|n|장소, 곳
-plain|a|분명한, 소박한
-plan|n|계획
-plane|n|비행기, 평면
-planet|n|행성
-plant|n|식물, 공장
-plastic|n|플라스틱
-plate|n|접시, 판
-platform|n|승강장, 연단, 플랫폼
-play|v|놀다, 연주하다, 경기하다
-player|n|선수, 연주자
-pleasant|a|즐거운, 유쾌한
-please|v|기쁘게 하다
-pleasure|n|기쁨, 즐거움
-plenty|n|풍부, 많음
-plus|prep|더하기, ~에 더하여
-pocket|n|주머니
-poem|n|시
-poet|n|시인
-point|n|점, 요점
-poison|n|독
-police|n|경찰
-policy|n|정책, 방침
-polite|a|예의 바른, 공손한
-politics|n|정치
-pollution|n|오염, 공해
-pool|n|수영장, 웅덩이
-poor|a|가난한, 서투른
-popular|a|인기 있는, 대중적인
-population|n|인구
-port|n|항구
-portion|n|부분, 1인분
-position|n|위치, 자리, 입장
-positive|a|긍정적인, 양성의
-possess|v|소유하다, 지니다
-possible|a|가능한
-post|n|우편, 게시물, 직책
-postpone|v|연기하다, 미루다
-pot|n|냄비, 항아리
-potato|n|감자
-potential|n|잠재력
-pour|v|붓다, 따르다
-poverty|n|가난, 빈곤
-powder|n|가루, 분말
-power|n|힘, 권력, 전력
-powerful|a|강력한, 영향력 있는
-practical|a|실용적인, 현실적인
-practice|n|연습, 실행
-praise|v|칭찬하다
-pray|v|기도하다
-precious|a|귀중한, 소중한
-predict|v|예측하다
-prefer|v|더 좋아하다, 선호하다
-pregnant|a|임신한
-prepare|v|준비하다
-prescription|n|처방전
-present|n|선물, 현재
-preserve|v|보존하다, 지키다
-president|n|대통령, 회장
-press|v|누르다, 압박하다
-pressure|n|압력, 압박
-pretend|v|~인 척하다
-pretty|a|예쁜, 꽤
-prevent|v|막다, 예방하다
-previous|a|이전의, 앞선
-price|n|가격, 값
-pride|n|자부심, 자존심
-priest|n|성직자, 신부
-primary|a|주요한, 초등의
-prince|n|왕자
-principal|n|교장, 주요한
-principle|n|원칙, 원리
-print|v|인쇄하다, 출력하다
-prison|n|감옥, 교도소
-private|a|사적인, 개인의
-prize|n|상, 상품
-probably|ad|아마도
-problem|n|문제
-procedure|n|절차, 수술
-process|n|과정, 절차
-produce|v|생산하다, 만들어 내다
-product|n|제품, 산물
-production|n|생산, 제작
-professional|a|전문적인, 직업의
-professor|n|교수
-profile|n|프로필, 옆모습
-profit|n|이익, 수익
-program|n|프로그램, 계획
-progress|n|진전, 발전
-project|n|계획, 과제
-promise|v|약속하다
-promote|v|승진시키다, 홍보하다
-prompt|a|즉각적인, 신속한
-pronounce|v|발음하다, 선언하다
-pronunciation|n|발음
-proof|n|증거, 증명
-proper|a|적절한, 올바른
-property|n|재산, 부동산, 속성
-proposal|n|제안, 청혼
-propose|v|제안하다, 청혼하다
-protect|v|보호하다, 지키다
-protein|n|단백질
-protest|v|항의하다, 시위하다
-proud|a|자랑스러운, 자부심 있는
-prove|v|증명하다, 판명되다
-provide|v|제공하다, 공급하다
-public|a|공공의, 대중의
-publish|v|출판하다, 게재하다
-pull|v|당기다, 끌다
-pump|n|펌프
-punish|v|벌하다, 처벌하다
-purchase|v|구매하다
-pure|a|순수한, 깨끗한
-purple|a|보라색의
-purpose|n|목적, 의도
-purse|n|지갑, 핸드백
-push|v|밀다, 누르다
-put|v|놓다, 두다
-puzzle|n|퍼즐, 수수께끼
-qualify|v|자격을 얻다
-quality|n|품질, 자질
-quantity|n|양, 수량
-quarter|n|4분의 1, 15분, 분기
-queen|n|여왕
-question|n|질문, 문제
-quick|a|빠른, 신속한
-quiet|a|조용한
-quit|v|그만두다, 끊다
-quite|ad|꽤, 상당히
-quiz|n|퀴즈, 쪽지 시험
-race|n|경주, 인종
-radio|n|라디오
-rail|n|철도, 난간
-rain|n|비
-rainbow|n|무지개
-raise|v|올리다, 기르다, 모으다
-range|n|범위, 산맥
-rank|n|계급, 순위
-rapid|a|빠른, 신속한
-rare|a|드문, 희귀한
-rate|n|비율, 요금, 속도
-rather|ad|오히려, 꽤
-raw|a|날것의, 가공하지 않은
-reach|v|도달하다, 닿다
-react|v|반응하다
-read|v|읽다
-ready|a|준비된
-real|a|진짜의, 실제의
-realize|v|깨닫다, 실현하다
-really|ad|정말로, 실제로
-reason|n|이유, 이성
-reasonable|a|합리적인, 적당한
-receipt|n|영수증
-receive|v|받다, 수령하다
-recent|a|최근의
-recipe|n|조리법, 요리법
-recognize|v|알아보다, 인정하다
-recommend|v|추천하다, 권하다
-record|n|기록, 음반
-recover|v|회복하다, 되찾다
-recycle|v|재활용하다
-red|a|빨간
-reduce|v|줄이다, 감소시키다
-refer|v|언급하다, 참조하다
-reflect|v|반사하다, 반영하다
-refrigerator|n|냉장고
-refuse|v|거절하다, 거부하다
-regard|v|여기다, 간주하다
-region|n|지역, 지방
-register|v|등록하다
-regret|v|후회하다, 유감으로 여기다
-regular|a|규칙적인, 정기적인
-reject|v|거절하다, 거부하다
-relate|v|관련시키다, 이야기하다
-relationship|n|관계, 사이
-relax|v|긴장을 풀다, 쉬다
-release|v|풀어 주다, 공개하다
-relief|n|안도, 구호
-religion|n|종교
-rely|v|의지하다, 신뢰하다
-remain|v|남다, 계속 ~이다
-remember|v|기억하다
-remind|v|상기시키다
-remote|a|먼, 외딴, 원격의
-remove|v|제거하다, 없애다
-rent|v|빌리다, 임대하다
-repair|v|수리하다, 고치다
-repeat|v|반복하다
-replace|v|대체하다, 교체하다
-reply|v|대답하다, 답장하다
-report|n|보고서, 보도
-represent|v|대표하다, 나타내다
-reputation|n|평판, 명성
-request|n|요청, 부탁
-require|v|요구하다, 필요로 하다
-rescue|v|구조하다, 구하다
-research|n|연구, 조사
-reservation|n|예약
-resident|n|주민, 거주자
-resist|v|저항하다, 참다
-resource|n|자원, 재료
-respect|v|존중하다, 존경하다
-respond|v|대답하다, 반응하다
-responsibility|n|책임, 책무
-responsible|a|책임이 있는
-rest|n|휴식, 나머지
-restaurant|n|식당
-restore|v|복구하다, 회복시키다
-restrict|v|제한하다
-result|n|결과
-retire|v|은퇴하다, 퇴직하다
-return|v|돌아오다, 반납하다
-reveal|v|드러내다, 밝히다
-review|n|검토, 후기, 복습
-reward|n|보상, 상
-rice|n|쌀, 밥
-rich|a|부유한, 풍부한
-ride|v|타다
-right|a|옳은, 오른쪽의
-ring|n|반지, 고리
-rise|v|오르다, 떠오르다
-risk|n|위험, 모험
-river|n|강
-road|n|길, 도로
-roast|v|굽다, 볶다
-rob|v|훔치다, 강도질하다
-rock|n|바위, 암석
-role|n|역할, 배역
-roll|v|구르다, 굴리다
-roof|n|지붕
-room|n|방, 공간
-root|n|뿌리, 근원
-rope|n|밧줄, 줄
-rose|n|장미
-rough|a|거친, 대략의
-round|a|둥근
-route|n|길, 경로
-routine|n|일과, 판에 박힌 일
-row|n|줄, 열
-royal|a|왕실의, 왕의
-rub|v|문지르다, 비비다
-rubber|n|고무
-rude|a|무례한, 버릇없는
-ruin|v|망치다, 파괴하다
-rule|n|규칙, 통치
-ruler|n|자, 통치자
-run|v|달리다, 운영하다
-rush|v|서두르다, 돌진하다
-sad|a|슬픈
-safe|a|안전한
-safety|n|안전
-sail|v|항해하다
-salad|n|샐러드
-salary|n|급여, 월급
-sale|n|판매, 할인 판매
-salt|n|소금
-same|a|같은, 동일한
-sample|n|견본, 표본
-sand|n|모래
-satisfy|v|만족시키다
-sauce|n|소스, 양념
-save|v|구하다, 저축하다, 저장하다
-say|v|말하다
-scale|n|규모, 저울, 눈금
-scare|v|겁주다, 무섭게 하다
-scene|n|장면, 현장
-schedule|n|일정, 시간표
-scholar|n|학자, 장학생
-school|n|학교
-science|n|과학
-scissors|n|가위
-score|n|점수, 득점
-scream|v|비명을 지르다
-screen|n|화면, 스크린
-sea|n|바다
-search|v|찾다, 검색하다
-season|n|계절, 시즌
-seat|n|좌석, 자리
-second|n|초, 두 번째
-secret|n|비밀
-secretary|n|비서, 장관
-section|n|부분, 구역
-secure|a|안전한, 확실한
-see|v|보다, 알다
-seed|n|씨앗
-seek|v|찾다, 구하다
-seem|v|~인 것 같다
-seldom|ad|좀처럼 ~않다
-select|v|고르다, 선택하다
-selfish|a|이기적인
-sell|v|팔다
-senator|n|상원 의원
-send|v|보내다
-senior|a|손위의, 상급의
-sense|n|감각, 느낌, 의미
-sensitive|a|민감한, 세심한
-sentence|n|문장, 형벌
-separate|v|분리하다, 나누다
-series|n|연속, 시리즈
-serious|a|심각한, 진지한
-serve|v|제공하다, 봉사하다
-service|n|서비스, 봉사
-set|v|놓다, 정하다
-settle|v|정착하다, 해결하다
-several|a|몇몇의
-severe|a|심한, 엄격한
-sew|v|바느질하다, 꿰매다
-shade|n|그늘, 색조
-shadow|n|그림자
-shake|v|흔들다, 떨다
-shall|v|~할 것이다, ~할까요
-shallow|a|얕은
-shame|n|수치심, 창피
-shape|n|모양, 형태
-share|v|공유하다, 나누다
-sharp|a|날카로운, 예리한
-shave|v|면도하다
-sheep|n|양
-sheet|n|시트, 한 장
-shelf|n|선반
-shell|n|껍데기, 조개껍질
-shelter|n|피난처, 보호소
-shine|v|빛나다, 비추다
-ship|n|배, 선박
-shirt|n|셔츠
-shock|n|충격
-shoe|n|신발
-shoot|v|쏘다, 촬영하다
-shop|n|가게, 상점
-shore|n|해안, 물가
-short|a|짧은, 부족한
-shortage|n|부족, 결핍
-shot|n|발사, 슛, 주사
-should|v|~해야 한다
-shoulder|n|어깨
-shout|v|외치다, 소리치다
-show|v|보여 주다, 나타내다
-shower|n|샤워, 소나기
-shrimp|n|새우
-shut|v|닫다, 닫히다
-shy|a|수줍은, 부끄러워하는
-sick|a|아픈, 병든
-side|n|쪽, 옆, 측면
-sight|n|시력, 광경
-sign|n|표지, 징후, 서명
-signal|n|신호
-signature|n|서명
-significant|a|중요한, 상당한
-silence|n|침묵, 고요
-silent|a|조용한, 침묵하는
-silk|n|비단, 실크
-silly|a|어리석은, 바보 같은
-silver|n|은
-similar|a|비슷한, 유사한
-simple|a|간단한, 단순한
-simply|ad|단순히, 그저
-since|conj|~ 이래로, ~ 때문에
-sincere|a|진실한, 진심의
-sing|v|노래하다
-single|a|단 하나의, 독신의
-sink|v|가라앉다
-sister|n|언니, 누나, 여동생
-sit|v|앉다
-site|n|장소, 부지, 사이트
-situation|n|상황, 처지
-size|n|크기, 치수
-skill|n|기술, 능력
-skin|n|피부, 껍질
-skirt|n|치마
-sky|n|하늘
-sleep|v|자다
-slice|n|조각, 얇은 조각
-slide|v|미끄러지다
-slight|a|약간의, 경미한
-slim|a|날씬한, 얇은
-slip|v|미끄러지다, 빠져나가다
-slow|a|느린
-small|a|작은
-smart|a|똑똑한, 영리한
-smell|v|냄새를 맡다, 냄새가 나다
-smile|v|미소 짓다
-smoke|n|연기
-smooth|a|매끄러운, 부드러운
-snack|n|간식
-snake|n|뱀
-snow|n|눈
-so|ad|그래서, 매우
-soap|n|비누
-soccer|n|축구
-social|a|사회의, 사교적인
-society|n|사회, 협회
-sock|n|양말
-soft|a|부드러운, 푹신한
-software|n|소프트웨어
-soil|n|흙, 토양
-soldier|n|군인, 병사
-solid|a|단단한, 고체의
-solution|n|해결책, 용액
-solve|v|풀다, 해결하다
-some|a|약간의, 어떤
-somebody|pron|어떤 사람, 누군가
-somehow|ad|어떻게든, 왠지
-someone|pron|누군가
-something|pron|어떤 것, 무언가
-sometimes|ad|가끔, 때때로
-somewhere|ad|어딘가에
-son|n|아들
-song|n|노래
-soon|ad|곧, 머지않아
-sorry|a|미안한, 유감스러운
-sort|n|종류, 부류
-soul|n|영혼, 정신
-sound|n|소리
-soup|n|수프, 국
-source|n|출처, 원천
-south|n|남쪽
-space|n|공간, 우주
-spare|a|여분의, 예비의
-speak|v|말하다, 이야기하다
-speaker|n|연설자, 화자, 스피커
-special|a|특별한
-species|n|종, 종류
-specific|a|구체적인, 특정한
-speech|n|연설, 말
-speed|n|속도
-spell|v|철자를 쓰다
-spend|v|쓰다, 보내다
-spicy|a|매운, 양념이 강한
-spider|n|거미
-spill|v|엎지르다, 쏟다
-spin|v|돌다, 회전시키다
-spirit|n|정신, 영혼
-spoil|v|망치다, 상하다
-spoon|n|숟가락
-sport|n|운동, 스포츠
-spot|n|점, 장소
-spread|v|퍼지다, 펴다
-spring|n|봄, 샘, 용수철
-square|n|정사각형, 광장
-stage|n|무대, 단계
-stair|n|계단
-stamp|n|우표, 도장
-stand|v|서다, 견디다
-standard|n|기준, 표준
-star|n|별, 스타
-stare|v|응시하다, 빤히 보다
-start|v|시작하다
-state|n|상태, 국가, 주
-statement|n|진술, 성명
-station|n|역, 방송국
-statue|n|조각상
-stay|v|머무르다, 유지하다
-steady|a|꾸준한, 안정된
-steal|v|훔치다
-steam|n|증기, 김
-steel|n|강철
-steep|a|가파른
-step|n|걸음, 단계
-stick|n|막대기
-sticky|a|끈적끈적한
-stiff|a|뻣뻣한, 뻑뻑한
-still|ad|여전히, 아직
-stomach|n|위, 배
-stone|n|돌
-stop|v|멈추다, 그만두다
-store|n|가게, 상점
-storm|n|폭풍, 폭풍우
-story|n|이야기, 층
-stove|n|난로, 가스레인지
-straight|a|곧은, 똑바른
-strange|a|이상한, 낯선
-stranger|n|낯선 사람
-strategy|n|전략
-straw|n|짚, 빨대
-stream|n|시내, 흐름
-street|n|거리, 길
-strength|n|힘, 강점
-stress|n|스트레스, 강조
-stretch|v|늘이다, 뻗다
-strict|a|엄격한
-strike|v|치다, 파업하다
-string|n|끈, 줄
-strong|a|강한, 튼튼한
-structure|n|구조, 건축물
-struggle|v|고군분투하다, 몸부림치다
-student|n|학생
-study|v|공부하다, 연구하다
-stuff|n|물건, 것
-stupid|a|어리석은, 멍청한
-style|n|양식, 방식, 스타일
-subject|n|과목, 주제
-submit|v|제출하다, 굴복하다
-subway|n|지하철
-succeed|v|성공하다, 뒤를 잇다
-success|n|성공
-such|a|그러한, 그런
-sudden|a|갑작스러운
-suffer|v|고통받다, 겪다
-sugar|n|설탕
-suggest|v|제안하다, 시사하다
-suit|n|정장, 소송
-suitable|a|적합한, 알맞은
-summary|n|요약
-summer|n|여름
-sun|n|해, 태양
-supermarket|n|슈퍼마켓
-supply|v|공급하다
-support|v|지지하다, 지원하다
-suppose|v|가정하다, 추측하다
-sure|a|확신하는, 확실한
-surface|n|표면
-surgery|n|수술
-surprise|v|놀라게 하다
-surround|v|둘러싸다, 에워싸다
-survey|n|조사, 설문
-survive|v|살아남다, 생존하다
-suspect|v|의심하다
-swallow|v|삼키다
-swear|v|맹세하다, 욕하다
-sweat|n|땀
-sweater|n|스웨터
-sweep|v|쓸다, 청소하다
-sweet|a|달콤한, 다정한
-swim|v|수영하다
-swing|v|흔들리다, 흔들다
-switch|n|스위치, 전환
-symbol|n|상징, 기호
-sympathy|n|동정, 공감
-symptom|n|증상, 징후
-system|n|체계, 시스템
-table|n|탁자, 표
-tail|n|꼬리
-take|v|가져가다, 잡다, 걸리다
-talent|n|재능, 재주
-talk|v|말하다, 이야기하다
-tall|a|키가 큰, 높은
-tape|n|테이프
-target|n|목표, 표적
-task|n|일, 과제
-taste|n|맛, 취향
-tax|n|세금
-taxi|n|택시
-tea|n|차
-teach|v|가르치다
-teacher|n|교사, 선생님
-team|n|팀, 조
-tear|n|눈물
-technique|n|기술, 기법
-technology|n|기술, 과학 기술
-teenager|n|십 대
-telephone|n|전화
-television|n|텔레비전
-tell|v|말하다, 알려 주다
-temperature|n|온도, 체온
-temple|n|절, 사원
-temporary|a|임시의, 일시적인
-tend|v|~하는 경향이 있다
-tension|n|긴장, 갈등
-term|n|용어, 기간, 조건
-terrible|a|끔찍한, 심한
-territory|n|영토, 지역
-test|n|시험, 검사
-text|n|글, 본문, 문자
-than|conj|~보다
-thank|v|감사하다
-that|pron|저것, 그것
-theater|n|극장
-theme|n|주제, 테마
-then|ad|그때, 그다음에
-theory|n|이론
-there|ad|거기에, 그곳에
-therefore|ad|그러므로, 따라서
-thick|a|두꺼운, 짙은
-thief|n|도둑
-thin|a|얇은, 마른
-thing|n|것, 물건, 일
-think|v|생각하다
-thirsty|a|목마른
-this|pron|이것
-thought|n|생각, 사고
-thousand|num|천, 1000
-thread|n|실, 가닥
-threat|n|위협, 협박
-throat|n|목구멍, 목
-through|prep|~을 통해, ~을 지나
-throughout|prep|~ 내내, ~ 전역에
-throw|v|던지다
-thumb|n|엄지손가락
-thunder|n|천둥
-thus|ad|그러므로, 이렇게
-ticket|n|표, 입장권
-tide|n|조수, 흐름
-tidy|a|정돈된, 깔끔한
-tie|v|묶다, 동점이 되다
-tight|a|꽉 끼는, 팽팽한
-time|n|시간, 때, 번
-tiny|a|아주 작은
-tip|n|끝, 조언, 팁
-tire|n|타이어
-tired|a|피곤한, 지친
-title|n|제목, 직함
-today|n|오늘
-toe|n|발가락
-together|ad|함께, 같이
-toilet|n|화장실, 변기
-tomorrow|n|내일
-tone|n|어조, 음색
-tongue|n|혀, 언어
-tonight|n|오늘 밤
-too|ad|너무, ~도 또한
-tool|n|도구, 연장
-tooth|n|이, 치아
-top|n|꼭대기, 맨 위
-topic|n|주제, 화제
-total|a|전체의, 총
-touch|v|만지다, 감동시키다
-tough|a|힘든, 질긴
-tour|n|여행, 관광
-tourist|n|관광객
-toward|prep|~ 쪽으로, ~을 향하여
-towel|n|수건
-tower|n|탑
-town|n|마을, 소도시
-toy|n|장난감
-trace|n|자취, 흔적
-track|n|길, 자취, 트랙
-trade|n|무역, 거래
-tradition|n|전통
-traffic|n|교통, 통행
-train|n|기차
-training|n|훈련, 교육
-translate|v|번역하다, 통역하다
-transport|v|수송하다, 운반하다
-trap|n|덫, 함정
-trash|n|쓰레기
-travel|v|여행하다
-treasure|n|보물
-treat|v|대하다, 치료하다, 대접하다
-treatment|n|치료, 대우
-tree|n|나무
-trend|n|경향, 유행
-trial|n|재판, 시험
-trick|n|속임수, 묘기
-trip|n|여행
-trouble|n|문제, 곤란
-truck|n|트럭
-true|a|사실인, 진실한
-trust|v|믿다, 신뢰하다
-truth|n|진실, 사실
-try|v|시도하다, 노력하다
-tube|n|관, 튜브
-tune|n|곡, 선율
-tunnel|n|터널
-turn|v|돌다, 돌리다, 변하다
-twice|ad|두 번, 두 배로
-twin|n|쌍둥이
-twist|v|비틀다, 꼬다
-type|n|유형, 종류
-typical|a|전형적인, 대표적인
-ugly|a|못생긴, 추한
-umbrella|n|우산
-uncle|n|삼촌, 이모부
-uncomfortable|a|불편한
-under|prep|~ 아래에
-underground|a|지하의
-understand|v|이해하다
-underwear|n|속옷
-unfortunately|ad|불행히도, 안타깝게도
-uniform|n|제복, 교복
-union|n|조합, 연합
-unique|a|독특한, 유일한
-unit|n|단위, 구성 단위
-unite|v|연합하다, 통합하다
-universe|n|우주
-university|n|대학교
-unless|conj|~하지 않는 한
-until|prep|~까지
-unusual|a|특이한, 흔치 않은
-up|ad|위로, 위에
-update|v|갱신하다, 최신으로 하다
-upload|v|올리다, 업로드하다
-upon|prep|~ 위에, ~하자마자
-upper|a|위쪽의, 상부의
-upset|a|속상한, 화난
-upstairs|ad|위층에
-urban|a|도시의
-urge|v|촉구하다, 재촉하다
-urgent|a|긴급한, 시급한
-use|v|사용하다, 쓰다
-useful|a|유용한, 쓸모 있는
-useless|a|쓸모없는
-usual|a|평소의, 보통의
-usually|ad|보통, 대개
-vacation|n|방학, 휴가
-valley|n|계곡, 골짜기
-valuable|a|귀중한, 값비싼
-value|n|가치, 값
-van|n|승합차, 밴
-variety|n|다양성, 종류
-various|a|다양한, 여러 가지의
-vary|v|다르다, 달라지다
-vegetable|n|채소
-vehicle|n|차량, 탈것
-version|n|판, 버전
-very|ad|매우, 아주
-victim|n|피해자, 희생자
-victory|n|승리
-video|n|영상, 비디오
-view|n|경치, 견해
-village|n|마을
-violence|n|폭력
-violent|a|폭력적인, 격렬한
-virus|n|바이러스
-visit|v|방문하다
-visitor|n|방문객, 손님
-vitamin|n|비타민
-voice|n|목소리, 음성
-volume|n|양, 음량, 권
-volunteer|n|자원봉사자
-vote|v|투표하다
-voyage|n|항해, 여행
-wage|n|임금, 급료
-waist|n|허리
-wait|v|기다리다
-wake|v|깨다, 깨우다
-walk|v|걷다
-wall|n|벽, 담
-wallet|n|지갑
-wander|v|돌아다니다, 헤매다
-want|v|원하다, 바라다
-war|n|전쟁
-warm|a|따뜻한
-warn|v|경고하다, 주의를 주다
-wash|v|씻다, 빨다
-waste|v|낭비하다
-watch|v|보다, 지켜보다
-water|n|물
-wave|n|파도, 물결
-way|n|길, 방법
-weak|a|약한
-wealth|n|부, 재산
-weapon|n|무기
-wear|v|입다, 착용하다
-weather|n|날씨
-web|n|웹, 거미줄
-wedding|n|결혼식
-week|n|주, 일주일
-weekend|n|주말
-weigh|v|무게가 나가다, 재다
-weight|n|무게, 체중
-welcome|v|환영하다
-well|ad|잘, 좋게
-west|n|서쪽
-wet|a|젖은, 축축한
-whale|n|고래
-what|pron|무엇
-whatever|pron|무엇이든
-wheat|n|밀
-wheel|n|바퀴, 핸들
-when|ad|언제
-whenever|conj|~할 때마다
-where|ad|어디에
-whether|conj|~인지 아닌지
-which|pron|어느 것
-while|conj|~하는 동안, 반면에
-whisper|v|속삭이다
-whistle|n|호루라기, 휘파람
-white|a|하얀, 흰
-who|pron|누구
-whole|a|전체의, 온전한
-whom|pron|누구를
-whose|pron|누구의
-why|ad|왜
-wide|a|넓은
-widely|ad|널리, 폭넓게
-wife|n|아내
-wild|a|야생의, 거친
-will|v|~할 것이다
-willing|a|기꺼이 하는
-win|v|이기다, 얻다
-wind|n|바람
-window|n|창문
-wine|n|포도주, 와인
-wing|n|날개
-winner|n|승자, 우승자
-winter|n|겨울
-wipe|v|닦다, 훔치다
-wire|n|철사, 전선
-wise|a|현명한, 지혜로운
-wish|v|바라다, 소망하다
-with|prep|~와 함께, ~을 가지고
-withdraw|v|철수하다, 인출하다
-within|prep|~ 이내에
-without|prep|~ 없이
-witness|n|목격자, 증인
-wolf|n|늑대
-woman|n|여자, 여성
-wonder|v|궁금해하다
-wonderful|a|훌륭한, 멋진
-wood|n|나무, 목재
-wool|n|양털, 모직
-word|n|단어, 말
-work|v|일하다, 작동하다
-worker|n|노동자, 근로자
-world|n|세계, 세상
-worry|v|걱정하다
-worse|a|더 나쁜
-worth|a|~의 가치가 있는
-would|v|~할 것이다, ~하곤 했다
-wound|n|상처, 부상
-wrap|v|싸다, 포장하다
-wrist|n|손목
-write|v|쓰다, 적다
-writer|n|작가, 필자
-wrong|a|틀린, 잘못된
-yard|n|마당, 야드
-year|n|해, 년, 나이
-yell|v|소리치다, 고함치다
-yellow|a|노란
-yes|ad|네, 그렇다
-yesterday|n|어제
-yet|ad|아직, 이미
-yield|v|산출하다, 양보하다
-young|a|어린, 젊은
-youth|n|청춘, 젊음
-zero|num|영, 0
-zone|n|지역, 구역
-zoo|n|동물원
+ability|n|능력, 재능|m
+able|a|~할 수 있는|m
+about|prep|~에 대하여, 약|h
+above|prep|~ 위에|h
+abroad|ad|해외로, 외국에|h
+absent|a|결석한, 없는|h
+absolutely|ad|절대적으로, 전적으로|h
+abstract|a|추상적인, 관념적인|t
+academic|a|학문의, 학업의|t
+accept|v|받아들이다, 수락하다|m
+accident|n|사고, 우연|m
+according to|prep|~에 따르면|h
+account|n|계좌, 설명|t
+accountant|n|회계사|t
+accumulate|v|축적하다, 모으다|t
+accurate|a|정확한|t
+achieve|v|이루다, 달성하다|t
+acquire|v|획득하다, 인수하다|t
+acquisition|n|인수, 습득|t
+across|prep|~을 가로질러|h
+act|v|행동하다, 연기하다|h
+action|n|행동, 조치|h
+active|a|활동적인, 적극적인|h
+activity|n|활동|m
+actor|n|배우|h
+actually|ad|사실은, 실제로|h
+adapt|v|적응하다, 각색하다|t
+add|v|더하다, 추가하다|h
+address|n|주소|m
+adequate|a|충분한, 적절한|t
+adjust|v|조정하다, 적응하다|h
+admire|v|존경하다, 감탄하다|h
+admit|v|인정하다, 입장을 허락하다|h
+adult|n|어른, 성인|m
+advance|v|전진하다, 발전시키다|h
+advantage|n|이점, 장점|h
+adventure|n|모험|h
+advertise|v|광고하다|t
+advice|n|충고, 조언|m
+advise|v|조언하다|h
+advocate|v|옹호하다, 주장하다|t
+affect|v|영향을 미치다|h
+afford|v|~할 여유가 있다|h
+afraid|a|두려워하는, 걱정하는|m
+after|prep|~ 후에|h
+afternoon|n|오후|h
+again|ad|다시, 또|h
+against|prep|~에 반대하여, ~에 맞서|h
+age|n|나이, 시대|m
+agency|n|대행사, 기관|t
+agenda|n|안건, 의제|t
+agent|n|대리인, 요원|h
+ago|ad|~ 전에|h
+agree|v|동의하다|m
+agreement|n|합의, 계약|h
+agriculture|n|농업|t
+ahead|ad|앞으로, 미리|h
+aim|n|목표, 겨냥|h
+air|n|공기, 하늘|e
+airplane|n|비행기|e
+airport|n|공항|m
+alarm|n|경보, 알람|h
+alike|a|비슷한|h
+alive|a|살아 있는|h
+allocate|v|할당하다, 배분하다|t
+allow|v|허락하다, 허용하다|m
+almost|ad|거의|m
+alone|a|혼자인|m
+along|prep|~을 따라|h
+aloud|ad|소리 내어|h
+already|ad|이미, 벌써|m
+also|ad|또한, 역시|h
+although|conj|비록 ~일지라도|m
+always|ad|항상, 언제나|m
+amazing|a|놀라운, 굉장한|m
+ambiguous|a|모호한, 애매한|t
+ambition|n|야망, 포부|h
+amend|v|수정하다, 개정하다|t
+among|prep|~ 사이에|m
+amount|n|양, 총액|m
+analyze|v|분석하다|t
+ancient|a|고대의, 아주 오래된|m
+anger|n|분노, 화|h
+angle|n|각도, 관점|m
+angry|a|화난|e
+animal|n|동물|e
+ankle|n|발목|h
+anniversary|n|기념일|m
+announce|v|발표하다, 알리다|m
+annoy|v|짜증나게 하다|h
+annual|a|매년의, 연례의|h
+another|a|또 하나의, 다른|m
+answer|n|대답, 답|e
+ant|n|개미|e
+anxious|a|불안한, 몹시 바라는|m
+anybody|pron|누구든지, 아무나|h
+anyone|pron|누구든지|h
+anything|pron|무엇이든|h
+anyway|ad|어쨌든|h
+anywhere|ad|어디든지|m
+apart|ad|떨어져, 따로|h
+apartment|n|아파트|m
+apologize|v|사과하다|m
+appeal|v|호소하다, 항소하다|h
+appear|v|나타나다, ~처럼 보이다|m
+appearance|n|외모, 등장|h
+apple|n|사과|e
+applicant|n|지원자, 신청자|t
+apply|v|지원하다, 적용하다|t
+appointment|n|약속, 예약|t
+appraisal|n|평가, 감정|t
+appreciate|v|감사하다, 진가를 알다|m
+approach|v|다가가다, 접근하다|h
+appropriate|a|적절한, 알맞은|h
+approve|v|승인하다, 찬성하다|t
+approximate|a|대략의, 근사한|t
+architect|n|건축가|h
+area|n|지역, 면적|m
+argue|v|말다툼하다, 주장하다|m
+argument|n|논쟁, 주장|h
+arm|n|팔|e
+army|n|군대, 육군|m
+around|prep|~ 주위에, 약|m
+arrange|v|정리하다, 준비하다|t
+arrest|v|체포하다|h
+arrive|v|도착하다|m
+arrow|n|화살, 화살표|m
+art|n|예술, 미술|m
+article|n|기사, 물품|h
+artist|n|예술가, 화가|m
+ashamed|a|부끄러운|h
+ask|v|묻다, 부탁하다|e
+asleep|a|잠든|h
+aspect|n|측면, 양상|t
+assemble|v|조립하다, 모으다|t
+assess|v|평가하다, 산정하다|t
+asset|n|자산, 재산|t
+assign|v|배정하다, 맡기다|t
+assist|v|돕다, 보조하다|t
+assume|v|가정하다, 추정하다|t
+athlete|n|운동선수|h
+atmosphere|n|대기, 분위기|t
+attach|v|붙이다, 첨부하다|t
+attack|v|공격하다|m
+attempt|v|시도하다|h
+attend|v|참석하다, 다니다|m
+attendee|n|참석자|t
+attention|n|주의, 관심|m
+attitude|n|태도, 자세|m
+attorney|n|변호사|t
+attract|v|끌어당기다, 매혹하다|h
+attractive|a|매력적인|h
+audience|n|청중, 관객|m
+audit|n|회계 감사|t
+aunt|n|이모, 고모, 숙모|e
+author|n|작가, 저자|m
+authority|n|권위, 당국|t
+authorize|v|권한을 주다, 승인하다|t
+automatic|a|자동의|h
+autumn|n|가을|e
+available|a|이용할 수 있는, 시간이 되는|mt
+average|n|평균|mt
+avoid|v|피하다|m
+awake|a|깨어 있는|m
+award|n|상, 상금|m
+aware|a|알고 있는, 인식하는|m
+away|ad|떨어져, 멀리|m
+awesome|a|굉장한, 멋진|h
+awful|a|끔찍한, 지독한|h
+awkward|a|어색한, 곤란한|h
+baby|n|아기|e
+back|n|등, 뒤|e
+background|n|배경|m
+backward|ad|뒤로, 거꾸로|h
+bad|a|나쁜, 심한|e
+bag|n|가방, 봉지|h
+bake|v|굽다|m
+balance|n|균형, 잔액|m
+ball|n|공|e
+balloon|n|풍선|h
+ban|v|금지하다|h
+band|n|밴드, 무리|m
+bank|n|은행, 강둑|e
+bar|n|막대, 술집|h
+barely|ad|간신히, 거의 ~않다|h
+bargain|n|싼 물건, 흥정|h
+base|n|기초, 기지|h
+basic|a|기본적인|m
+basis|n|근거, 기준|h
+basket|n|바구니|m
+bath|n|목욕, 욕조|e
+battery|n|건전지, 배터리|h
+battle|n|전투, 싸움|m
+beach|n|해변|e
+bear|v|참다, 낳다|e
+beard|n|턱수염|h
+beat|v|이기다, 때리다|h
+beautiful|a|아름다운|e
+beauty|n|아름다움, 미인|m
+because|conj|왜냐하면, ~ 때문에|m
+become|v|~이 되다|m
+bed|n|침대|e
+bee|n|벌|e
+beef|n|소고기|h
+before|prep|~ 전에|m
+beg|v|간청하다, 구걸하다|h
+begin|v|시작하다|m
+beginner|n|초보자|h
+behave|v|행동하다, 처신하다|m
+behavior|n|행동, 태도|m
+behind|prep|~ 뒤에|h
+belief|n|믿음, 신념|m
+believe|v|믿다|m
+bell|n|종, 벨|m
+belong|v|속하다, ~의 것이다|m
+below|prep|~ 아래에|m
+belt|n|벨트, 띠|m
+bench|n|긴 의자, 벤치|m
+bend|v|구부리다, 굽히다|m
+benefit|n|혜택, 이익|m
+beside|prep|~ 옆에|m
+besides|ad|게다가, ~ 외에도|m
+best|a|가장 좋은, 최고의|h
+bet|v|내기하다, 장담하다|h
+better|a|더 좋은|h
+between|prep|~ 사이에|m
+beyond|prep|~ 너머, ~을 넘어서|m
+bicycle|n|자전거|e
+bid|n|입찰, 응찰|t
+big|a|큰|e
+bill|n|계산서, 지폐, 법안|m
+bird|n|새|e
+birth|n|출생, 탄생|h
+birthday|n|생일|e
+bit|n|조금, 약간|h
+bite|v|물다, 베어 물다|m
+bitter|a|쓴, 쓰라린|m
+black|a|검은|e
+blame|v|탓하다, 비난하다|m
+blank|a|빈, 백지의|m
+blanket|n|담요|m
+bleed|v|피가 나다|m
+blind|a|눈이 먼|m
+block|v|막다, 차단하다|m
+blood|n|피, 혈액|m
+blow|v|불다, 날리다|m
+blue|a|파란, 우울한|e
+board|n|판, 이사회|m
+boat|n|배, 보트|m
+body|n|몸, 신체|e
+boil|v|끓이다, 삶다|m
+bomb|n|폭탄|m
+bone|n|뼈|m
+book|n|책|e
+boot|n|장화, 부츠|h
+border|n|국경, 경계|h
+bored|a|지루해하는|h
+boring|a|지루한|h
+borrow|v|빌리다|m
+boss|n|상사, 사장|m
+both|a|둘 다의|h
+bother|v|귀찮게 하다, 신경 쓰다|m
+bottle|n|병|m
+bottom|n|바닥, 맨 아래|m
+bowl|n|그릇, 사발|m
+box|n|상자|e
+boy|n|소년|e
+brain|n|뇌, 두뇌|m
+branch|n|나뭇가지, 지점|m
+brand|n|상표, 브랜드|h
+brave|a|용감한|e
+bread|n|빵|e
+break|v|깨다, 부수다, 어기다|m
+breakfast|n|아침 식사|e
+breath|n|숨, 호흡|m
+breathe|v|숨 쉬다|m
+bridge|n|다리, 교량|m
+brief|a|간단한, 짧은|h
+bright|a|밝은, 영리한|m
+bring|v|가져오다, 데려오다|m
+broad|a|넓은|m
+broadcast|v|방송하다|h
+brochure|n|안내 책자, 브로슈어|t
+broken|a|고장 난, 부서진|m
+brother|n|형, 오빠, 남동생|e
+brown|a|갈색의|h
+brush|n|붓, 솔|m
+budget|n|예산|t
+build|v|짓다, 세우다|m
+building|n|건물|m
+bull|n|황소|h
+burn|v|타다, 태우다|m
+burst|v|터지다, 터뜨리다|h
+bury|v|묻다, 매장하다|m
+bus|n|버스|e
+business|n|사업, 일|m
+busy|a|바쁜|e
+but|conj|그러나|h
+butter|n|버터|e
+button|n|단추, 버튼|m
+buy|v|사다|e
+cabinet|n|캐비닛, 내각|m
+cage|n|새장, 우리|m
+cake|n|케이크|e
+calculate|v|계산하다|m
+calendar|n|달력|m
+call|v|부르다, 전화하다|e
+calm|a|침착한, 고요한|m
+camera|n|카메라|e
+camp|n|캠프, 야영지|m
+campaign|n|캠페인, 운동|t
+can|v|~할 수 있다|h
+cancel|v|취소하다|m
+cancer|n|암|h
+candidate|n|후보자, 지원자|t
+candle|n|양초|m
+candy|n|사탕|e
+cap|n|모자, 뚜껑|e
+capable|a|~할 수 있는, 유능한|h
+capital|n|수도, 자본|t
+captain|n|선장, 주장|m
+capture|v|사로잡다, 포착하다|h
+car|n|자동차|e
+card|n|카드|h
+care|n|돌봄, 주의|m
+career|n|경력, 직업|m
+careful|a|조심스러운, 신중한|m
+careless|a|부주의한|m
+cargo|n|화물|t
+carpet|n|카펫, 양탄자|h
+carry|v|나르다, 지니다|m
+case|n|경우, 사건, 상자|m
+cash|n|현금|m
+cast|v|던지다, 배역을 정하다|h
+castle|n|성|m
+cat|n|고양이|e
+catch|v|잡다, 붙잡다|e
+category|n|범주, 부문|t
+cause|n|원인, 이유|m
+ceiling|n|천장|m
+ceiling price|n|상한 가격|t
+celebrate|v|축하하다, 기념하다|m
+cell|n|세포, 감방|m
+center|n|중심, 센터|m
+century|n|세기, 100년|m
+ceremony|n|의식, 예식|m
+certain|a|확실한, 어떤|m
+certainly|ad|확실히, 물론|h
+certificate|n|증명서, 자격증|t
+chain|n|사슬, 연쇄|m
+chair|n|의자|e
+challenge|n|도전, 난제|m
+champion|n|우승자, 챔피언|m
+chance|n|기회, 가능성|m
+change|v|바꾸다, 변하다|m
+character|n|성격, 등장인물, 글자|m
+charge|v|청구하다, 충전하다|m
+charity|n|자선, 자선 단체|h
+chart|n|도표, 차트|m
+chase|v|쫓다, 추격하다|m
+cheap|a|싼|m
+cheat|v|속이다, 부정행위를 하다|m
+check|v|확인하다, 점검하다|m
+cheek|n|뺨, 볼|m
+cheer|v|응원하다, 환호하다|m
+cheese|n|치즈|e
+chef|n|요리사, 주방장|m
+chemical|n|화학 물질|h
+chest|n|가슴, 상자|m
+chew|v|씹다|m
+chicken|n|닭, 닭고기|e
+chief|a|주요한, 최고의|m
+child|n|아이, 자녀|e
+childhood|n|어린 시절|m
+chin|n|턱|e
+choice|n|선택|m
+choose|v|고르다, 선택하다|m
+church|n|교회|e
+cigarette|n|담배|h
+circle|n|원, 동그라미|m
+circumstance|n|상황, 환경|h
+citizen|n|시민|m
+city|n|도시|e
+civil|a|시민의, 민간의|m
+civilization|n|문명|t
+claim|v|주장하다, 요구하다|m
+class|n|수업, 학급, 계급|e
+classic|a|고전적인, 전형적인|m
+classify|v|분류하다|t
+clause|n|조항, 절|t
+clean|a|깨끗한|e
+clear|a|분명한, 맑은|m
+clerk|n|점원, 사무원|m
+clever|a|영리한, 똑똑한|m
+click|v|클릭하다|m
+client|n|고객, 의뢰인|t
+cliff|n|절벽|m
+climate|n|기후|h
+climb|v|오르다, 등반하다|m
+clinic|n|진료소, 병원|m
+clock|n|시계|e
+close|v|닫다|e
+closet|n|벽장, 옷장|m
+cloth|n|천, 옷감|m
+clothes|n|옷, 의복|e
+cloud|n|구름|e
+club|n|동아리, 클럽|m
+clue|n|단서, 실마리|m
+coach|n|코치, 감독|m
+coal|n|석탄|m
+coast|n|해안|m
+coat|n|외투, 코트|e
+code|n|암호, 규정, 코드|m
+coffee|n|커피|e
+coin|n|동전|m
+cold|a|추운, 차가운|e
+collapse|v|무너지다, 쓰러지다|t
+colleague|n|동료|t
+collect|v|모으다, 수집하다|m
+college|n|대학|m
+color|n|색깔|e
+column|n|기둥, 칼럼|m
+comb|n|빗|m
+combine|v|결합하다, 섞다|m
+come|v|오다|e
+comfort|n|편안함, 위로|m
+comfortable|a|편안한|m
+command|n|명령, 지휘|m
+comment|n|논평, 의견|m
+commercial|a|상업적인|t
+commission|n|수수료, 위원회|t
+commit|v|저지르다, 헌신하다|t
+committee|n|위원회|t
+commodity|n|상품, 물품|t
+common|a|흔한, 공통의|m
+communicate|v|의사소통하다|m
+community|n|지역 사회, 공동체|m
+company|n|회사, 동료|m
+compare|v|비교하다|m
+compensation|n|보상, 보수|t
+compete|v|경쟁하다|m
+competition|n|경쟁, 대회|t
+competitor|n|경쟁자, 경쟁사|t
+complain|v|불평하다|m
+complaint|n|불평, 항의|t
+complete|a|완전한|m
+complex|a|복잡한|t
+complicated|a|복잡한|h
+comply|v|따르다, 준수하다|t
+component|n|구성 요소, 부품|t
+computer|n|컴퓨터|e
+concentrate|v|집중하다|h
+concept|n|개념|t
+concern|n|걱정, 관심사|h
+concert|n|연주회, 콘서트|m
+conclude|v|결론짓다, 끝내다|mt
+condition|n|상태, 조건|m
+conduct|v|수행하다, 지휘하다|t
+conference|n|회의, 학회|t
+confidence|n|자신감, 신뢰|m
+confident|a|자신 있는, 확신하는|h
+confirm|v|확인하다, 확정하다|mt
+conflict|n|갈등, 충돌|t
+confuse|v|혼란스럽게 하다|m
+congratulate|v|축하하다|m
+connect|v|연결하다|m
+conscious|a|의식하는, 자각하는|h
+consent|n|동의, 승낙|t
+consequence|n|결과, 영향|t
+consider|v|고려하다, 여기다|m
+considerable|a|상당한, 많은|t
+consignment|n|위탁 판매품, 탁송|t
+consist|v|구성되다|h
+consistent|a|일관된, 한결같은|t
+constant|a|끊임없는, 일정한|h
+construct|v|건설하다, 구성하다|h
+consult|v|상담하다, 상의하다|t
+consultant|n|자문 위원, 컨설턴트|t
+consume|v|소비하다, 먹다|t
+contact|v|연락하다|m
+contain|v|담고 있다, 포함하다|m
+contemporary|a|동시대의, 현대의|t
+content|n|내용, 내용물|m
+contest|n|대회, 경연|m
+context|n|맥락, 문맥|t
+continue|v|계속하다|m
+contract|n|계약, 계약서|t
+contrary|a|반대의, ~와 다른|t
+contrast|n|대조, 차이|t
+contribute|v|기여하다, 기부하다|t
+control|v|통제하다, 조종하다|m
+controversy|n|논란, 논쟁|t
+convenient|a|편리한|m
+convention|n|관례, 대회, 협약|t
+conversation|n|대화|m
+convince|v|설득하다, 납득시키다|h
+cook|v|요리하다|e
+cookie|n|과자, 쿠키|e
+cool|a|시원한, 멋진|e
+copy|v|복사하다, 베끼다|m
+corner|n|모퉁이, 구석|m
+corporate|a|기업의, 법인의|t
+correct|a|올바른, 정확한|m
+correspondence|n|서신, 왕래|t
+cost|n|비용, 값|m
+cotton|n|면, 목화|m
+couch|n|소파|h
+cough|v|기침하다|m
+could|v|~할 수 있었다, ~할 수도 있다|h
+council|n|의회, 협의회|t
+count|v|세다, 중요하다|m
+country|n|나라, 시골|e
+countryside|n|시골, 교외|h
+couple|n|커플, 두 사람|h
+courage|n|용기|m
+course|n|과정, 강좌, 코스|m
+court|n|법정, 코트|m
+cousin|n|사촌|e
+cover|v|덮다, 다루다|m
+cow|n|암소, 젖소|e
+crash|v|충돌하다, 추락하다|m
+crazy|a|미친, 정신 나간|m
+cream|n|크림|m
+create|v|만들다, 창조하다|m
+creative|a|창의적인|m
+creature|n|생물, 생명체|m
+credit|n|신용, 학점|t
+crime|n|범죄|m
+criminal|n|범죄자|m
+crisis|n|위기|h
+criteria|n|기준, 판단 기준|t
+critic|n|비평가|h
+critical|a|비판적인, 중대한|h
+criticize|v|비판하다|h
+crop|n|농작물, 수확량|m
+cross|v|건너다, 교차하다|m
+crowd|n|군중, 무리|m
+crown|n|왕관|m
+crucial|a|결정적인, 중대한|t
+cruel|a|잔인한|m
+cry|v|울다, 외치다|e
+culture|n|문화|m
+cup|n|컵, 잔|e
+cure|v|치료하다, 고치다|m
+curious|a|궁금한, 호기심 많은|m
+currency|n|통화, 화폐|t
+current|a|현재의, 지금의|h
+curtain|n|커튼|m
+curve|n|곡선, 커브|h
+custom|n|관습, 풍습|m
+customer|n|고객, 손님|m
+cut|v|자르다, 베다|e
+cute|a|귀여운|e
+cycle|n|주기, 순환|m
+daily|a|매일의, 일상의|m
+damage|n|손상, 피해|m
+dance|v|춤추다|e
+danger|n|위험|m
+dangerous|a|위험한|m
+dark|a|어두운|e
+data|n|자료, 데이터|t
+date|n|날짜, 데이트|m
+daughter|n|딸|e
+dawn|n|새벽, 동틀 녘|m
+day|n|날, 하루, 낮|e
+dead|a|죽은|m
+deadline|n|마감 기한|t
+deaf|a|귀가 들리지 않는|m
+deal|v|다루다, 거래하다|m
+dealer|n|판매업자, 중개인|t
+dear|a|친애하는, 소중한|m
+death|n|죽음|m
+debate|n|토론, 논쟁|m
+debt|n|빚, 부채|t
+decade|n|10년|t
+decide|v|결정하다|m
+decision|n|결정|m
+declare|v|선언하다, 신고하다|t
+decline|v|감소하다, 거절하다|t
+decorate|v|장식하다|m
+decrease|v|감소하다, 줄이다|m
+deduct|v|공제하다, 빼다|t
+deep|a|깊은|e
+deer|n|사슴|e
+defeat|v|패배시키다, 이기다|h
+defective|a|결함이 있는|t
+defend|v|방어하다, 변호하다|h
+define|v|정의하다|t
+definitely|ad|분명히, 틀림없이|h
+degree|n|정도, 학위, 도|m
+delay|v|미루다, 지연시키다|m
+delegate|v|위임하다, 대표로 보내다|t
+delete|v|삭제하다, 지우다|m
+delicious|a|맛있는|e
+deliver|v|배달하다, 전달하다|mt
+demand|n|요구, 수요|h
+democracy|n|민주주의|h
+demonstrate|v|보여 주다, 시위하다|t
+density|n|밀도, 농도|t
+dentist|n|치과 의사|m
+deny|v|부인하다, 거절하다|h
+department|n|부서, 학과|t
+depend|v|의존하다, ~에 달려 있다|m
+deposit|n|보증금, 예금|t
+depressed|a|우울한|h
+depth|n|깊이|h
+derive|v|끌어내다, 유래하다|t
+describe|v|묘사하다, 설명하다|m
+desert|n|사막|m
+deserve|v|~을 받을 만하다|m
+design|n|디자인, 설계|m
+desire|n|욕구, 바람|m
+desk|n|책상|e
+desperate|a|필사적인, 절박한|h
+despite|prep|~에도 불구하고|h
+dessert|n|후식, 디저트|m
+destroy|v|파괴하다|m
+detail|n|세부 사항|m
+detect|v|탐지하다, 발견하다|h
+determine|v|결정하다, 알아내다|t
+develop|v|발전시키다, 개발하다|m
+development|n|발전, 개발|h
+device|n|장치, 기기|t
+devote|v|바치다, 헌신하다|h
+diary|n|일기|m
+dictionary|n|사전|m
+die|v|죽다|h
+diet|n|식단, 식이 요법|m
+differ|v|다르다|h
+difference|n|차이|m
+different|a|다른|e
+difficult|a|어려운|m
+difficulty|n|어려움, 곤란|m
+dig|v|파다|m
+digital|a|디지털의|h
+dimension|n|차원, 크기, 측면|t
+dinner|n|저녁 식사|e
+direct|a|직접적인|m
+direction|n|방향, 지시|m
+director|n|감독, 이사|m
+dirty|a|더러운|e
+disabled|a|장애가 있는|h
+disagree|v|동의하지 않다|h
+disappear|v|사라지다|m
+disappointed|a|실망한|m
+disaster|n|재난, 참사|m
+discount|n|할인|m
+discover|v|발견하다|m
+discuss|v|논의하다|m
+discussion|n|토론, 논의|h
+disease|n|질병|m
+dish|n|접시, 요리|m
+dislike|v|싫어하다|m
+dispatch|v|발송하다, 파견하다|t
+dispute|n|분쟁, 논쟁|t
+distance|n|거리|m
+distant|a|먼, 떨어진|h
+distinguish|v|구별하다|t
+distribute|v|분배하다, 유통시키다|t
+distribution|n|유통, 배포|t
+district|n|지구, 구역|t
+disturb|v|방해하다|h
+diverse|a|다양한|t
+divide|v|나누다, 분할하다|m
+dividend|n|배당금|t
+divorce|n|이혼|h
+dizzy|a|어지러운|m
+do|v|하다|h
+doctor|n|의사, 박사|e
+document|n|서류, 문서|mt
+dog|n|개|e
+doll|n|인형|e
+dollar|n|달러|m
+domestic|a|국내의, 가정의|t
+dominate|v|지배하다, 우세하다|t
+door|n|문|e
+double|a|두 배의, 이중의|m
+doubt|n|의심|m
+down|ad|아래로|h
+download|v|내려받다|m
+downtown|n|도심, 시내|m
+dozen|n|12개, 다스|m
+draft|n|초안, 원고|t
+drag|v|끌다, 끌어당기다|m
+drama|n|드라마, 연극|m
+draw|v|그리다, 끌어당기다|m
+drawer|n|서랍|m
+dream|n|꿈|m
+dress|n|드레스, 옷|e
+drink|v|마시다|e
+drive|v|운전하다, 몰다|e
+driver|n|운전자, 기사|e
+drop|v|떨어뜨리다, 떨어지다|m
+drug|n|약, 마약|m
+drum|n|북, 드럼|m
+drunk|a|술 취한|h
+dry|a|마른, 건조한|e
+duck|n|오리|e
+due|a|~하기로 예정된, ~ 때문인|h
+dull|a|따분한, 무딘|h
+during|prep|~ 동안|m
+dust|n|먼지|m
+duty|n|의무, 임무|mt
+each|a|각각의|h
+eager|a|열망하는, 간절한|m
+ear|n|귀|e
+early|a|이른, 초기의|e
+earn|v|벌다, 얻다|m
+earth|n|지구, 흙|e
+earthquake|n|지진|m
+ease|n|쉬움, 편안함|h
+easily|ad|쉽게|h
+east|n|동쪽|m
+easy|a|쉬운|e
+eat|v|먹다|e
+economy|n|경제|t
+edge|n|가장자리, 끝|m
+edit|v|편집하다, 수정하다|m
+education|n|교육|m
+effect|n|효과, 영향|m
+effective|a|효과적인|h
+efficiency|n|효율, 능률|t
+efficient|a|효율적인|t
+effort|n|노력|m
+egg|n|달걀, 알|e
+either|a|둘 중 어느 하나의|m
+elbow|n|팔꿈치|e
+elder|a|손위의, 나이가 더 많은|m
+elderly|a|나이 드신, 연세가 많은|h
+elect|v|선출하다|m
+electric|a|전기의|m
+electricity|n|전기|h
+element|n|요소, 성분|t
+elementary|a|초등의, 기초적인|m
+elephant|n|코끼리|e
+elevator|n|승강기, 엘리베이터|h
+eligible|a|자격이 있는|t
+else|ad|그 밖에, 다른|m
+email|n|이메일|m
+embarrassed|a|당황한, 창피한|m
+emergency|n|비상사태, 응급|m
+emotion|n|감정|m
+emphasize|v|강조하다|t
+employ|v|고용하다|mt
+employee|n|직원, 종업원|t
+empty|a|텅 빈|m
+enable|v|가능하게 하다|h
+encourage|v|격려하다, 장려하다|m
+end|n|끝, 마지막|h
+endorse|v|지지하다, 보증하다|t
+enemy|n|적|m
+energy|n|에너지, 활력|m
+engage|v|참여시키다, 약혼하다|h
+engine|n|엔진, 기관|m
+engineer|n|기술자, 공학자|m
+enjoy|v|즐기다|m
+enormous|a|막대한, 거대한|t
+enough|a|충분한|m
+enter|v|들어가다, 입력하다|m
+enterprise|n|기업, 사업|t
+entertain|v|즐겁게 하다, 대접하다|h
+enthusiasm|n|열정, 열의|h
+entire|a|전체의, 온|t
+entitle|v|자격을 주다, 제목을 붙이다|t
+entrance|n|입구, 입학|m
+envelope|n|봉투|m
+environment|n|환경|mt
+envy|v|부러워하다|m
+equal|a|같은, 동등한|m
+equipment|n|장비, 설비|t
+equivalent|a|동등한, ~에 상당하는|t
+error|n|실수, 오류|m
+escape|v|탈출하다, 벗어나다|m
+especially|ad|특히|m
+essay|n|수필, 과제물|h
+essential|a|필수적인, 본질적인|t
+establish|v|설립하다, 확립하다|t
+estimate|v|추정하다, 견적을 내다|t
+evaluate|v|평가하다|t
+even|ad|심지어, ~조차|h
+evening|n|저녁|h
+event|n|사건, 행사|m
+eventually|ad|결국, 마침내|h
+ever|ad|언젠가, 한 번이라도|h
+every|a|모든, 매 ~|h
+everybody|pron|모든 사람|h
+everyday|a|일상의, 매일의|h
+everyone|pron|모든 사람|h
+everything|pron|모든 것|h
+everywhere|ad|어디에나|h
+evidence|n|증거|t
+evil|a|사악한, 악한|h
+evolve|v|진화하다, 발전하다|t
+exact|a|정확한|m
+exam|n|시험|h
+examine|v|조사하다, 검사하다|mt
+example|n|예, 본보기|m
+exceed|v|초과하다, 넘어서다|t
+excellent|a|훌륭한, 탁월한|m
+except|prep|~을 제외하고|m
+exchange|v|교환하다, 환전하다|m
+excited|a|신이 난, 흥분한|m
+exciting|a|흥미진진한|m
+exclude|v|제외하다, 배제하다|t
+excuse|n|변명, 핑계|m
+executive|n|임원, 경영진|t
+exempt|a|면제되는|t
+exercise|n|운동, 연습|m
+exhausted|a|기진맥진한|h
+exhibition|n|전시회|m
+exist|v|존재하다|h
+exit|n|출구|m
+expand|v|확장하다, 넓히다|t
+expect|v|기대하다, 예상하다|m
+expenditure|n|지출, 비용|t
+expense|n|비용, 경비|t
+expensive|a|비싼|m
+experience|n|경험|m
+experiment|n|실험|mt
+expert|n|전문가|m
+expire|v|만료되다, 기한이 끝나다|t
+explain|v|설명하다|m
+explicit|a|명시적인, 분명한|t
+explode|v|폭발하다|h
+exploit|v|이용하다, 착취하다|t
+explore|v|탐험하다, 탐구하다|m
+export|v|수출하다|t
+express|v|표현하다|m
+expression|n|표현, 표정|m
+extend|v|연장하다, 확대하다|h
+external|a|외부의, 대외적인|t
+extra|a|추가의, 여분의|h
+extract|v|추출하다, 뽑아내다|t
+extreme|a|극단적인, 극심한|h
+eye|n|눈|e
+face|n|얼굴, 표면|e
+facility|n|시설, 설비|t
+fact|n|사실|m
+factor|n|요인, 요소|t
+factory|n|공장|m
+fail|v|실패하다, 낙제하다|m
+failure|n|실패|m
+fair|a|공정한, 상당한|m
+faith|n|믿음, 신앙|m
+fake|a|가짜의, 위조의|m
+fall|v|떨어지다, 넘어지다|e
+false|a|틀린, 거짓의|m
+familiar|a|익숙한, 친숙한|m
+family|n|가족|e
+famous|a|유명한|m
+fan|n|팬, 선풍기|h
+fancy|a|화려한, 고급의|h
+fantastic|a|환상적인, 굉장한|h
+far|ad|멀리|h
+farm|n|농장|e
+farmer|n|농부|e
+fashion|n|유행, 패션|m
+fast|a|빠른|e
+fat|a|뚱뚱한|e
+fate|n|운명|h
+father|n|아버지|e
+fault|n|잘못, 결함|m
+favor|n|호의, 부탁|m
+favorite|a|가장 좋아하는|m
+fear|n|두려움, 공포|m
+feature|n|특징, 이목구비|t
+fee|n|요금, 수수료|t
+feed|v|먹이다, 먹이를 주다|m
+feel|v|느끼다|m
+feeling|n|느낌, 감정|m
+female|a|여성의, 암컷의|m
+fence|n|울타리|m
+festival|n|축제|m
+fever|n|열|m
+few|a|거의 없는, 몇몇의|h
+field|n|들판, 분야|e
+fight|v|싸우다|m
+figure|n|숫자, 인물, 모습|m
+file|n|파일, 서류철|m
+fill|v|채우다|m
+film|n|영화, 필름|m
+final|a|마지막의, 최종의|m
+finally|ad|마침내, 마지막으로|m
+finance|n|재정, 금융|t
+find|v|찾다, 알아내다|e
+fine|a|좋은, 괜찮은, 미세한|e
+finger|n|손가락|e
+finish|v|끝내다, 마치다|m
+fire|n|불, 화재|e
+firm|n|회사|mt
+first|a|첫 번째의|h
+fiscal|a|재정의, 회계의|t
+fish|n|물고기, 생선|e
+fit|v|맞다, 어울리다|m
+fix|v|고치다, 고정하다|m
+flag|n|깃발|m
+flame|n|불꽃, 불길|h
+flash|n|섬광, 번쩍임|h
+flat|a|평평한|m
+flavor|n|맛, 풍미|m
+flight|n|비행, 항공편|m
+float|v|뜨다, 떠다니다|m
+flood|n|홍수|m
+floor|n|바닥, 층|e
+flour|n|밀가루|m
+flow|v|흐르다|m
+flower|n|꽃|e
+flu|n|독감|m
+fluctuate|v|변동하다, 오르내리다|t
+fly|v|날다|e
+focus|v|집중하다, 초점을 맞추다|m
+fog|n|안개|m
+fold|v|접다, 개다|m
+follow|v|따라가다, 따르다|m
+food|n|음식, 식량|e
+fool|n|바보|m
+foot|n|발|e
+football|n|축구, 미식축구|m
+for|prep|~을 위해, ~ 동안|h
+force|n|힘, 무력|m
+forecast|n|예보, 예측|mt
+foreign|a|외국의|m
+forest|n|숲, 삼림|e
+forever|ad|영원히|m
+forget|v|잊다|m
+forgive|v|용서하다|m
+fork|n|포크|m
+form|n|형태, 서식|m
+formal|a|공식적인, 격식을 차린|m
+former|a|이전의, 전자의|h
+formula|n|공식, 방식|t
+fortunately|ad|다행히|h
+fortune|n|행운, 재산|m
+forward|ad|앞으로|m
+found|v|설립하다|h
+foundation|n|토대, 기초, 재단|t
+fountain|n|분수, 샘|h
+frame|n|틀, 액자|m
+framework|n|틀, 체계|t
+free|a|자유로운, 무료의|e
+freedom|n|자유|m
+freeze|v|얼다, 얼리다|m
+freight|n|화물, 화물 운송|t
+frequent|a|잦은, 빈번한|m
+fresh|a|신선한, 새로운|e
+friend|n|친구|e
+friendly|a|친절한, 다정한|m
+frighten|v|겁먹게 하다|m
+from|prep|~에서, ~로부터|h
+front|n|앞, 정면|m
+frozen|a|얼어붙은, 냉동의|m
+fruit|n|과일, 열매|e
+fry|v|튀기다, 볶다|m
+fuel|n|연료|m
+full|a|가득 찬, 완전한|e
+fun|n|재미, 즐거움|h
+function|n|기능, 함수|mt
+fund|n|기금, 자금|t
+fundamental|a|근본적인, 기본적인|t
+funeral|n|장례식|h
+funny|a|웃기는, 재미있는|e
+fur|n|털, 모피|h
+furniture|n|가구|m
+further|a|더 이상의, 더 먼|h
+future|n|미래|m
+gain|v|얻다, 늘리다|m
+gallery|n|미술관, 화랑|m
+game|n|게임, 경기|e
+garage|n|차고, 정비소|m
+garbage|n|쓰레기|m
+garden|n|정원|m
+gas|n|기체, 가스, 휘발유|h
+gate|n|문, 출입구|m
+gather|v|모으다, 모이다|m
+general|a|일반적인, 전반적인|m
+generate|v|발생시키다, 만들어 내다|t
+generation|n|세대|m
+generous|a|너그러운, 후한|h
+genetic|a|유전의, 유전학의|t
+gentle|a|온화한, 부드러운|m
+gentleman|n|신사|h
+gesture|n|몸짓, 제스처|m
+get|v|얻다, ~하게 되다|e
+ghost|n|유령|m
+giant|a|거대한|m
+gift|n|선물, 재능|e
+girl|n|소녀|e
+give|v|주다|e
+glad|a|기쁜|h
+glass|n|유리, 잔|h
+glasses|n|안경|e
+global|a|세계적인, 전 세계의|mt
+glove|n|장갑|m
+glue|n|풀, 접착제|m
+go|v|가다|e
+goal|n|목표, 골|m
+god|n|신, 하느님|h
+gold|n|금|m
+golf|n|골프|m
+good|a|좋은, 착한|e
+goods|n|상품, 물건|m
+govern|v|통치하다, 다스리다|h
+government|n|정부|m
+grab|v|움켜쥐다, 붙잡다|h
+grade|n|성적, 학년, 등급|m
+gradual|a|점진적인, 서서히 일어나는|t
+gradually|ad|점차, 서서히|h
+graduate|v|졸업하다|m
+grain|n|곡물, 알갱이|m
+grammar|n|문법|m
+grand|a|웅장한, 위대한|m
+grandfather|n|할아버지|e
+grandmother|n|할머니|e
+grant|v|승인하다, 주다|h
+grape|n|포도|h
+grass|n|풀, 잔디|e
+grateful|a|고마워하는, 감사하는|m
+grave|n|무덤|m
+gravity|n|중력, 심각성|h
+gray|a|회색의|m
+great|a|위대한, 훌륭한|e
+green|a|초록색의|e
+greet|v|인사하다, 맞이하다|m
+grocery|n|식료품, 식료품점|m
+ground|n|땅, 지면|m
+group|n|무리, 집단|m
+grow|v|자라다, 기르다|m
+growth|n|성장, 증가|m
+guarantee|v|보장하다, 보증하다|h
+guard|n|경비원, 보호|m
+guess|v|추측하다, 짐작하다|m
+guest|n|손님|m
+guide|n|안내, 안내인|m
+guilty|a|죄책감을 느끼는, 유죄의|m
+guitar|n|기타|m
+gun|n|총|h
+guy|n|남자, 사람|h
+habit|n|습관, 버릇|m
+hair|n|머리카락, 털|e
+half|n|반, 절반|m
+hall|n|복도, 회관|m
+hand|n|손|e
+handle|v|다루다, 처리하다|m
+handsome|a|잘생긴|m
+hang|v|걸다, 매달다|m
+happen|v|일어나다, 발생하다|m
+happy|a|행복한, 기쁜|e
+harbor|n|항구|m
+hard|a|어려운, 딱딱한|e
+hardly|ad|거의 ~않다|h
+harm|n|해, 피해|h
+harmony|n|조화, 화합|m
+harvest|n|수확, 추수|m
+hat|n|모자|e
+hate|v|싫어하다, 미워하다|m
+have|v|가지다, 먹다|h
+head|n|머리, 우두머리|e
+headache|n|두통|m
+headquarters|n|본사, 본부|t
+heal|v|낫다, 치유하다|m
+health|n|건강|m
+healthy|a|건강한|m
+hear|v|듣다, 들리다|m
+heart|n|심장, 마음|e
+heat|n|열, 더위|m
+heaven|n|천국, 하늘|m
+heavy|a|무거운, 심한|e
+heel|n|발뒤꿈치, 굽|m
+height|n|키, 높이|m
+hell|n|지옥|h
+hello|int|안녕하세요|h
+help|v|돕다|e
+helpful|a|도움이 되는|h
+hero|n|영웅, 주인공|m
+hesitate|v|망설이다, 주저하다|m
+hide|v|숨기다, 숨다|m
+high|a|높은|e
+highway|n|고속도로|m
+hill|n|언덕|e
+hire|v|고용하다, 빌리다|m
+history|n|역사|m
+hit|v|치다, 때리다|m
+hobby|n|취미|m
+hold|v|잡다, 열다, 유지하다|e
+hole|n|구멍|m
+holiday|n|휴일, 휴가|e
+holy|a|신성한, 거룩한|h
+home|n|집, 가정|e
+homework|n|숙제|e
+honest|a|정직한, 솔직한|m
+honey|n|꿀, 여보|m
+honor|n|명예, 영광|m
+hope|v|바라다, 희망하다|m
+horizon|n|수평선, 지평선|h
+horrible|a|끔찍한|m
+horse|n|말|e
+hospital|n|병원|e
+host|n|주인, 진행자|m
+hot|a|뜨거운, 더운, 매운|e
+hotel|n|호텔|m
+hour|n|시간|e
+house|n|집, 주택|e
+housework|n|집안일|h
+however|ad|그러나, 아무리 ~해도|m
+hug|v|껴안다, 포옹하다|m
+huge|a|거대한|m
+human|n|인간, 사람|m
+humor|n|유머, 익살|m
+hundred|num|백, 100|m
+hungry|a|배고픈|e
+hunt|v|사냥하다, 찾다|m
+hurry|v|서두르다|m
+hurt|v|다치게 하다, 아프다|m
+husband|n|남편|e
+hypothesis|n|가설|t
+ice|n|얼음|e
+idea|n|생각, 발상|m
+ideal|a|이상적인|m
+identical|a|동일한, 똑같은|t
+identify|v|확인하다, 알아보다|t
+identity|n|정체성, 신원|h
+if|conj|만약 ~라면|h
+ignore|v|무시하다|m
+ill|a|아픈, 병든|m
+illegal|a|불법의|h
+illness|n|병, 질병|m
+illustrate|v|설명하다, 삽화를 넣다|t
+image|n|이미지, 인상|m
+imagine|v|상상하다|m
+immediately|ad|즉시, 곧바로|m
+immigrant|n|이민자|h
+impact|n|영향, 충격|t
+implement|v|시행하다, 이행하다|t
+implication|n|영향, 함축, 암시|t
+imply|v|암시하다, 의미하다|t
+importance|n|중요성|m
+important|a|중요한|m
+impose|v|부과하다, 강요하다|t
+impossible|a|불가능한|m
+impress|v|깊은 인상을 주다|m
+improve|v|개선하다, 향상시키다|m
+include|v|포함하다|m
+income|n|소득, 수입|mt
+incorporate|v|포함하다, 통합하다|t
+increase|v|증가하다, 늘리다|m
+indeed|ad|정말로, 실제로|m
+independent|a|독립적인|h
+indicate|v|나타내다, 가리키다|t
+individual|n|개인|t
+industry|n|산업, 업계|t
+inevitable|a|불가피한, 필연적인|t
+infer|v|추론하다, 짐작하다|t
+influence|n|영향, 영향력|t
+inform|v|알리다, 통지하다|h
+information|n|정보|m
+ingredient|n|재료, 성분|h
+inherent|a|내재된, 타고난|t
+initial|a|처음의, 초기의|t
+initiate|v|시작하다, 착수하다|t
+initiative|n|주도권, 계획|t
+injure|v|다치게 하다, 부상을 입히다|m
+injury|n|부상, 상처|m
+ink|n|잉크|m
+inner|a|내부의, 내면의|h
+innocent|a|무죄인, 순진한|h
+innovation|n|혁신, 쇄신|t
+input|n|입력, 투입|h
+inquiry|n|문의, 조사|t
+insect|n|곤충|m
+inside|prep|~ 안에|m
+insight|n|통찰력, 이해|t
+insist|v|주장하다, 고집하다|m
+inspection|n|점검, 검사|t
+inspire|v|영감을 주다, 고무하다|h
+install|v|설치하다|mt
+instance|n|사례, 경우|t
+instead|ad|대신에|m
+institute|n|기관, 협회|t
+instruction|n|지시, 설명|m
+instrument|n|악기, 기구|m
+insurance|n|보험|t
+integrate|v|통합하다, 융합하다|t
+intelligent|a|똑똑한, 지적인|h
+intend|v|의도하다, 작정하다|h
+intense|a|극심한, 강렬한|t
+interest|n|관심, 흥미, 이자|m
+interesting|a|흥미로운, 재미있는|m
+international|a|국제적인|m
+internet|n|인터넷|e
+interpret|v|해석하다, 통역하다|t
+interrupt|v|방해하다, 가로막다|h
+interval|n|간격, 중간 휴식|t
+interview|n|면접, 인터뷰|m
+introduce|v|소개하다, 도입하다|m
+invent|v|발명하다|m
+inventory|n|재고, 물품 목록|t
+invest|v|투자하다|t
+investigate|v|조사하다, 수사하다|t
+invitation|n|초대, 초대장|m
+invite|v|초대하다|m
+invoice|n|송장, 청구서|t
+involve|v|포함하다, 관련시키다|h
+iron|n|철, 다리미|m
+island|n|섬|e
+isolate|v|고립시키다, 분리하다|t
+issue|n|문제, 쟁점, 발행|mt
+item|n|항목, 물품|mt
+jacket|n|재킷, 상의|e
+jail|n|감옥|h
+jam|n|잼, 교통 체증|h
+jar|n|병, 단지|h
+jealous|a|질투하는, 시기하는|m
+jeans|n|청바지|e
+jewelry|n|보석, 장신구|m
+job|n|일, 직업|m
+join|v|참여하다, 합치다|m
+joke|n|농담|m
+journal|n|일지, 학술지|h
+journey|n|여행, 여정|m
+joy|n|기쁨|m
+judge|n|판사, 심사위원|m
+juice|n|주스, 즙|e
+jump|v|뛰다, 점프하다|e
+jungle|n|밀림, 정글|m
+junior|a|손아래의, 하급의|m
+just|ad|막, 단지, 정확히|h
+justice|n|정의, 사법|m
+justify|v|정당화하다, 옳음을 보이다|t
+keep|v|유지하다, 계속하다|e
+key|n|열쇠, 핵심|e
+kick|v|차다|m
+kid|n|아이|h
+kill|v|죽이다|m
+kind|a|친절한|e
+kindergarten|n|유치원|m
+king|n|왕|m
+kiss|v|입 맞추다|m
+kitchen|n|부엌, 주방|e
+knee|n|무릎|e
+knife|n|칼|m
+knock|v|두드리다, 노크하다|m
+know|v|알다|e
+knowledge|n|지식|m
+lab|n|실험실, 연구실|h
+label|n|상표, 라벨|m
+labor|n|노동, 노동력|mt
+lack|n|부족, 결핍|h
+ladder|n|사다리|m
+lady|n|숙녀, 여성|m
+lake|n|호수|e
+lamp|n|등, 램프|e
+land|n|땅, 육지|m
+language|n|언어|m
+large|a|큰, 넓은|e
+last|a|마지막의, 지난|m
+late|a|늦은|e
+lately|ad|최근에|h
+later|ad|나중에|m
+laugh|v|웃다|e
+launch|v|출시하다, 시작하다|t
+laundry|n|세탁물, 빨래|m
+law|n|법, 법칙|m
+lawyer|n|변호사|m
+lay|v|놓다, 눕히다|m
+layer|n|층, 겹|h
+lazy|a|게으른|e
+lead|v|이끌다, 안내하다|m
+leader|n|지도자, 대표|m
+leaf|n|잎|e
+league|n|리그, 연맹|m
+lean|v|기대다, 기울다|m
+learn|v|배우다, 알게 되다|e
+lease|n|임대차 계약|t
+least|a|가장 적은|m
+leather|n|가죽|m
+leave|v|떠나다, 남기다|m
+lecture|n|강의, 강연|m
+left|n|왼쪽|h
+leg|n|다리|e
+legal|a|합법적인, 법률의|m
+lemon|n|레몬|h
+lend|v|빌려주다|m
+length|n|길이, 기간|m
+less|a|더 적은|m
+lesson|n|수업, 교훈|e
+let|v|~하게 하다, 허락하다|h
+letter|n|편지, 글자|e
+level|n|수준, 높이|m
+liability|n|책임, 부채|t
+library|n|도서관|e
+license|n|면허, 자격증|m
+lie|v|눕다, 거짓말하다|m
+life|n|삶, 생명|m
+lift|v|들어 올리다|m
+light|n|빛, 조명|e
+lightning|n|번개|h
+like|v|좋아하다|e
+likely|a|~할 것 같은|h
+limit|n|한계, 제한|m
+line|n|선, 줄|m
+lip|n|입술|m
+liquid|n|액체|m
+list|n|목록, 명단|m
+listen|v|듣다, 귀 기울이다|e
+literature|n|문학|m
+little|a|작은, 조금의|e
+live|v|살다, 생활하다|e
+lively|a|활기찬, 생기 넘치는|h
+living|n|생계, 생활|h
+load|n|짐, 부하|h
+loan|n|대출, 융자|m
+local|a|지역의, 현지의|m
+locate|v|위치시키다, 찾아내다|m
+location|n|위치, 장소|m
+lock|v|잠그다|m
+lonely|a|외로운|m
+long|a|긴, 오랜|e
+look|v|보다, ~처럼 보이다|e
+loose|a|헐거운, 느슨한|m
+lose|v|잃다, 지다|m
+loss|n|손실, 패배|m
+lot|n|많음, 다수|m
+loud|a|시끄러운, 큰|e
+love|v|사랑하다|e
+lovely|a|사랑스러운, 멋진|m
+low|a|낮은|e
+loyal|a|충성스러운|m
+luck|n|운, 행운|m
+lucky|a|운이 좋은|e
+lunch|n|점심 식사|e
+lung|n|폐, 허파|m
+luxury|n|사치, 호화|m
+machine|n|기계|m
+mad|a|화난, 미친|m
+magazine|n|잡지|m
+magic|n|마법, 마술|m
+mail|n|우편, 메일|m
+main|a|주요한, 주된|m
+maintain|v|유지하다, 주장하다|mt
+major|a|주요한, 대다수의|mt
+make|v|만들다, ~하게 하다|e
+male|a|남성의, 수컷의|h
+mall|n|쇼핑몰|h
+man|n|남자, 사람|e
+manage|v|관리하다, 해내다|m
+manager|n|관리자, 매니저|m
+manipulate|v|조종하다, 다루다|t
+manner|n|방식, 태도|m
+manufacture|v|제조하다, 생산하다|t
+many|a|많은|h
+map|n|지도|e
+march|v|행진하다|m
+mark|n|표시, 자국, 점수|m
+market|n|시장|e
+marriage|n|결혼|m
+marry|v|결혼하다|m
+mass|n|덩어리, 대중|m
+master|n|주인, 달인|m
+match|n|경기, 성냥, 어울림|m
+material|n|재료, 자료|m
+math|n|수학|e
+matter|n|문제, 사안|m
+maximum|n|최대, 최고|t
+may|v|~일지도 모른다, ~해도 된다|h
+maybe|ad|아마도|m
+meal|n|식사, 끼니|m
+mean|v|의미하다, 의도하다|m
+meaning|n|의미, 뜻|m
+means|n|수단, 방법|h
+meanwhile|ad|그동안에, 한편|h
+measure|v|측정하다, 재다|m
+meat|n|고기|e
+mechanism|n|기제, 구조, 장치|t
+medal|n|메달, 훈장|m
+media|n|매체, 언론|m
+medical|a|의학의, 의료의|m
+medicine|n|약, 의학|m
+medium|a|중간의, 보통의|m
+meet|v|만나다, 충족시키다|e
+meeting|n|회의, 만남|h
+melt|v|녹다, 녹이다|m
+member|n|구성원, 회원|m
+memory|n|기억, 추억|m
+mention|v|언급하다|m
+menu|n|메뉴, 차림표|m
+merchandise|n|상품|t
+merely|ad|단지, 그저|h
+merge|v|합병하다, 합치다|t
+merit|n|장점, 가치|t
+mess|n|엉망, 혼란|m
+message|n|메시지, 전갈|m
+metal|n|금속|m
+method|n|방법|mt
+middle|n|중간, 가운데|m
+midnight|n|자정, 한밤중|m
+might|v|~일지도 모른다|h
+mild|a|온화한, 순한|m
+military|a|군사의, 군대의|m
+milk|n|우유|e
+million|num|백만|m
+mind|n|마음, 정신|m
+mine|pron|나의 것|h
+mineral|n|광물, 무기질|m
+minimum|n|최소, 최저|t
+minister|n|장관, 목사|m
+minor|a|사소한, 작은|m
+minute|n|분, 잠깐|e
+miracle|n|기적|m
+mirror|n|거울|e
+miss|v|그리워하다, 놓치다|m
+mission|n|임무, 사명|m
+mistake|n|실수, 잘못|m
+mix|v|섞다, 혼합하다|m
+mobile|a|이동하는, 휴대의|h
+model|n|모형, 모델|m
+modern|a|현대의, 근대의|m
+modest|a|겸손한, 수수한|h
+modify|v|수정하다, 바꾸다|t
+moment|n|순간, 잠깐|m
+money|n|돈|e
+monitor|n|화면, 감시 장치|mt
+monkey|n|원숭이|e
+month|n|달, 월|e
+mood|n|기분, 분위기|m
+moon|n|달|e
+moral|a|도덕적인|m
+more|a|더 많은|h
+morning|n|아침, 오전|e
+most|a|대부분의, 가장 많은|h
+mostly|ad|주로, 대체로|m
+mother|n|어머니|e
+motion|n|움직임, 동작|m
+motivate|v|동기를 부여하다|h
+motive|n|동기, 이유|t
+motor|n|모터, 발동기|m
+mountain|n|산|e
+mouse|n|쥐, 마우스|e
+mouth|n|입|e
+move|v|움직이다, 이사하다|e
+movement|n|움직임, 운동|m
+movie|n|영화|e
+much|a|많은|h
+mud|n|진흙|m
+multiply|v|곱하다, 증가시키다|h
+murder|n|살인|m
+muscle|n|근육|m
+museum|n|박물관, 미술관|e
+mushroom|n|버섯|m
+music|n|음악|e
+musician|n|음악가|m
+must|v|~해야 한다, ~임에 틀림없다|h
+mystery|n|수수께끼, 신비|m
+nail|n|손톱, 못|m
+naked|a|벌거벗은|m
+name|n|이름|e
+narrow|a|좁은|m
+nation|n|국가, 국민|m
+national|a|국가의, 전국의|m
+native|a|토박이의, 모국의|m
+natural|a|자연의, 자연스러운|m
+nature|n|자연, 본성|m
+near|prep|~ 가까이에|m
+nearly|ad|거의|m
+neat|a|깔끔한, 정돈된|m
+necessary|a|필요한, 필수의|m
+neck|n|목|e
+need|v|필요하다|h
+needle|n|바늘|m
+negative|a|부정적인, 음성의|mt
+negotiate|v|협상하다|t
+neighbor|n|이웃|m
+neither|a|둘 다 아닌|h
+nephew|n|조카|e
+nerve|n|신경, 용기|m
+nervous|a|긴장한, 불안한|m
+nest|n|둥지|m
+net|n|그물, 망|m
+network|n|망, 네트워크|mt
+neutral|a|중립의, 중성의|t
+never|ad|결코 ~않다|m
+nevertheless|ad|그럼에도 불구하고|h
+new|a|새로운|e
+news|n|소식, 뉴스|m
+newspaper|n|신문|m
+next|a|다음의|m
+nice|a|좋은, 친절한|e
+niece|n|조카딸|e
+night|n|밤|e
+no|ad|아니오, 없는|h
+nobody|pron|아무도 ~않다|h
+noise|n|소음, 소리|m
+none|pron|아무것도 ~않다|m
+nonsense|n|말도 안 되는 소리, 헛소리|m
+noon|n|정오, 낮 열두 시|e
+nor|conj|~도 아니다|h
+norm|n|규범, 표준|t
+normal|a|정상의, 보통의|m
+north|n|북쪽|m
+nose|n|코|e
+not|ad|~아니다|h
+note|n|메모, 음표|m
+nothing|pron|아무것도 ~않다|m
+notice|v|알아차리다|m
+notify|v|통지하다, 알리다|t
+notion|n|개념, 관념|t
+novel|n|소설|m
+now|ad|지금, 이제|h
+nowadays|ad|요즘에는|m
+nowhere|ad|어디에도 ~없다|h
+nuclear|a|핵의, 원자력의|h
+number|n|숫자, 번호|e
+nurse|n|간호사|e
+nut|n|견과, 너트|m
+obey|v|복종하다, 따르다|m
+object|n|물체, 목적|m
+objective|n|목표, 목적|t
+observe|v|관찰하다, 지키다|m
+obtain|v|얻다, 획득하다|t
+obvious|a|명백한, 분명한|m
+occasion|n|경우, 행사|m
+occupation|n|직업, 점유|t
+occupy|v|차지하다, 점령하다|h
+occur|v|일어나다, 발생하다|t
+ocean|n|바다, 대양|e
+odd|a|이상한, 홀수의|t
+of|prep|~의|h
+off|ad|떨어져, 꺼진|h
+offer|v|제안하다, 제공하다|m
+office|n|사무실, 관청|m
+officer|n|장교, 공무원|m
+official|a|공식적인|m
+often|ad|자주, 흔히|m
+oil|n|기름, 석유|m
+old|a|나이 든, 오래된|e
+once|ad|한 번, 예전에|m
+only|a|유일한, 단지|h
+onto|prep|~ 위로|h
+open|v|열다|e
+operate|v|작동하다, 수술하다|t
+opinion|n|의견, 견해|m
+opportunity|n|기회|mt
+oppose|v|반대하다|m
+opposite|a|반대의, 맞은편의|m
+option|n|선택, 선택권|mt
+or|conj|또는, 혹은|h
+orange|n|오렌지, 주황색|e
+order|n|주문, 명령, 순서|m
+ordinary|a|평범한, 보통의|m
+organ|n|장기, 기관|m
+organize|v|조직하다, 정리하다|mt
+origin|n|기원, 출신|m
+original|a|원래의, 독창적인|m
+other|a|다른|m
+otherwise|ad|그렇지 않으면|m
+ought|v|~해야 한다|h
+ours|pron|우리의 것|h
+out|ad|밖으로, 밖에|h
+outcome|n|결과|t
+outdoor|a|야외의|m
+outline|n|개요, 윤곽|h
+output|n|생산량, 출력|t
+outside|prep|~ 밖에|m
+outstanding|a|뛰어난, 미지급된|t
+oven|n|오븐|m
+over|prep|~ 위에, ~ 넘어|h
+overcome|v|극복하다|h
+overseas|ad|해외로, 해외에|h
+overtime|n|초과 근무|t
+owe|v|빚지다, 신세를 지다|m
+own|v|소유하다|m
+owner|n|주인, 소유자|m
+oxygen|n|산소|m
+pack|v|싸다, 포장하다|m
+package|n|소포, 꾸러미|mt
+page|n|쪽, 페이지|m
+pain|n|고통, 아픔|m
+paint|v|칠하다, 그리다|m
+pair|n|한 쌍, 한 켤레|m
+palace|n|궁전|m
+pale|a|창백한, 옅은|m
+palm|n|손바닥, 야자나무|m
+pan|n|냄비, 프라이팬|m
+panic|n|공황, 공포|m
+pants|n|바지|e
+paper|n|종이, 논문|e
+parade|n|행진, 퍼레이드|m
+parallel|a|평행한, 유사한|t
+parent|n|부모|e
+park|n|공원|e
+part|n|부분, 역할|m
+partial|a|부분적인, 편파적인|t
+participate|v|참가하다|mt
+particular|a|특정한, 특별한|m
+partner|n|동반자, 동업자|mt
+party|n|파티, 정당|e
+pass|v|지나가다, 통과하다|m
+passenger|n|승객|m
+passion|n|열정|h
+passport|n|여권|m
+password|n|비밀번호|h
+past|n|과거|m
+patent|n|특허, 특허권|t
+path|n|길, 경로|m
+patient|n|환자|m
+pattern|n|무늬, 양식|m
+pause|v|잠시 멈추다|m
+pay|v|지불하다, 내다|m
+payment|n|지급, 결제|t
+payroll|n|급여 대상자 명단, 급여 총액|t
+peace|n|평화|m
+peak|n|정상, 절정|m
+pen|n|펜|e
+pencil|n|연필|e
+people|n|사람들, 국민|e
+pepper|n|후추, 고추|m
+per|prep|~당, ~마다|h
+perceive|v|인식하다, 감지하다|t
+percent|n|퍼센트, 백분율|mt
+perfect|a|완벽한|m
+perform|v|공연하다, 수행하다|m
+performance|n|공연, 성과|t
+perhaps|ad|아마, 어쩌면|m
+period|n|기간, 시기|mt
+permanent|a|영구적인|t
+permission|n|허락, 허가|m
+person|n|사람, 개인|e
+personal|a|개인적인|m
+personality|n|성격, 개성|m
+personnel|n|인원, 인사부|t
+perspective|n|관점, 시각|t
+persuade|v|설득하다|m
+pet|n|반려동물|m
+phase|n|단계, 국면|t
+phenomenon|n|현상|t
+philosophy|n|철학|t
+phone|n|전화|e
+photograph|n|사진|m
+phrase|n|구절, 표현|m
+physical|a|신체의, 물리적인|mt
+piano|n|피아노|m
+pick|v|고르다, 따다|m
+picture|n|그림, 사진|e
+piece|n|조각, 한 개|m
+pig|n|돼지|e
+pile|n|더미, 무더기|m
+pill|n|알약|m
+pillow|n|베개|m
+pilot|n|조종사|m
+pin|n|핀, 압정|m
+pink|a|분홍색의|m
+pipe|n|관, 파이프|m
+pity|n|연민, 유감|m
+place|n|장소, 곳|m
+plain|a|분명한, 소박한|m
+plan|n|계획|m
+plane|n|비행기, 평면|m
+planet|n|행성|m
+plant|n|식물, 공장|e
+plastic|n|플라스틱|m
+plate|n|접시, 판|m
+platform|n|승강장, 연단, 플랫폼|m
+play|v|놀다, 연주하다, 경기하다|e
+player|n|선수, 연주자|m
+pleasant|a|즐거운, 유쾌한|m
+please|v|기쁘게 하다|m
+pleasure|n|기쁨, 즐거움|m
+pledge|v|약속하다, 서약하다|t
+plenty|n|풍부, 많음|m
+plus|prep|더하기, ~에 더하여|h
+pocket|n|주머니|m
+poem|n|시|m
+poet|n|시인|m
+point|n|점, 요점|m
+poison|n|독|m
+police|n|경찰|e
+policy|n|정책, 방침|mt
+polite|a|예의 바른, 공손한|m
+politics|n|정치|h
+pollution|n|오염, 공해|m
+pool|n|수영장, 웅덩이|m
+poor|a|가난한, 서투른|e
+popular|a|인기 있는, 대중적인|m
+population|n|인구|m
+port|n|항구|m
+portion|n|부분, 1인분|t
+position|n|위치, 자리, 입장|m
+positive|a|긍정적인, 양성의|m
+possess|v|소유하다, 지니다|h
+possible|a|가능한|m
+post|n|우편, 게시물, 직책|m
+postpone|v|연기하다, 미루다|t
+pot|n|냄비, 항아리|m
+potato|n|감자|e
+potential|n|잠재력|t
+pour|v|붓다, 따르다|m
+poverty|n|가난, 빈곤|h
+powder|n|가루, 분말|m
+power|n|힘, 권력, 전력|m
+powerful|a|강력한, 영향력 있는|h
+practical|a|실용적인, 현실적인|h
+practice|n|연습, 실행|m
+praise|v|칭찬하다|m
+pray|v|기도하다|m
+precede|v|앞서다, 선행하다|t
+precious|a|귀중한, 소중한|m
+precise|a|정확한, 정밀한|t
+predict|v|예측하다|t
+prefer|v|더 좋아하다, 선호하다|m
+pregnant|a|임신한|h
+premises|n|건물, 부지|t
+premium|n|할증금, 보험료|t
+prepare|v|준비하다|m
+prescription|n|처방전|h
+present|n|선물, 현재|m
+preserve|v|보존하다, 지키다|h
+president|n|대통령, 회장|m
+press|v|누르다, 압박하다|m
+pressure|n|압력, 압박|m
+presume|v|추정하다, 가정하다|t
+pretend|v|~인 척하다|m
+pretty|a|예쁜, 꽤|e
+prevent|v|막다, 예방하다|m
+previous|a|이전의, 앞선|t
+price|n|가격, 값|e
+pride|n|자부심, 자존심|m
+priest|n|성직자, 신부|h
+primary|a|주요한, 초등의|t
+prince|n|왕자|m
+principal|n|교장, 주요한|m
+principle|n|원칙, 원리|t
+print|v|인쇄하다, 출력하다|m
+prior|a|이전의, 우선하는|t
+prison|n|감옥, 교도소|m
+private|a|사적인, 개인의|m
+prize|n|상, 상품|m
+probably|ad|아마도|m
+problem|n|문제|m
+procedure|n|절차, 수술|t
+proceed|v|진행하다, 나아가다|t
+process|n|과정, 절차|mt
+produce|v|생산하다, 만들어 내다|mt
+product|n|제품, 산물|mt
+production|n|생산, 제작|t
+professional|a|전문적인, 직업의|t
+professor|n|교수|m
+profile|n|프로필, 옆모습|h
+profit|n|이익, 수익|mt
+program|n|프로그램, 계획|m
+progress|n|진전, 발전|m
+prohibit|v|금지하다|t
+project|n|계획, 과제|mt
+promise|v|약속하다|m
+promote|v|승진시키다, 홍보하다|mt
+prompt|a|즉각적인, 신속한|h
+pronounce|v|발음하다, 선언하다|m
+pronunciation|n|발음|m
+proof|n|증거, 증명|m
+proper|a|적절한, 올바른|m
+property|n|재산, 부동산, 속성|t
+proportion|n|비율, 부분|t
+proposal|n|제안, 청혼|t
+propose|v|제안하다, 청혼하다|h
+prospect|n|전망, 가능성|t
+prospective|a|장래의, 유망한|t
+protect|v|보호하다, 지키다|m
+protein|n|단백질|h
+protest|v|항의하다, 시위하다|h
+proud|a|자랑스러운, 자부심 있는|m
+prove|v|증명하다, 판명되다|m
+provide|v|제공하다, 공급하다|m
+provision|n|공급, 조항|t
+public|a|공공의, 대중의|m
+publication|n|출판, 출판물|t
+publish|v|출판하다, 게재하다|m
+pull|v|당기다, 끌다|m
+pump|n|펌프|h
+punish|v|벌하다, 처벌하다|m
+purchase|v|구매하다|t
+purchase order|n|발주서, 구매 주문서|t
+pure|a|순수한, 깨끗한|m
+purple|a|보라색의|m
+purpose|n|목적, 의도|m
+purse|n|지갑, 핸드백|m
+pursue|v|추구하다, 계속하다|t
+push|v|밀다, 누르다|m
+put|v|놓다, 두다|e
+puzzle|n|퍼즐, 수수께끼|m
+qualify|v|자격을 얻다|t
+quality|n|품질, 자질|mt
+quantity|n|양, 수량|mt
+quarter|n|4분의 1, 15분, 분기|mt
+queen|n|여왕|m
+question|n|질문, 문제|e
+quick|a|빠른, 신속한|m
+quiet|a|조용한|e
+quit|v|그만두다, 끊다|m
+quite|ad|꽤, 상당히|m
+quiz|n|퀴즈, 쪽지 시험|m
+quotation|n|견적, 시세|t
+race|n|경주, 인종|m
+radio|n|라디오|e
+rail|n|철도, 난간|m
+rain|n|비|e
+rainbow|n|무지개|m
+raise|v|올리다, 기르다, 모으다|m
+random|a|무작위의, 임의의|t
+range|n|범위, 산맥|mt
+rank|n|계급, 순위|m
+rapid|a|빠른, 신속한|m
+rare|a|드문, 희귀한|m
+rate|n|비율, 요금, 속도|m
+rather|ad|오히려, 꽤|m
+ratio|n|비율|t
+rational|a|합리적인, 이성적인|t
+raw|a|날것의, 가공하지 않은|h
+reach|v|도달하다, 닿다|m
+react|v|반응하다|mt
+read|v|읽다|e
+ready|a|준비된|m
+real|a|진짜의, 실제의|m
+realize|v|깨닫다, 실현하다|m
+really|ad|정말로, 실제로|h
+reason|n|이유, 이성|m
+reasonable|a|합리적인, 적당한|h
+receipt|n|영수증|mt
+receive|v|받다, 수령하다|m
+recent|a|최근의|m
+reception|n|접수처, 환영회|t
+recipe|n|조리법, 요리법|m
+recognize|v|알아보다, 인정하다|m
+recommend|v|추천하다, 권하다|m
+record|n|기록, 음반|m
+recover|v|회복하다, 되찾다|m
+recruit|v|채용하다, 모집하다|t
+recycle|v|재활용하다|m
+red|a|빨간|e
+reduce|v|줄이다, 감소시키다|mt
+refer|v|언급하다, 참조하다|h
+reflect|v|반사하다, 반영하다|t
+refrigerator|n|냉장고|h
+refund|n|환불|t
+refuse|v|거절하다, 거부하다|m
+regard|v|여기다, 간주하다|h
+regime|n|정권, 제도|t
+region|n|지역, 지방|t
+register|v|등록하다|t
+regret|v|후회하다, 유감으로 여기다|m
+regular|a|규칙적인, 정기적인|m
+regulate|v|규제하다, 조절하다|t
+regulation|n|규정, 규제|t
+reimburse|v|상환하다, 변제하다|t
+reinforce|v|강화하다, 보강하다|t
+reject|v|거절하다, 거부하다|t
+relate|v|관련시키다, 이야기하다|h
+relationship|n|관계, 사이|h
+relax|v|긴장을 풀다, 쉬다|m
+release|v|풀어 주다, 공개하다|mt
+relevant|a|관련 있는, 적절한|t
+relief|n|안도, 구호|m
+religion|n|종교|m
+reluctant|a|꺼리는, 마지못한|t
+rely|v|의지하다, 신뢰하다|t
+remain|v|남다, 계속 ~이다|m
+remember|v|기억하다|m
+remind|v|상기시키다|m
+remote|a|먼, 외딴, 원격의|h
+remove|v|제거하다, 없애다|mt
+renew|v|갱신하다, 재개하다|t
+rent|v|빌리다, 임대하다|mt
+repair|v|수리하다, 고치다|m
+repeat|v|반복하다|m
+replace|v|대체하다, 교체하다|mt
+reply|v|대답하다, 답장하다|m
+report|n|보고서, 보도|m
+represent|v|대표하다, 나타내다|h
+representative|n|대표, 담당 직원|t
+reputation|n|평판, 명성|t
+request|n|요청, 부탁|t
+require|v|요구하다, 필요로 하다|mt
+rescue|v|구조하다, 구하다|m
+research|n|연구, 조사|mt
+reservation|n|예약|mt
+reside|v|거주하다, 살다|t
+resident|n|주민, 거주자|h
+resign|v|사직하다, 사임하다|t
+resist|v|저항하다, 참다|h
+resolve|v|해결하다, 결심하다|t
+resource|n|자원, 재료|t
+respect|v|존중하다, 존경하다|m
+respond|v|대답하다, 반응하다|mt
+responsibility|n|책임, 책무|mt
+responsible|a|책임이 있는|h
+rest|n|휴식, 나머지|m
+restaurant|n|식당|e
+restore|v|복구하다, 회복시키다|h
+restrict|v|제한하다|t
+result|n|결과|m
+retail|n|소매|t
+retain|v|유지하다, 보유하다|t
+retire|v|은퇴하다, 퇴직하다|t
+return|v|돌아오다, 반납하다|m
+reveal|v|드러내다, 밝히다|mt
+revenue|n|수익, 세입|t
+reverse|v|뒤집다, 되돌리다|t
+review|n|검토, 후기, 복습|mt
+revise|v|수정하다, 개정하다|t
+revision|n|수정, 개정|t
+revolution|n|혁명, 회전|t
+reward|n|보상, 상|m
+rice|n|쌀, 밥|e
+rich|a|부유한, 풍부한|e
+ride|v|타다|e
+right|a|옳은, 오른쪽의|h
+rigid|a|엄격한, 뻣뻣한|t
+ring|n|반지, 고리|m
+rise|v|오르다, 떠오르다|m
+risk|n|위험, 모험|m
+river|n|강|e
+road|n|길, 도로|e
+roast|v|굽다, 볶다|m
+rob|v|훔치다, 강도질하다|m
+rock|n|바위, 암석|e
+role|n|역할, 배역|mt
+roll|v|구르다, 굴리다|m
+roof|n|지붕|m
+room|n|방, 공간|e
+root|n|뿌리, 근원|m
+rope|n|밧줄, 줄|m
+rose|n|장미|m
+rough|a|거친, 대략의|m
+round|a|둥근|m
+route|n|길, 경로|m
+routine|n|일과, 판에 박힌 일|m
+row|n|줄, 열|h
+royal|a|왕실의, 왕의|h
+rub|v|문지르다, 비비다|m
+rubber|n|고무|m
+rude|a|무례한, 버릇없는|m
+ruin|v|망치다, 파괴하다|m
+rule|n|규칙, 통치|m
+ruler|n|자, 통치자|e
+run|v|달리다, 운영하다|e
+rush|v|서두르다, 돌진하다|m
+sad|a|슬픈|e
+safe|a|안전한|e
+safety|n|안전|m
+sail|v|항해하다|m
+salad|n|샐러드|m
+salary|n|급여, 월급|mt
+sale|n|판매, 할인 판매|m
+salt|n|소금|e
+same|a|같은, 동일한|e
+sample|n|견본, 표본|m
+sand|n|모래|m
+satisfy|v|만족시키다|m
+sauce|n|소스, 양념|m
+save|v|구하다, 저축하다, 저장하다|m
+say|v|말하다|e
+scale|n|규모, 저울, 눈금|m
+scare|v|겁주다, 무섭게 하다|m
+scenario|n|시나리오, 예상되는 상황|t
+scene|n|장면, 현장|m
+schedule|n|일정, 시간표|mt
+scheme|n|계획, 제도, 책략|t
+scholar|n|학자, 장학생|m
+school|n|학교|e
+science|n|과학|e
+scissors|n|가위|m
+scope|n|범위, 여지|t
+score|n|점수, 득점|m
+scream|v|비명을 지르다|m
+screen|n|화면, 스크린|m
+sea|n|바다|e
+search|v|찾다, 검색하다|m
+season|n|계절, 시즌|m
+seat|n|좌석, 자리|m
+second|n|초, 두 번째|m
+secret|n|비밀|m
+secretary|n|비서, 장관|m
+section|n|부분, 구역|mt
+sector|n|부문, 분야|t
+secure|a|안전한, 확실한|t
+see|v|보다, 알다|e
+seed|n|씨앗|m
+seek|v|찾다, 구하다|mt
+seem|v|~인 것 같다|m
+seldom|ad|좀처럼 ~않다|h
+select|v|고르다, 선택하다|mt
+selfish|a|이기적인|m
+sell|v|팔다|e
+senator|n|상원 의원|h
+send|v|보내다|e
+senior|a|손위의, 상급의|m
+sense|n|감각, 느낌, 의미|m
+sensitive|a|민감한, 세심한|h
+sentence|n|문장, 형벌|m
+separate|v|분리하다, 나누다|m
+sequence|n|순서, 연속|t
+series|n|연속, 시리즈|mt
+serious|a|심각한, 진지한|m
+serve|v|제공하다, 봉사하다|m
+service|n|서비스, 봉사|m
+session|n|기간, 회의, 시간|t
+set|v|놓다, 정하다|m
+settle|v|정착하다, 해결하다|m
+several|a|몇몇의|m
+severe|a|심한, 엄격한|h
+sew|v|바느질하다, 꿰매다|m
+shade|n|그늘, 색조|m
+shadow|n|그림자|m
+shake|v|흔들다, 떨다|m
+shall|v|~할 것이다, ~할까요|h
+shallow|a|얕은|m
+shame|n|수치심, 창피|m
+shape|n|모양, 형태|m
+share|v|공유하다, 나누다|m
+shareholder|n|주주|t
+sharp|a|날카로운, 예리한|m
+shave|v|면도하다|m
+sheep|n|양|e
+sheet|n|시트, 한 장|h
+shelf|n|선반|m
+shell|n|껍데기, 조개껍질|m
+shelter|n|피난처, 보호소|h
+shift|n|교대 근무, 변화|t
+shine|v|빛나다, 비추다|m
+ship|n|배, 선박|e
+shipment|n|수송, 발송 화물|t
+shirt|n|셔츠|e
+shock|n|충격|m
+shoe|n|신발|e
+shoot|v|쏘다, 촬영하다|m
+shop|n|가게, 상점|e
+shore|n|해안, 물가|m
+short|a|짧은, 부족한|e
+shortage|n|부족, 결핍|m
+shot|n|발사, 슛, 주사|m
+should|v|~해야 한다|h
+shoulder|n|어깨|e
+shout|v|외치다, 소리치다|m
+show|v|보여 주다, 나타내다|e
+shower|n|샤워, 소나기|m
+shrimp|n|새우|m
+shut|v|닫다, 닫히다|m
+shy|a|수줍은, 부끄러워하는|m
+sick|a|아픈, 병든|e
+side|n|쪽, 옆, 측면|m
+sight|n|시력, 광경|m
+sign|n|표지, 징후, 서명|m
+signal|n|신호|m
+signature|n|서명|h
+significant|a|중요한, 상당한|t
+silence|n|침묵, 고요|m
+silent|a|조용한, 침묵하는|m
+silk|n|비단, 실크|m
+silly|a|어리석은, 바보 같은|m
+silver|n|은|m
+similar|a|비슷한, 유사한|mt
+simple|a|간단한, 단순한|m
+simply|ad|단순히, 그저|h
+simulate|v|모의실험하다, 흉내 내다|t
+since|conj|~ 이래로, ~ 때문에|m
+sincere|a|진실한, 진심의|m
+sing|v|노래하다|e
+single|a|단 하나의, 독신의|m
+sink|v|가라앉다|m
+sister|n|언니, 누나, 여동생|e
+sit|v|앉다|e
+site|n|장소, 부지, 사이트|mt
+situation|n|상황, 처지|m
+size|n|크기, 치수|m
+skill|n|기술, 능력|m
+skin|n|피부, 껍질|e
+skirt|n|치마|e
+sky|n|하늘|e
+sleep|v|자다|e
+slice|n|조각, 얇은 조각|m
+slide|v|미끄러지다|m
+slight|a|약간의, 경미한|m
+slim|a|날씬한, 얇은|m
+slip|v|미끄러지다, 빠져나가다|m
+slow|a|느린|e
+small|a|작은|e
+smart|a|똑똑한, 영리한|m
+smell|v|냄새를 맡다, 냄새가 나다|m
+smile|v|미소 짓다|e
+smoke|n|연기|m
+smooth|a|매끄러운, 부드러운|m
+snack|n|간식|m
+snake|n|뱀|e
+snow|n|눈|e
+so|ad|그래서, 매우|h
+soap|n|비누|e
+soccer|n|축구|h
+social|a|사회의, 사교적인|h
+society|n|사회, 협회|h
+sock|n|양말|e
+soft|a|부드러운, 푹신한|e
+software|n|소프트웨어|m
+soil|n|흙, 토양|m
+soldier|n|군인, 병사|m
+solid|a|단단한, 고체의|m
+solution|n|해결책, 용액|m
+solve|v|풀다, 해결하다|m
+some|a|약간의, 어떤|h
+somebody|pron|어떤 사람, 누군가|h
+somehow|ad|어떻게든, 왠지|h
+someone|pron|누군가|h
+something|pron|어떤 것, 무언가|h
+sometimes|ad|가끔, 때때로|m
+somewhat|ad|다소, 어느 정도|t
+somewhere|ad|어딘가에|m
+son|n|아들|e
+song|n|노래|e
+soon|ad|곧, 머지않아|m
+sorry|a|미안한, 유감스러운|m
+sort|n|종류, 부류|m
+soul|n|영혼, 정신|m
+sound|n|소리|m
+soup|n|수프, 국|e
+source|n|출처, 원천|mt
+south|n|남쪽|m
+space|n|공간, 우주|m
+spare|a|여분의, 예비의|m
+speak|v|말하다, 이야기하다|e
+speaker|n|연설자, 화자, 스피커|m
+special|a|특별한|m
+species|n|종, 종류|h
+specific|a|구체적인, 특정한|t
+specify|v|명시하다, 구체적으로 밝히다|t
+speech|n|연설, 말|m
+speed|n|속도|m
+spell|v|철자를 쓰다|m
+spend|v|쓰다, 보내다|m
+sphere|n|구, 영역|t
+spicy|a|매운, 양념이 강한|m
+spider|n|거미|e
+spill|v|엎지르다, 쏟다|m
+spin|v|돌다, 회전시키다|m
+spirit|n|정신, 영혼|m
+spoil|v|망치다, 상하다|m
+spoon|n|숟가락|m
+sport|n|운동, 스포츠|m
+spot|n|점, 장소|m
+spread|v|퍼지다, 펴다|m
+spring|n|봄, 샘, 용수철|e
+square|n|정사각형, 광장|m
+stable|a|안정된, 안정적인|t
+staff|n|직원, 인력|t
+stage|n|무대, 단계|m
+stair|n|계단|m
+stamp|n|우표, 도장|m
+stand|v|서다, 견디다|e
+standard|n|기준, 표준|m
+star|n|별, 스타|e
+stare|v|응시하다, 빤히 보다|m
+start|v|시작하다|e
+state|n|상태, 국가, 주|m
+statement|n|진술, 성명|t
+station|n|역, 방송국|m
+statistic|n|통계, 통계 수치|t
+statue|n|조각상|m
+status|n|지위, 상태|t
+stay|v|머무르다, 유지하다|m
+steady|a|꾸준한, 안정된|m
+steal|v|훔치다|m
+steam|n|증기, 김|m
+steel|n|강철|m
+steep|a|가파른|m
+step|n|걸음, 단계|m
+stick|n|막대기|m
+sticky|a|끈적끈적한|m
+stiff|a|뻣뻣한, 뻑뻑한|m
+still|ad|여전히, 아직|m
+stock|n|재고, 주식|t
+stomach|n|위, 배|e
+stone|n|돌|e
+stop|v|멈추다, 그만두다|e
+store|n|가게, 상점|e
+storm|n|폭풍, 폭풍우|m
+story|n|이야기, 층|e
+stove|n|난로, 가스레인지|m
+straight|a|곧은, 똑바른|m
+straightforward|a|간단한, 솔직한|t
+strange|a|이상한, 낯선|m
+stranger|n|낯선 사람|m
+strategy|n|전략|t
+straw|n|짚, 빨대|m
+stream|n|시내, 흐름|m
+street|n|거리, 길|e
+strength|n|힘, 강점|m
+stress|n|스트레스, 강조|mt
+stretch|v|늘이다, 뻗다|m
+strict|a|엄격한|m
+strike|v|치다, 파업하다|m
+string|n|끈, 줄|m
+strong|a|강한, 튼튼한|e
+structure|n|구조, 건축물|mt
+struggle|v|고군분투하다, 몸부림치다|m
+student|n|학생|e
+study|v|공부하다, 연구하다|e
+stuff|n|물건, 것|m
+stupid|a|어리석은, 멍청한|m
+style|n|양식, 방식, 스타일|mt
+subject|n|과목, 주제|m
+submit|v|제출하다, 굴복하다|t
+subscribe|v|구독하다, 가입하다|t
+subsequent|a|그 뒤의, 이어지는|t
+subsidiary|n|자회사|t
+substitute|v|대체하다, 대신하다|t
+subway|n|지하철|m
+succeed|v|성공하다, 뒤를 잇다|m
+success|n|성공|m
+successor|n|후임자, 계승자|t
+such|a|그러한, 그런|h
+sudden|a|갑작스러운|m
+suffer|v|고통받다, 겪다|m
+sufficient|a|충분한|t
+sugar|n|설탕|e
+suggest|v|제안하다, 시사하다|m
+suit|n|정장, 소송|m
+suitable|a|적합한, 알맞은|m
+sum|n|합계, 금액|t
+summary|n|요약|mt
+summer|n|여름|e
+sun|n|해, 태양|e
+sunlight|n|햇빛|m
+supermarket|n|슈퍼마켓|m
+supervisor|n|감독관, 상사|t
+supplement|n|보충, 보충제|t
+supply|v|공급하다|mt
+support|v|지지하다, 지원하다|m
+suppose|v|가정하다, 추측하다|m
+sure|a|확신하는, 확실한|m
+surface|n|표면|m
+surgery|n|수술|m
+surplus|n|잉여, 흑자|t
+surprise|v|놀라게 하다|m
+surround|v|둘러싸다, 에워싸다|m
+survey|n|조사, 설문|mt
+survive|v|살아남다, 생존하다|mt
+suspect|v|의심하다|m
+suspend|v|중단하다, 매달다|t
+sustain|v|지속시키다, 떠받치다|t
+swallow|v|삼키다|m
+swear|v|맹세하다, 욕하다|m
+sweat|n|땀|m
+sweater|n|스웨터|e
+sweep|v|쓸다, 청소하다|m
+sweet|a|달콤한, 다정한|e
+swim|v|수영하다|e
+swing|v|흔들리다, 흔들다|m
+switch|n|스위치, 전환|m
+symbol|n|상징, 기호|mt
+sympathy|n|동정, 공감|m
+symptom|n|증상, 징후|m
+system|n|체계, 시스템|m
+table|n|탁자, 표|e
+tail|n|꼬리|m
+take|v|가져가다, 잡다, 걸리다|e
+talent|n|재능, 재주|m
+talk|v|말하다, 이야기하다|e
+tall|a|키가 큰, 높은|e
+tape|n|테이프|m
+target|n|목표, 표적|mt
+tariff|n|관세, 요금표|t
+task|n|일, 과제|m
+taste|n|맛, 취향|m
+tax|n|세금|mt
+taxi|n|택시|e
+tea|n|차|e
+teach|v|가르치다|e
+teacher|n|교사, 선생님|e
+team|n|팀, 조|m
+tear|n|눈물|m
+technical|a|기술적인, 전문적인|t
+technique|n|기술, 기법|mt
+technology|n|기술, 과학 기술|mt
+teenager|n|십 대|m
+telephone|n|전화|m
+television|n|텔레비전|e
+tell|v|말하다, 알려 주다|e
+temperature|n|온도, 체온|m
+temple|n|절, 사원|m
+temporary|a|임시의, 일시적인|mt
+tenant|n|세입자, 임차인|t
+tend|v|~하는 경향이 있다|m
+tense|a|긴장한, 팽팽한|t
+tension|n|긴장, 갈등|m
+term|n|용어, 기간, 조건|m
+terminate|v|종료하다, 끝내다|t
+terrible|a|끔찍한, 심한|m
+territory|n|영토, 지역|h
+test|n|시험, 검사|e
+text|n|글, 본문, 문자|mt
+than|conj|~보다|h
+thank|v|감사하다|m
+that|pron|저것, 그것|h
+theater|n|극장|m
+theme|n|주제, 테마|mt
+then|ad|그때, 그다음에|h
+theory|n|이론|mt
+there|ad|거기에, 그곳에|h
+therefore|ad|그러므로, 따라서|h
+thesis|n|논문, 논지|t
+thick|a|두꺼운, 짙은|e
+thief|n|도둑|m
+thin|a|얇은, 마른|e
+thing|n|것, 물건, 일|h
+think|v|생각하다|e
+thirsty|a|목마른|m
+this|pron|이것|h
+thought|n|생각, 사고|m
+thousand|num|천, 1000|m
+thread|n|실, 가닥|m
+threat|n|위협, 협박|m
+throat|n|목구멍, 목|m
+through|prep|~을 통해, ~을 지나|h
+throughout|prep|~ 내내, ~ 전역에|h
+throw|v|던지다|e
+thumb|n|엄지손가락|e
+thunder|n|천둥|m
+thus|ad|그러므로, 이렇게|h
+ticket|n|표, 입장권|m
+tide|n|조수, 흐름|h
+tidy|a|정돈된, 깔끔한|m
+tie|v|묶다, 동점이 되다|m
+tight|a|꽉 끼는, 팽팽한|m
+time|n|시간, 때, 번|h
+tiny|a|아주 작은|m
+tip|n|끝, 조언, 팁|m
+tire|n|타이어|m
+tired|a|피곤한, 지친|e
+title|n|제목, 직함|m
+today|n|오늘|e
+toe|n|발가락|e
+together|ad|함께, 같이|m
+toilet|n|화장실, 변기|m
+tomorrow|n|내일|e
+tone|n|어조, 음색|m
+tongue|n|혀, 언어|e
+tonight|n|오늘 밤|m
+too|ad|너무, ~도 또한|h
+tool|n|도구, 연장|m
+tooth|n|이, 치아|e
+top|n|꼭대기, 맨 위|m
+topic|n|주제, 화제|mt
+total|a|전체의, 총|m
+touch|v|만지다, 감동시키다|e
+tough|a|힘든, 질긴|m
+tour|n|여행, 관광|m
+tourist|n|관광객|m
+toward|prep|~ 쪽으로, ~을 향하여|m
+towel|n|수건|e
+tower|n|탑|m
+town|n|마을, 소도시|e
+toy|n|장난감|e
+trace|n|자취, 흔적|t
+track|n|길, 자취, 트랙|m
+trade|n|무역, 거래|m
+tradition|n|전통|mt
+traffic|n|교통, 통행|m
+train|n|기차|e
+training|n|훈련, 교육|m
+transaction|n|거래, 처리|t
+transfer|v|옮기다, 이동하다, 갈아타다|t
+transform|v|변형시키다, 완전히 바꾸다|t
+transit|n|통과, 운송|t
+translate|v|번역하다, 통역하다|m
+transmit|v|전송하다, 전달하다|t
+transport|v|수송하다, 운반하다|mt
+trap|n|덫, 함정|m
+trash|n|쓰레기|m
+travel|v|여행하다|m
+treasure|n|보물|m
+treat|v|대하다, 치료하다, 대접하다|m
+treatment|n|치료, 대우|m
+tree|n|나무|e
+trend|n|경향, 유행|mt
+trial|n|재판, 시험|m
+trick|n|속임수, 묘기|m
+trigger|v|촉발하다, 유발하다|t
+trip|n|여행|m
+trouble|n|문제, 곤란|m
+truck|n|트럭|m
+true|a|사실인, 진실한|m
+trust|v|믿다, 신뢰하다|m
+truth|n|진실, 사실|m
+try|v|시도하다, 노력하다|m
+tube|n|관, 튜브|m
+tune|n|곡, 선율|m
+tunnel|n|터널|m
+turn|v|돌다, 돌리다, 변하다|e
+twice|ad|두 번, 두 배로|m
+twin|n|쌍둥이|m
+twist|v|비틀다, 꼬다|m
+type|n|유형, 종류|m
+typical|a|전형적인, 대표적인|m
+ugly|a|못생긴, 추한|m
+ultimate|a|궁극적인, 최후의|t
+umbrella|n|우산|m
+uncle|n|삼촌, 이모부|e
+uncomfortable|a|불편한|m
+under|prep|~ 아래에|h
+undergo|v|겪다, 받다|t
+underground|a|지하의|m
+underlie|v|기저를 이루다, 근거가 되다|t
+understand|v|이해하다|m
+undertake|v|착수하다, 떠맡다|t
+underwear|n|속옷|m
+unfortunately|ad|불행히도, 안타깝게도|h
+uniform|n|제복, 교복|et
+unify|v|통합하다, 하나로 만들다|t
+union|n|조합, 연합|m
+unique|a|독특한, 유일한|mt
+unit|n|단위, 구성 단위|m
+unite|v|연합하다, 통합하다|h
+universe|n|우주|m
+university|n|대학교|m
+unless|conj|~하지 않는 한|m
+until|prep|~까지|m
+unusual|a|특이한, 흔치 않은|m
+up|ad|위로, 위에|h
+update|v|갱신하다, 최신으로 하다|m
+upload|v|올리다, 업로드하다|m
+upon|prep|~ 위에, ~하자마자|h
+upper|a|위쪽의, 상부의|m
+upset|a|속상한, 화난|m
+upstairs|ad|위층에|m
+urban|a|도시의|h
+urge|v|촉구하다, 재촉하다|h
+urgent|a|긴급한, 시급한|m
+use|v|사용하다, 쓰다|e
+useful|a|유용한, 쓸모 있는|m
+useless|a|쓸모없는|m
+usual|a|평소의, 보통의|m
+usually|ad|보통, 대개|m
+utility|n|공공요금, 유용성|t
+utilize|v|활용하다, 이용하다|t
+vacancy|n|공석, 빈방|t
+vacation|n|방학, 휴가|m
+valid|a|유효한, 타당한|t
+valley|n|계곡, 골짜기|m
+valuable|a|귀중한, 값비싼|m
+value|n|가치, 값|m
+van|n|승합차, 밴|h
+variety|n|다양성, 종류|m
+various|a|다양한, 여러 가지의|m
+vary|v|다르다, 달라지다|mt
+vegetable|n|채소|e
+vehicle|n|차량, 탈것|mt
+vendor|n|판매업체, 노점상|t
+venue|n|장소, 개최지|t
+version|n|판, 버전|mt
+very|ad|매우, 아주|h
+via|prep|~을 통해, ~을 거쳐|t
+victim|n|피해자, 희생자|m
+victory|n|승리|m
+video|n|영상, 비디오|m
+view|n|경치, 견해|m
+village|n|마을|e
+violate|v|위반하다, 침해하다|t
+violence|n|폭력|m
+violent|a|폭력적인, 격렬한|m
+virtual|a|사실상의, 가상의|t
+virus|n|바이러스|m
+visible|a|눈에 보이는, 뚜렷한|t
+vision|n|시력, 시야, 비전|t
+visit|v|방문하다|m
+visitor|n|방문객, 손님|m
+visual|a|시각의, 눈으로 보는|t
+vitamin|n|비타민|m
+voice|n|목소리, 음성|m
+volume|n|양, 음량, 권|mt
+voluntary|a|자발적인, 자원봉사의|t
+volunteer|n|자원봉사자|m
+vote|v|투표하다|m
+voyage|n|항해, 여행|m
+wage|n|임금, 급료|mt
+waist|n|허리|m
+wait|v|기다리다|e
+wake|v|깨다, 깨우다|m
+walk|v|걷다|e
+wall|n|벽, 담|e
+wallet|n|지갑|m
+wander|v|돌아다니다, 헤매다|m
+want|v|원하다, 바라다|e
+war|n|전쟁|m
+warehouse|n|창고|t
+warm|a|따뜻한|e
+warn|v|경고하다, 주의를 주다|m
+warranty|n|품질 보증서|t
+wash|v|씻다, 빨다|e
+waste|v|낭비하다|m
+watch|v|보다, 지켜보다|e
+water|n|물|e
+wave|n|파도, 물결|m
+way|n|길, 방법|m
+weak|a|약한|e
+wealth|n|부, 재산|m
+weapon|n|무기|m
+wear|v|입다, 착용하다|e
+weather|n|날씨|e
+web|n|웹, 거미줄|m
+wedding|n|결혼식|m
+week|n|주, 일주일|e
+weekend|n|주말|m
+weigh|v|무게가 나가다, 재다|m
+weight|n|무게, 체중|m
+welcome|v|환영하다|m
+welfare|n|복지, 후생|t
+well|ad|잘, 좋게|h
+west|n|서쪽|m
+wet|a|젖은, 축축한|e
+whale|n|고래|e
+what|pron|무엇|h
+whatever|pron|무엇이든|h
+wheat|n|밀|m
+wheel|n|바퀴, 핸들|m
+when|ad|언제|h
+whenever|conj|~할 때마다|h
+where|ad|어디에|h
+whereas|conj|~인 반면에|t
+whereby|conj|그것에 의하여, ~하는|t
+whether|conj|~인지 아닌지|h
+which|pron|어느 것|h
+while|conj|~하는 동안, 반면에|h
+whisper|v|속삭이다|m
+whistle|n|호루라기, 휘파람|m
+white|a|하얀, 흰|e
+who|pron|누구|h
+whole|a|전체의, 온전한|m
+whom|pron|누구를|h
+whose|pron|누구의|h
+why|ad|왜|h
+wide|a|넓은|e
+widely|ad|널리, 폭넓게|h
+widespread|a|널리 퍼진, 광범위한|t
+wife|n|아내|e
+wild|a|야생의, 거친|m
+will|v|~할 것이다|m
+willing|a|기꺼이 하는|m
+win|v|이기다, 얻다|m
+wind|n|바람|e
+window|n|창문|e
+wine|n|포도주, 와인|m
+wing|n|날개|m
+winner|n|승자, 우승자|m
+winter|n|겨울|e
+wipe|v|닦다, 훔치다|m
+wire|n|철사, 전선|m
+wise|a|현명한, 지혜로운|m
+wish|v|바라다, 소망하다|m
+with|prep|~와 함께, ~을 가지고|h
+withdraw|v|철수하다, 인출하다|h
+withdrawal|n|인출, 철수|t
+within|prep|~ 이내에|h
+without|prep|~ 없이|h
+witness|n|목격자, 증인|m
+wolf|n|늑대|e
+woman|n|여자, 여성|e
+wonder|v|궁금해하다|m
+wonderful|a|훌륭한, 멋진|m
+wood|n|나무, 목재|m
+wool|n|양털, 모직|m
+word|n|단어, 말|e
+work|v|일하다, 작동하다|e
+worker|n|노동자, 근로자|m
+workshop|n|워크숍, 작업장|t
+world|n|세계, 세상|m
+worry|v|걱정하다|m
+worse|a|더 나쁜|m
+worth|a|~의 가치가 있는|m
+would|v|~할 것이다, ~하곤 했다|h
+wound|n|상처, 부상|m
+wrap|v|싸다, 포장하다|m
+wrist|n|손목|m
+write|v|쓰다, 적다|e
+writer|n|작가, 필자|m
+wrong|a|틀린, 잘못된|e
+yard|n|마당, 야드|m
+year|n|해, 년, 나이|e
+yell|v|소리치다, 고함치다|m
+yellow|a|노란|e
+yes|ad|네, 그렇다|h
+yesterday|n|어제|e
+yet|ad|아직, 이미|m
+yield|v|산출하다, 양보하다|h
+young|a|어린, 젊은|e
+youth|n|청춘, 젊음|m
+zero|num|영, 0|m
+zone|n|지역, 구역|m
+zoo|n|동물원|e
 `;

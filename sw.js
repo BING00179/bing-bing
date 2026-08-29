@@ -1,5 +1,5 @@
 /* 오프라인에서도 열리도록 앱 파일을 캐시에 담아 둔다. 파일을 고치면 CACHE 이름의 숫자를 올린다. */
-var CACHE = "eng-words-v1";
+var CACHE = "eng-words-v2";
 var ASSETS = [
   "./",
   "./index.html",

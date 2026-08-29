@@ -1,0 +1,287 @@
+ant|n|개미|e
+bench|n|긴 의자, 벤치|m
+dentist|n|치과 의사|m
+elder|a|손위의, 나이가 더 많은|m
+giant|a|거대한|m
+gray|a|회색의|m
+nonsense|n|말도 안 되는 소리, 헛소리|m
+parade|n|행진, 퍼레이드|m
+sunlight|n|햇빛|m
+abstract|a|추상적인, 관념적인|t
+academic|a|학문의, 학업의|t
+accumulate|v|축적하다, 모으다|t
+adapt|v|적응하다, 각색하다|t
+adequate|a|충분한, 적절한|t
+advocate|v|옹호하다, 주장하다|t
+agriculture|n|농업|t
+ambiguous|a|모호한, 애매한|t
+analyze|v|분석하다|t
+approximate|a|대략의, 근사한|t
+category|n|범주, 부문|t
+civilization|n|문명|t
+classify|v|분류하다|t
+component|n|구성 요소, 부품|t
+consequence|n|결과, 영향|t
+considerable|a|상당한, 많은|t
+consistent|a|일관된, 한결같은|t
+contemporary|a|동시대의, 현대의|t
+contrary|a|반대의, ~와 다른|t
+controversy|n|논란, 논쟁|t
+convention|n|관례, 대회, 협약|t
+criteria|n|기준, 판단 기준|t
+crucial|a|결정적인, 중대한|t
+density|n|밀도, 농도|t
+derive|v|끌어내다, 유래하다|t
+dimension|n|차원, 크기, 측면|t
+diverse|a|다양한|t
+dominate|v|지배하다, 우세하다|t
+enormous|a|막대한, 거대한|t
+equivalent|a|동등한, ~에 상당하는|t
+evolve|v|진화하다, 발전하다|t
+exceed|v|초과하다, 넘어서다|t
+exclude|v|제외하다, 배제하다|t
+explicit|a|명시적인, 분명한|t
+exploit|v|이용하다, 착취하다|t
+external|a|외부의, 대외적인|t
+extract|v|추출하다, 뽑아내다|t
+fluctuate|v|변동하다, 오르내리다|t
+formula|n|공식, 방식|t
+foundation|n|토대, 기초, 재단|t
+framework|n|틀, 체계|t
+fundamental|a|근본적인, 기본적인|t
+generate|v|발생시키다, 만들어 내다|t
+genetic|a|유전의, 유전학의|t
+gradual|a|점진적인, 서서히 일어나는|t
+hypothesis|n|가설|t
+identical|a|동일한, 똑같은|t
+illustrate|v|설명하다, 삽화를 넣다|t
+implement|v|시행하다, 이행하다|t
+implication|n|영향, 함축, 암시|t
+imply|v|암시하다, 의미하다|t
+impose|v|부과하다, 강요하다|t
+incorporate|v|포함하다, 통합하다|t
+inevitable|a|불가피한, 필연적인|t
+infer|v|추론하다, 짐작하다|t
+inherent|a|내재된, 타고난|t
+initial|a|처음의, 초기의|t
+initiate|v|시작하다, 착수하다|t
+innovation|n|혁신, 쇄신|t
+insight|n|통찰력, 이해|t
+institute|n|기관, 협회|t
+integrate|v|통합하다, 융합하다|t
+intense|a|극심한, 강렬한|t
+interval|n|간격, 중간 휴식|t
+isolate|v|고립시키다, 분리하다|t
+justify|v|정당화하다, 옳음을 보이다|t
+manipulate|v|조종하다, 다루다|t
+maximum|n|최대, 최고|t
+mechanism|n|기제, 구조, 장치|t
+minimum|n|최소, 최저|t
+modify|v|수정하다, 바꾸다|t
+motive|n|동기, 이유|t
+neutral|a|중립의, 중성의|t
+norm|n|규범, 표준|t
+notion|n|개념, 관념|t
+objective|n|목표, 목적|t
+parallel|a|평행한, 유사한|t
+partial|a|부분적인, 편파적인|t
+perceive|v|인식하다, 감지하다|t
+phase|n|단계, 국면|t
+phenomenon|n|현상|t
+philosophy|n|철학|t
+precede|v|앞서다, 선행하다|t
+precise|a|정확한, 정밀한|t
+presume|v|추정하다, 가정하다|t
+prior|a|이전의, 우선하는|t
+proceed|v|진행하다, 나아가다|t
+prohibit|v|금지하다|t
+proportion|n|비율, 부분|t
+prospect|n|전망, 가능성|t
+publication|n|출판, 출판물|t
+pursue|v|추구하다, 계속하다|t
+random|a|무작위의, 임의의|t
+ratio|n|비율|t
+rational|a|합리적인, 이성적인|t
+regime|n|정권, 제도|t
+regulate|v|규제하다, 조절하다|t
+reinforce|v|강화하다, 보강하다|t
+relevant|a|관련 있는, 적절한|t
+reluctant|a|꺼리는, 마지못한|t
+reside|v|거주하다, 살다|t
+resolve|v|해결하다, 결심하다|t
+retain|v|유지하다, 보유하다|t
+revenue|n|수익, 세입|t
+reverse|v|뒤집다, 되돌리다|t
+revise|v|수정하다, 개정하다|t
+revolution|n|혁명, 회전|t
+rigid|a|엄격한, 뻣뻣한|t
+scenario|n|시나리오, 예상되는 상황|t
+scheme|n|계획, 제도, 책략|t
+scope|n|범위, 여지|t
+sector|n|부문, 분야|t
+sequence|n|순서, 연속|t
+simulate|v|모의실험하다, 흉내 내다|t
+somewhat|ad|다소, 어느 정도|t
+specify|v|명시하다, 구체적으로 밝히다|t
+sphere|n|구, 영역|t
+stable|a|안정된, 안정적인|t
+statistic|n|통계, 통계 수치|t
+status|n|지위, 상태|t
+straightforward|a|간단한, 솔직한|t
+subsequent|a|그 뒤의, 이어지는|t
+substitute|v|대체하다, 대신하다|t
+successor|n|후임자, 계승자|t
+sufficient|a|충분한|t
+sum|n|합계, 금액|t
+supplement|n|보충, 보충제|t
+suspend|v|중단하다, 매달다|t
+sustain|v|지속시키다, 떠받치다|t
+technical|a|기술적인, 전문적인|t
+tense|a|긴장한, 팽팽한|t
+terminate|v|종료하다, 끝내다|t
+thesis|n|논문, 논지|t
+transfer|v|옮기다, 이동하다, 갈아타다|t
+transform|v|변형시키다, 완전히 바꾸다|t
+transit|n|통과, 운송|t
+transmit|v|전송하다, 전달하다|t
+trigger|v|촉발하다, 유발하다|t
+ultimate|a|궁극적인, 최후의|t
+undergo|v|겪다, 받다|t
+underlie|v|기저를 이루다, 근거가 되다|t
+undertake|v|착수하다, 떠맡다|t
+unify|v|통합하다, 하나로 만들다|t
+utilize|v|활용하다, 이용하다|t
+valid|a|유효한, 타당한|t
+via|prep|~을 통해, ~을 거쳐|t
+violate|v|위반하다, 침해하다|t
+virtual|a|사실상의, 가상의|t
+visible|a|눈에 보이는, 뚜렷한|t
+vision|n|시력, 시야, 비전|t
+visual|a|시각의, 눈으로 보는|t
+voluntary|a|자발적인, 자원봉사의|t
+welfare|n|복지, 후생|t
+whereas|conj|~인 반면에|t
+whereby|conj|그것에 의하여, ~하는|t
+widespread|a|널리 퍼진, 광범위한|t
+accountant|n|회계사|t
+acquire|v|획득하다, 인수하다|t
+acquisition|n|인수, 습득|t
+agenda|n|안건, 의제|t
+allocate|v|할당하다, 배분하다|t
+amend|v|수정하다, 개정하다|t
+applicant|n|지원자, 신청자|t
+appraisal|n|평가, 감정|t
+assemble|v|조립하다, 모으다|t
+assess|v|평가하다, 산정하다|t
+asset|n|자산, 재산|t
+assign|v|배정하다, 맡기다|t
+attendee|n|참석자|t
+attorney|n|변호사|t
+audit|n|회계 감사|t
+authorize|v|권한을 주다, 승인하다|t
+bid|n|입찰, 응찰|t
+brochure|n|안내 책자, 브로슈어|t
+cargo|n|화물|t
+ceiling price|n|상한 가격|t
+certificate|n|증명서, 자격증|t
+clause|n|조항, 절|t
+commission|n|수수료, 위원회|t
+commodity|n|상품, 물품|t
+compensation|n|보상, 보수|t
+competitor|n|경쟁자, 경쟁사|t
+complaint|n|불평, 항의|t
+comply|v|따르다, 준수하다|t
+conference|n|회의, 학회|t
+consent|n|동의, 승낙|t
+consignment|n|위탁 판매품, 탁송|t
+consultant|n|자문 위원, 컨설턴트|t
+corporate|a|기업의, 법인의|t
+correspondence|n|서신, 왕래|t
+currency|n|통화, 화폐|t
+deadline|n|마감 기한|t
+dealer|n|판매업자, 중개인|t
+declare|v|신고하다, 선언하다|t
+deduct|v|공제하다, 빼다|t
+defective|a|결함이 있는|t
+delegate|v|위임하다, 대표로 보내다|t
+demonstrate|v|입증하다, 시연하다|t
+dispatch|v|발송하다, 파견하다|t
+dispute|n|분쟁, 논쟁|t
+distribution|n|유통, 배포|t
+dividend|n|배당금|t
+draft|v|초안을 작성하다|t
+efficiency|n|효율, 능률|t
+eligible|a|자격이 있는|t
+endorse|v|지지하다, 보증하다|t
+enterprise|n|기업, 사업|t
+entitle|v|자격을 주다, 제목을 붙이다|t
+evaluate|v|평가하다|t
+executive|n|임원, 경영진|t
+exempt|a|면제되는|t
+expenditure|n|지출, 비용|t
+expense|n|비용, 경비|t
+expire|v|만료되다, 기한이 끝나다|t
+facility|n|시설, 설비|t
+fiscal|a|재정의, 회계의|t
+forecast|v|예측하다, 예보하다|t
+freight|n|화물, 화물 운송|t
+headquarters|n|본사, 본부|t
+implement|v|시행하다|t
+initiative|n|주도권, 계획|t
+inquiry|n|문의, 조사|t
+inspection|n|점검, 검사|t
+inventory|n|재고, 물품 목록|t
+invoice|n|송장, 청구서|t
+launch|v|출시하다, 시작하다|t
+lease|n|임대차 계약|t
+liability|n|책임, 부채|t
+merchandise|n|상품|t
+merge|v|합병하다, 합치다|t
+merit|n|장점, 가치|t
+negotiate|v|협상하다|t
+notify|v|통지하다, 알리다|t
+occupation|n|직업, 점유|t
+outstanding|a|뛰어난, 미지급된|t
+overtime|n|초과 근무|t
+patent|n|특허, 특허권|t
+payment|n|지급, 결제|t
+payroll|n|급여 대상자 명단, 급여 총액|t
+personnel|n|인원, 인사부|t
+pledge|v|약속하다, 서약하다|t
+premises|n|건물, 부지|t
+premium|n|할증금, 보험료|t
+prospective|a|장래의, 유망한|t
+provision|n|공급, 조항|t
+purchase order|n|발주서, 구매 주문서|t
+quotation|n|견적, 시세|t
+reception|n|접수처, 환영회|t
+recruit|v|채용하다, 모집하다|t
+refund|n|환불|t
+regulation|n|규정, 규제|t
+reimburse|v|상환하다, 변제하다|t
+renew|v|갱신하다, 재개하다|t
+representative|n|대표, 담당 직원|t
+resign|v|사직하다, 사임하다|t
+retail|n|소매|t
+revision|n|수정, 개정|t
+session|n|기간, 회의, 시간|t
+shareholder|n|주주|t
+shift|n|교대 근무, 변화|t
+shipment|n|수송, 발송 화물|t
+staff|n|직원, 인력|t
+stock|n|재고, 주식|t
+subscribe|v|구독하다, 가입하다|t
+subsidiary|n|자회사|t
+supervisor|n|감독관, 상사|t
+surplus|n|잉여, 흑자|t
+tariff|n|관세, 요금표|t
+tenant|n|세입자, 임차인|t
+transaction|n|거래, 처리|t
+utility|n|공공요금, 유용성|t
+vacancy|n|공석, 빈방|t
+vendor|n|판매업체, 노점상|t
+venue|n|장소, 개최지|t
+warehouse|n|창고|t
+warranty|n|품질 보증서|t
+withdrawal|n|인출, 철수|t
+workshop|n|워크숍, 작업장|t
