@@ -2,7 +2,12 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4f6f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101614" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="영어 단어장">
+<meta name="mobile-web-app-capable" content="yes">
 <title>매일 영어 단어장</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -146,6 +151,18 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 }
 .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 @media (max-width:480px){ .wrap{padding:20px 12px 64px} h1{font-size:23px} .stat b{font-size:19px} }
+
+/* 터치 기기(태블릿·폰): 초점 시 화면 확대 방지 + 손가락에 맞는 터치 영역 */
+@media (pointer:coarse){
+  input[type=text],input[type=search],textarea,select{font-size:16px; padding:12px 13px}
+  button{padding:12px 16px; font-size:15px}
+  button.icon{padding:13px 14px; font-size:16px}
+  .wacts{gap:8px}
+  li.w{padding:12px 12px 12px 14px}
+  .wword{font-size:21px; padding:2px 0}
+  .check input{width:20px; height:20px}
+  input[type=range]{height:28px}
+}
 </style>
 </head>
 <body>
@@ -167,16 +184,16 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     <div class="row">
       <div style="flex:2 1 220px">
         <label class="f" for="word">영어 단어 / 문장</label>
-        <input id="word" type="text" placeholder="예: pronunciation" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <input id="word" type="text" placeholder="예: pronunciation" lang="en" inputmode="text" enterkeyhint="done" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
       </div>
       <div>
         <label class="f" for="meaning">뜻 · 메모 (선택)</label>
-        <input id="meaning" type="text" placeholder="예: 발음" autocomplete="off">
+        <input id="meaning" type="text" placeholder="예: 발음" enterkeyhint="done" autocomplete="off">
       </div>
       <button id="speakBtn" title="발음만 듣기">🔊 듣기</button>
       <button id="saveBtn" class="primary">저장</button>
     </div>
-    <p class="hint" id="voiceHint">Enter 키로 바로 저장돼요. 단어를 클릭하면 다시 들을 수 있습니다.</p>
+    <p class="hint" id="voiceHint">Enter(또는 완료) 키로 바로 저장돼요. 목록의 단어를 누르면 다시 들려줍니다. 소리가 안 나면 기기의 무음 모드와 볼륨을 확인해 주세요.</p>
   </div>
 
   <div class="card">
@@ -222,7 +239,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
         <div id="quizPlay" hidden>
           <p class="quizq">들은 단어를 입력하세요.</p>
           <div class="row">
-            <div><input id="quizInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="정답 입력 후 Enter"></div>
+            <div><input id="quizInput" type="text" lang="en" enterkeyhint="done" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="정답 입력 후 Enter"></div>
             <button id="quizCheck">확인</button>
             <button id="quizSkip" class="ghost">건너뛰기</button>
           </div>
@@ -233,7 +250,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   </div>
 
   <div class="toolbar">
-    <input id="search" type="text" placeholder="🔍 단어 · 뜻 검색" autocomplete="off">
+    <input id="search" type="search" enterkeyhint="search" placeholder="🔍 단어 · 뜻 검색" autocomplete="off" autocorrect="off">
     <button id="speakAll">📚 오늘 단어 모두 듣기</button>
   </div>
 
@@ -336,8 +353,19 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     for(var i=0;i<voices.length;i++) if(voices[i].voiceURI === state.settings.voiceURI) return voices[i];
     return voices[0] || null;
   }
+  /* iOS·일부 태블릿은 첫 사용자 조작 안에서 한 번 소리를 내야 이후 재생이 허용된다 */
+  var unlocked = false;
+  function unlockAudio(){
+    if(unlocked || !supported) return;
+    unlocked = true;
+    try{
+      var u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0; synth.speak(u);
+    }catch(e){ /* 실패해도 이후 재생 시도에 영향 없음 */ }
+  }
   function speak(text, onend){
     if(!supported || !text){ if(onend) onend(); return; }
+    unlocked = true;
     synth.cancel();
     var u = new SpeechSynthesisUtterance(text);
     var v = currentVoice();
@@ -595,12 +623,15 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   if(supported){
     pickVoices();
     if(typeof synth.onvoiceschanged !== "undefined") synth.onvoiceschanged = pickVoices;
-    setTimeout(pickVoices, 400);   // 일부 브라우저는 목소리 목록이 늦게 채워진다
+    setTimeout(pickVoices, 400);    // 일부 브라우저는 목소리 목록이 늦게 채워진다
+    setTimeout(pickVoices, 1500);   // iOS는 특히 느리게 채워지는 경우가 있다
+    document.addEventListener("pointerdown", unlockAudio, { once:true });
+    document.addEventListener("touchstart", unlockAudio, { once:true });
   }else{
     $("voiceHint").innerHTML = '<span class="warn">이 브라우저는 음성 합성을 지원하지 않아요. Chrome · Edge · Safari에서 열어주세요.</span> 저장 기능은 그대로 쓸 수 있습니다.';
     $("speakBtn").disabled = true; $("speakAll").disabled = true;
   }
-  $("word").focus();
+  if(!window.matchMedia || !window.matchMedia("(pointer:coarse)").matches) $("word").focus();
 })();
 </script>
 </body>
