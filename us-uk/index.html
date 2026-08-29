@@ -161,6 +161,20 @@ button.icon{padding:7px 9px; font-size:14px; line-height:1}
 .seg button + button{border-left:1px solid var(--line)}
 .seg button.on{background:var(--accent); color:var(--accent-ink)}
 .seg button.on:hover{color:var(--accent-ink)}
+.ixrow{
+  display:flex; gap:4px; margin:0 0 10px; padding-bottom:4px;
+  overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+}
+.ixrow::-webkit-scrollbar{display:none}
+.ix{
+  flex:0 0 auto; min-width:32px; padding:7px 8px; font-family:var(--mono);
+  font-size:12.5px; font-weight:500; border-radius:8px; background:var(--panel);
+}
+.ix.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
+.ix.on:hover{color:var(--accent-ink)}
+.ix[data-ix=""]{font-family:var(--sans); font-weight:600}
+.more{display:flex; justify-content:center; margin-top:14px}
+.more button{min-width:180px}
 .tabswrap{position:relative; margin-bottom:12px}
 .tabs{
   display:flex; gap:6px; padding-bottom:4px;
@@ -956,6 +970,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     return false;
   }
   var shownCount = 60;                        // 단계 목록은 조금씩 늘려 보여 준다
+  var levelIx = "";                           // 알파벳 바로가기 (빈 값이면 전체)
   var curTabId = "recent";                    // 앱을 열면 항상 최근 단어부터 (탭은 기억하지 않는다)
   function curTab(){ return curTabId; }
   function tabName(t){
@@ -1214,14 +1229,29 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     var all = levelWords(tag);
     var have = 0;
     all.forEach(function(e){ if(isSaved(e.w)) have++; });
-    var list = !q ? all : all.filter(function(e){
-      return e.w.toLowerCase().indexOf(q) > -1 || e.m.indexOf(q) > -1;
-    });
+
+    var list = all;
+    if(q){
+      list = all.filter(function(e){ return e.w.toLowerCase().indexOf(q) > -1 || e.m.indexOf(q) > -1; });
+    }else if(levelIx){
+      list = all.filter(function(e){ return e.w.charAt(0).toUpperCase() === levelIx; });
+    }
     var shown = list.slice(0, shownCount);
 
-    var head = '<div class="daygroup"><div class="dayhead">' +
-      '<span class="today">' + LV[tag] + "</span>" +
-      "<span>" + (q ? list.length + "개 찾음" : all.length + "개") + "</span>" +
+    /* 알파벳으로 바로 건너뛰기 — 254개를 눌러 넘길 일이 없도록 */
+    var ix = "";
+    if(!q){
+      var letters = {};
+      all.forEach(function(e){ letters[e.w.charAt(0).toUpperCase()] = 1; });
+      ix = '<div class="ixrow"><button type="button" class="ix' + (levelIx ? "" : " on") + '" data-ix="">전체</button>' +
+        Object.keys(letters).sort().map(function(L){
+          return '<button type="button" class="ix' + (levelIx === L ? " on" : "") + '" data-ix="' + L + '">' + L + "</button>";
+        }).join("") + "</div>";
+    }
+
+    var head = ix + '<div class="daygroup"><div class="dayhead">' +
+      '<span class="today">' + LV[tag] + (levelIx ? " · " + levelIx : "") + "</span>" +
+      "<span>" + (q || levelIx ? list.length + "개" : all.length + "개") + "</span>" +
       "<span>담은 단어 " + have + "개</span>" +
       '<span class="rule"></span></div>';
 
@@ -1245,10 +1275,23 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     });
     html += "</ul>";
     if(list.length > shown.length){
-      html += '<div class="toolbar" style="justify-content:center; margin:12px 0 0">' +
-        '<button type="button" id="more">더 보기 (' + (list.length - shown.length) + "개 남음)</button></div>";
+      html += '<div class="more"><button type="button" id="more">' +
+        (list.length - shown.length) + "개 더 보기</button></div>";
     }
     $("list").innerHTML = html + "</div>";
+    observeMore();
+  }
+
+  /* 목록 끝이 보이면 자동으로 이어 붙인다 (버튼을 누를 필요 없이) */
+  var moreObserver = null;
+  function observeMore(){
+    if(moreObserver){ moreObserver.disconnect(); moreObserver = null; }
+    var el = $("more");
+    if(!el || typeof IntersectionObserver === "undefined") return;
+    moreObserver = new IntersectionObserver(function(entries){
+      if(entries[0] && entries[0].isIntersecting){ shownCount += 60; render(); }
+    }, { rootMargin: "400px 0px" });
+    moreObserver.observe(el);
   }
 
   /* ---------- 모두 듣기 (활성 탭 기준) ---------- */
@@ -1321,6 +1364,11 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   /* ---------- 홈 화면 설치 ---------- */
   /* 변경 내역 — 새 버전을 올릴 때 맨 위에 한 칸 추가하면 사용자에게 한 번 안내됩니다 */
   var RELEASES = [
+    { v:"2026.08.29-13", t:"단어 찾기가 훨씬 편해졌어요", n:[
+        "단계 목록 위에 <b>알파벳 바로가기</b>가 생겼습니다. <b>M</b> 을 누르면 M 으로 시작하는 단어만 바로 나와요.",
+        "이제 <b>더 보기 버튼을 누를 필요가 없습니다.</b> 아래로 내리면 알아서 이어집니다.",
+        "<b>전체</b> 를 누르면 다시 전부 보입니다."
+    ]},
     { v:"2026.08.29-12", t:"탭이 더 있다는 걸 알려 드려요", n:[
         "탭 줄 양옆에 <b>‹ ›</b> 표시가 생겼습니다. 옆에 탭이 더 있다는 뜻이에요.",
         "화살표를 <b>눌러도</b> 넘어가고, 손가락으로 <b>쓸어 넘겨도</b> 됩니다.",
@@ -1350,7 +1398,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     ]}
   ];
 
-  var APP_VERSION = "2026.08.29-12";
+  var APP_VERSION = "2026.08.29-13";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
@@ -1632,7 +1680,15 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     $("meaning").onkeydown = function(e){ if(e.key === "Enter") addWord(); };
     $("search").oninput = function(){ shownCount = 60; render(); };
     $("list").addEventListener("click", function(e){
-      if(e.target.id === "more"){ shownCount += 60; render(); }
+      if(e.target.id === "more"){ shownCount += 60; render(); return; }
+      var ixBtn = e.target.closest("[data-ix]");
+      if(ixBtn){
+        levelIx = ixBtn.getAttribute("data-ix");
+        shownCount = 60;
+        render();
+        var top = $("tabsWrap").offsetTop - 10;
+        if(window.scrollY > top) window.scrollTo({ top: top, behavior: "smooth" });
+      }
     });
     $("speakAll").onclick = speakAll;
 
@@ -1664,7 +1720,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       var b = e.target.closest("button[data-tab]");
       if(!b) return;
       curTabId = b.getAttribute("data-tab");
-      shownCount = 60;
+      shownCount = 60; levelIx = "";
       $("search").value = "";
       render();
       window.scrollTo({ top: $("tabs").offsetTop - 12, behavior: "smooth" });
