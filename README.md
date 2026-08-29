@@ -117,6 +117,23 @@ serendipity|n|뜻밖의 행운|h
 > iPad는 `설정 → 손쉬운 사용 → 음성 콘텐츠`에서 영어 음성을 추가로 내려받으면 발음 품질이 좋아집니다.
 
 
+## 📥 파일 하나로 쓰기 (standalone.html)
+
+`standalone.html` 은 **사전까지 전부 들어 있는 파일 하나**입니다. 이 파일만 있으면 됩니다.
+
+- PC·노트북: 더블클릭 → 브라우저에서 바로 열립니다. 인터넷도 필요 없습니다.
+- iPad·안드로이드: `파일` 앱에 저장해 두고 브라우저로 열면 됩니다.
+- 단어는 그 브라우저에 그대로 저장되고, 새로고침해도 남아 있습니다.
+
+> 홈 화면 설치와 오프라인 캐시는 인터넷 주소(https)가 있어야 동작하므로, `standalone.html` 에서는 빠져 있습니다. 앱처럼 설치하려면 아래 [홈 화면에 앱으로 설치하기](#-홈-화면에-앱으로-설치하기)를 보세요.
+
+`index.html` 이나 `dictionary.js` 를 고친 뒤에는 아래 명령으로 다시 만듭니다.
+
+```
+python3 build-single.py
+```
+
+
 ## 📱 홈 화면에 앱으로 설치하기
 
 이 앱은 **PWA**라서 홈 화면에 설치하면 주소창 없이 앱처럼 열리고, 인터넷이 없어도 동작합니다.
@@ -162,7 +179,7 @@ serendipity|n|뜻밖의 행운|h
 ## 기술 메모
 
 - 순수 HTML/CSS/JavaScript. 빌드 도구도, 외부 라이브러리도 없습니다.
-- 파일 구성: `index.html`(앱) · `dictionary.js`(영한 사전 2,593단어 · 단계 태그 포함) · `manifest.webmanifest`+`sw.js`+`icon-*.png`(홈 화면 설치·오프라인)
+- 파일 구성: `index.html`(앱) · `dictionary.js`(영한 사전 2,593단어 · 단계 태그 포함) · `manifest.webmanifest`+`sw.js`+`icon-*.png`(홈 화면 설치·오프라인) · `standalone.html`(위 둘을 합친 단일 파일, `build-single.py` 로 생성)
 - 사전 검색: 영어는 완전 일치 → 앞부분 일치 → 부분 일치, 한글은 뜻 일치 → 앞부분 → 부분 일치 순으로 정렬합니다.
 - 발음: `SpeechSynthesis` API — `en-US` 목소리만 사용하고, 없는 기기에서만 다른 영어 목소리로 대체합니다.
 - 저장: `localStorage` 키 `daily-english-words/v1`
