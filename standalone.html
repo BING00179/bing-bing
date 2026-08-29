@@ -2839,6 +2839,7 @@ zoo|n|동물원|e
         <span id="installWhy">아이콘을 눌러 바로 열고, 인터넷 없이도 쓸 수 있습니다.</span>
       </div>
       <button id="installBtn" class="primary">설치</button>
+      <button id="installCopy">링크 복사</button>
       <button id="installClose" class="ghost icon" title="닫기" aria-label="설치 안내 닫기">✕</button>
     </div>
     <ol id="installSteps" hidden></ol>
@@ -3588,7 +3589,21 @@ zoo|n|동물원|e
   }
 
   /* ---------- 홈 화면 설치 ---------- */
+  var APP_VERSION = "2026.08.29-3";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
+
+  /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
+  function inAppBrowser(){
+    var ua = navigator.userAgent;
+    if(/KAKAOTALK/i.test(ua)) return "카카오톡";
+    if(/NAVER\(inapp|NAVER /i.test(ua)) return "네이버 앱";
+    if(/DaumApps|DaumDevice/i.test(ua)) return "다음 앱";
+    if(/Instagram/i.test(ua)) return "인스타그램";
+    if(/FBAN|FBAV|FB_IAB/i.test(ua)) return "페이스북";
+    if(/Line\//i.test(ua)) return "라인";
+    if(/everytimeApp|BAND|KAKAOSTORY/i.test(ua)) return "앱 안의 브라우저";
+    return null;
+  }
 
   function isStandalone(){
     return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) ||
@@ -3616,14 +3631,26 @@ zoo|n|동물원|e
     }
     $("installBtn").hidden = false;
     $("installBtn").textContent = "설치 방법";
+    var app = inAppBrowser();
     $("installWhy").textContent =
-      isIOS() ? (isSafari() ? "아이폰·아이패드는 아래 공유 버튼으로 추가합니다. 설치 팝업은 뜨지 않아요."
+      app     ? app + " 안에서는 설치할 수 없어요. 크롬·사파리로 열어야 합니다."
+    : isIOS() ? (isSafari() ? "아이폰·아이패드는 아래 공유 버튼으로 추가합니다. 설치 팝업은 뜨지 않아요."
                             : "아이폰·아이패드는 사파리에서만 설치할 수 있어요.")
               : "브라우저 메뉴에서 직접 추가해야 합니다.";
   }
 
   function showSteps(){
-    var steps;
+    var steps, app = inAppBrowser();
+    if(app){
+      steps = [app + " 안의 브라우저에서는 홈 화면에 설치할 수 없습니다",
+               "화면 <b>오른쪽 아래 ⋯</b> (또는 위쪽 메뉴)를 눌러 <b>다른 브라우저로 열기</b>를 고릅니다",
+               isIOS() ? "<b>Safari</b>를 고른 뒤, 아래 <b>공유 버튼 → 홈 화면에 추가</b>"
+                       : "<b>Chrome</b>을 고른 뒤, 오른쪽 위 <b>⋮ → 앱 설치</b>",
+               "메뉴가 없으면 아래 <b>링크 복사</b>를 눌러 주소를 복사하고, 브라우저에 붙여넣어 여세요"];
+      $("installSteps").innerHTML = steps.map(function(t){ return "<li>" + t + "</li>"; }).join("");
+      $("installSteps").hidden = false;
+      return;
+    }
     if(isIOS()){
       steps = isSafari()
         ? ["화면 <b>아래 가운데 공유 버튼</b>(□ 안에 ↑)을 누릅니다",
@@ -3643,6 +3670,7 @@ zoo|n|동물원|e
 
   function renderDiag(){
     $("diag").innerHTML =
+      "앱 버전 &nbsp;&nbsp;&nbsp;&nbsp;: " + APP_VERSION + "<br>" +
       "서비스 워커 : " + diag.sw + "<br>" +
       "매니페스트 &nbsp;: " + diag.mf + "<br>" +
       "설치 준비 &nbsp;&nbsp;: " + (isStandalone() ? "이미 설치됨" : diag.prompt) + "<br>" +
@@ -3671,6 +3699,9 @@ zoo|n|동물원|e
       }
       showSteps();
     };
+    $("installCopy").onclick = function(){
+      copy(location.origin + location.pathname, "주소를 복사했어요. 크롬·사파리에 붙여넣어 여세요.");
+    };
     $("installClose").onclick = function(){
       state.settings.installHidden = true; save();
       $("installBox").hidden = true;
@@ -3680,10 +3711,26 @@ zoo|n|동물원|e
     /* 진단: 서비스 워커와 매니페스트가 실제로 살아 있는지 */
     if(location.protocol === "https:" || location.hostname === "localhost"){
       if("serviceWorker" in navigator){
-        navigator.serviceWorker.register("sw.js").then(function(){
+        var hadController = !!navigator.serviceWorker.controller, refreshing = false;
+
+        /* 새 버전이 올라오면 스스로 한 번 새로고침해서 바로 적용한다 */
+        navigator.serviceWorker.addEventListener("controllerchange", function(){
+          if(refreshing || !hadController) return;
+          refreshing = true;
+          toast("새 버전을 받았어요. 잠시만요…");
+          setTimeout(function(){ location.reload(); }, 700);
+        });
+
+        navigator.serviceWorker.register("sw.js").then(function(reg){
+          reg.update()["catch"](function(){});
+          /* 앱을 다시 열 때마다 새 버전이 있는지 확인 */
+          document.addEventListener("visibilitychange", function(){
+            if(!document.hidden) reg.update()["catch"](function(){});
+          });
+          setInterval(function(){ reg.update()["catch"](function(){}); }, 60 * 60 * 1000);
           return navigator.serviceWorker.ready;
         }).then(function(){
-          diag.sw = "등록됨 ✓"; renderDiag();
+          diag.sw = "등록됨 ✓ (자동 업데이트 켜짐)"; renderDiag();
         })["catch"](function(err){
           diag.sw = "실패 — " + (err && err.message ? err.message : "알 수 없음"); renderDiag();
         });
