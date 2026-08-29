@@ -289,6 +289,13 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   background:var(--accent-soft); border-radius:8px; padding:2px 9px; margin:0 1px;
 }
 .hello .rice{font-size:19px}
+ul.heard{list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:5px;
+  max-height:46vh; overflow-y:auto; -webkit-overflow-scrolling:touch}
+ul.heard li{display:flex; align-items:center; gap:9px; padding:8px 11px; border:1px solid var(--line);
+  border-radius:9px; cursor:pointer}
+ul.heard li:hover{border-color:var(--accent)}
+ul.heard b{font-family:var(--serif); font-size:17px; font-weight:500; flex:0 0 auto}
+ul.heard .hm{flex:1 1 auto; font-size:12.5px; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .credit{
   margin:26px 0 0; text-align:center; font-size:11.5px; color:var(--ink-2); letter-spacing:.02em;
 }
@@ -3111,7 +3118,7 @@ zoo|n|동물원|e
 (function(){
   "use strict";
   var KEY = "daily-english-words/v1";
-  var state = { words: [], looked: [], playLog: {}, settings: { accent:"en-US", voices:{}, rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"", installHidden:false, seenVersion:"" } };
+  var state = { words: [], looked: [], playLog: {}, heard: {}, settings: { accent:"en-US", voices:{}, rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"", installHidden:false, seenVersion:"" } };
 
   /* ---------- 저장소 ---------- */
   function load(){
@@ -3122,6 +3129,7 @@ zoo|n|동물원|e
       if(d && Array.isArray(d.words)) state.words = d.words;
       if(d && Array.isArray(d.looked)) state.looked = d.looked;
       if(d && d.playLog) state.playLog = d.playLog;
+      if(d && d.heard) state.heard = d.heard;
       if(d && d.settings) for(var k in d.settings) state.settings[k] = d.settings[k];
     }catch(e){ /* 저장소를 못 읽어도 앱은 동작 */ }
   }
@@ -3329,21 +3337,40 @@ zoo|n|동물원|e
   function countPlay(text){
     var w = String(text || "").trim();
     if(!w || w.length < 2) return;
-    var counted = false, k = w.toLowerCase();
+    var counted = false, k = w.toLowerCase(), meaning = "";
     for(var i=0;i<state.words.length;i++){
       if(state.words[i].word.toLowerCase() === k){
         state.words[i].plays = (state.words[i].plays || 0) + 1;
         state.words[i].lastPlayed = new Date().toISOString();
+        meaning = state.words[i].meaning || "";
         counted = true;
         break;
       }
     }
-    if(!counted && !lookup(w)) return;          // 사전에도 단어장에도 없는 말은 세지 않는다
+    var e = lookup(w);
+    if(!counted && !e) return;                  // 사전에도 단어장에도 없는 말은 세지 않는다
+    if(!meaning && e) meaning = e.m;
+
     var day = dayKey();
+    var rec = state.heard[k] || { w:(e ? e.w : w), m:meaning, n:0, dn:0, day:"" };
+    if(meaning) rec.m = meaning;
+    rec.n += 1;
+    if(rec.day !== day){ rec.day = day; rec.dn = 0; }
+    rec.dn += 1;
+    rec.at = new Date().toISOString();
+    state.heard[k] = rec;
+    trimHeard();
+
     state.playLog[day] = (state.playLog[day] || 0) + 1;
     trimPlayLog();
     save();
     renderPlays();
+  }
+  function trimHeard(){                          // 오래 안 들은 단어부터 500개까지만 보관
+    var keys = Object.keys(state.heard);
+    if(keys.length <= 500) return;
+    keys.sort(function(a,b){ return (state.heard[a].at || "") < (state.heard[b].at || "") ? -1 : 1; });
+    while(keys.length > 500) delete state.heard[keys.shift()];
   }
   function trimPlayLog(){                        // 최근 90일치만 남긴다
     var keys = Object.keys(state.playLog).sort();
@@ -3355,11 +3382,54 @@ zoo|n|동물원|e
     for(var k in state.playLog) n += state.playLog[k];
     return n;
   }
-  var showTotalPlays = false;
   function renderPlays(){
-    $("stPlays").textContent = showTotalPlays ? playsTotal() : playsToday();
-    $("playsLabel").textContent = showTotalPlays ? "누적 들은 횟수" : "오늘 들은 횟수";
-    $("playStat").title = "눌러서 오늘 / 누적 전환 (누적 " + playsTotal() + "번)";
+    $("stPlays").textContent = playsToday();
+    $("playsLabel").textContent = "오늘 들은 횟수";
+    $("playStat").title = "눌러서 들은 단어 보기 (누적 " + playsTotal() + "번)";
+  }
+
+  /* 들은 단어 목록 — 무엇을 몇 번 들었는지 */
+  var heardScope = "today";
+  function heardList(){
+    var today = dayKey(), out = [];
+    for(var k in state.heard){
+      var r = state.heard[k];
+      if(heardScope === "today"){
+        if(r.day !== today || !r.dn) continue;
+        out.push({ w:r.w, m:r.m, n:r.dn, at:r.at });
+      }else{
+        out.push({ w:r.w, m:r.m, n:r.n, at:r.at });
+      }
+    }
+    out.sort(function(a,b){ return b.n - a.n || ((a.at || "") < (b.at || "") ? 1 : -1); });
+    return out;
+  }
+  function showHeard(){
+    resetModal();                       /* 인사 팝업 뒤에 열어도 제목·정렬이 정상이도록 */
+    modalMode = "heard";
+    var list = heardList(), today = heardScope === "today";
+    var total = today ? playsToday() : playsTotal();
+    $("newsTitle").textContent = "🔊 들은 단어";
+    var html = '<div class="seg" style="margin:14px 0 4px">' +
+      '<button type="button" data-hs="today"' + (today ? ' class="on"' : "") + ">오늘</button>" +
+      '<button type="button" data-hs="all"' + (today ? "" : ' class="on"') + ">전체</button></div>" +
+      '<p class="hint" style="margin:10px 0 6px">' +
+        (today ? "오늘" : "지금까지") + " <b>" + list.length + "개 단어</b>를 <b>" + total + "번</b> 들었어요. 단어를 누르면 다시 들려줍니다." +
+      "</p>";
+    if(!list.length){
+      html += '<div class="empty" style="padding:22px 8px">' +
+        (today ? "오늘은 아직 들은 단어가 없어요." : "아직 들은 단어가 없어요.") + "</div>";
+    }else{
+      html += '<ul class="heard">' + list.slice(0, 200).map(function(r){
+        return '<li data-hw="' + esc(r.w) + '"><b>' + esc(r.w) + "</b>" +
+          '<span class="hm">' + esc(r.m || "") + "</span>" +
+          '<i class="cnt">🔊 ' + r.n + "</i></li>";
+      }).join("") + "</ul>";
+      if(list.length > 200) html += '<p class="hint" style="text-align:center; margin-top:8px">많이 들은 200개만 보여 드려요.</p>';
+    }
+    $("newsBody").innerHTML = html;
+    $("newsOk").textContent = "닫기";
+    $("newsBox").hidden = false;
   }
 
   function speak(text, onend, accent){
@@ -4016,6 +4086,11 @@ zoo|n|동물원|e
   /* ---------- 홈 화면 설치 ---------- */
   /* 변경 내역 — 새 버전을 올릴 때 맨 위에 한 칸 추가하면 사용자에게 한 번 안내됩니다 */
   var RELEASES = [
+    { v:"2026.08.29-16", t:"어떤 단어를 들었는지 볼 수 있어요", n:[
+        "상단 <b>오늘 들은 횟수</b> 칸을 누르면 <b>무슨 단어를 몇 번 들었는지</b> 목록으로 나옵니다.",
+        "<b>오늘 / 전체</b> 를 골라 볼 수 있고, 목록에서 단어를 누르면 다시 들려줍니다.",
+        "단어장에 담지 않고 사전에서 들어 본 단어도 함께 기록됩니다."
+    ]},
     { v:"2026.08.29-15", t:"탭 아래에 드래그 바가 생겼어요", n:[
         "탭 줄 아래 <b>회색 막대</b>를 잡고 밀면 좌우로 움직입니다.",
         "양옆 <b>‹ ›</b> 화살표를 눌러도 되고, 탭을 손가락으로 쓸어도 됩니다.",
@@ -4059,7 +4134,7 @@ zoo|n|동물원|e
     ]}
   ];
 
-  var APP_VERSION = "2026.08.29-15";
+  var APP_VERSION = "2026.08.29-16";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
@@ -4234,6 +4309,8 @@ zoo|n|동물원|e
   }
   function showNews(list, title){
     if(!list.length) return;
+    resetModal();
+    modalMode = "news";
     $("newsTitle").textContent = title || "✨ 앱이 새로워졌어요";
     $("newsBody").innerHTML = list.map(function(r){
       return '<div class="rel"><h3>' + esc(r.t) + '<i>v' + esc(r.v) + "</i></h3><ul>" +
@@ -4245,10 +4322,15 @@ zoo|n|동물원|e
   function closeNews(){
     $("newsBox").hidden = true;
     resetModal();
-    state.settings.seenVersion = APP_VERSION;
-    save();
+    if(modalMode !== "heard"){          /* 들은 단어 목록은 버전 확인과 무관 */
+      state.settings.seenVersion = APP_VERSION;
+      save();
+    }
+    modalMode = "news";
   }
+  var modalMode = "news";
   function showWelcome(){
+    modalMode = "hello";
     $("newsTitle").textContent = "";
     $("newsBody").innerHTML =
       '<span class="face">🍚</span>' +
@@ -4483,7 +4565,13 @@ zoo|n|동물원|e
     $("quizSkip").onclick = quizNext;
     $("quizInput").onkeydown = function(e){ if(e.key === "Enter") quizCheck(); };
 
-    $("playStat").onclick = function(){ showTotalPlays = !showTotalPlays; renderPlays(); };
+    $("playStat").onclick = showHeard;
+    $("newsBody").addEventListener("click", function(e){
+      var scope = e.target.closest("[data-hs]");
+      if(scope){ heardScope = scope.getAttribute("data-hs"); showHeard(); return; }
+      var row = e.target.closest("[data-hw]");
+      if(row) speak(row.getAttribute("data-hw"));
+    });
     $("playStat").style.cursor = "pointer";
     $("themeBtn").onclick = function(){
       var now = document.documentElement.getAttribute("data-theme");
