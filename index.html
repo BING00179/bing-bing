@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="영어 단어장">
 <meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png" sizes="192x192">
 <title>매일 영어 단어장</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,6 +48,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none !important}   /* display 를 지정한 클래스보다 hidden 속성이 우선하도록 */
 body{
   margin:0; background:var(--bg); color:var(--ink);
   font-family:var(--sans); font-size:15px; line-height:1.55; -webkit-text-size-adjust:100%;
@@ -95,6 +99,28 @@ button.primary:hover:not(:disabled){background:var(--accent); color:var(--accent
 button.ghost{background:transparent}
 button.icon{padding:7px 9px; font-size:14px; line-height:1}
 .hint{font-size:12.5px; color:var(--ink-2); margin-top:10px}
+
+.inputwrap{position:relative}
+.suggest{
+  position:absolute; z-index:20; left:0; right:0; top:calc(100% + 6px);
+  margin:0; padding:5px; list-style:none; background:var(--panel);
+  border:1px solid var(--line); border-radius:11px; box-shadow:var(--shadow);
+  max-height:min(300px, 45vh); overflow-y:auto; -webkit-overflow-scrolling:touch;
+}
+.suggest li{display:flex; align-items:baseline; gap:8px; padding:9px 10px; border-radius:7px; cursor:pointer}
+.suggest li.on,.suggest li:hover{background:var(--accent-soft)}
+.suggest b{font-family:var(--serif); font-size:17px; font-weight:600; flex:0 0 auto}
+.pos{
+  font-style:normal; font-size:10px; font-weight:600; color:var(--accent);
+  border:1px solid var(--accent); border-radius:4px; padding:0 4px; flex:0 0 auto; line-height:1.5;
+}
+.suggest span{font-size:13px; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.dictnote{
+  display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
+  margin-top:12px; padding:10px 12px; background:var(--accent-soft); border-radius:9px; font-size:13.5px;
+}
+.dictnote b{font-family:var(--serif); font-size:18px; font-weight:600}
+.dictnote .src{margin-left:auto; font-size:10.5px; color:var(--ink-2); letter-spacing:.06em; text-transform:uppercase}
 .warn{color:var(--bad)}
 
 .toolbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px}
@@ -164,6 +190,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   input[type=range]{height:28px}
 }
 </style>
+<script src="dictionary.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -183,17 +210,21 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   <div class="card">
     <div class="row">
       <div style="flex:2 1 220px">
-        <label class="f" for="word">영어 단어 / 문장</label>
-        <input id="word" type="text" placeholder="예: pronunciation" lang="en" inputmode="text" enterkeyhint="done" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <label class="f" for="word">영어 단어 · 한글 뜻으로 찾기</label>
+        <div class="inputwrap">
+        <input id="word" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest" placeholder="예: pronunciation 또는 발음" lang="en" inputmode="text" enterkeyhint="done" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <ul id="suggest" class="suggest" role="listbox" hidden></ul>
+        </div>
       </div>
       <div>
-        <label class="f" for="meaning">뜻 · 메모 (선택)</label>
+        <label class="f" for="meaning">뜻 · 메모 (자동으로 채워집니다)</label>
         <input id="meaning" type="text" placeholder="예: 발음" enterkeyhint="done" autocomplete="off">
       </div>
       <button id="speakBtn" title="발음만 듣기">🔊 듣기</button>
       <button id="saveBtn" class="primary">저장</button>
     </div>
-    <p class="hint" id="voiceHint">Enter(또는 완료) 키로 바로 저장돼요. 목록의 단어를 누르면 다시 들려줍니다. 소리가 안 나면 기기의 무음 모드와 볼륨을 확인해 주세요.</p>
+    <div id="dictNote" class="dictnote" hidden></div>
+    <p class="hint" id="voiceHint">영어를 치면 뜻이 자동으로 뜨고, <b>한글을 치면 영어 단어를 찾아 줍니다</b>. 추천 목록에서 고르면 발음이 바로 나옵니다. 소리가 안 나면 기기의 무음 모드와 볼륨을 확인해 주세요.</p>
   </div>
 
   <div class="card">
@@ -210,6 +241,10 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
         </div>
         <div style="display:flex; align-items:flex-end">
           <label class="check"><input id="autoSpeak" type="checkbox" checked> 저장할 때 자동으로 발음</label>
+        </div>
+        <div style="grid-column:1/-1">
+          <label class="check"><input id="netDict" type="checkbox"> 내장 사전에 없는 단어는 인터넷 사전으로 찾기</label>
+          <p class="hint" style="margin-top:6px">켜면 내장 사전에서 못 찾은 단어만 번역 서비스(MyMemory)로 보내 뜻을 받아옵니다. 꺼 두면 아무것도 전송되지 않고, 내장 사전 <b id="dictCount">0</b>개 단어만 사용합니다.</p>
         </div>
       </div>
       <div class="setgrid" style="margin-top:16px">
@@ -263,7 +298,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 (function(){
   "use strict";
   var KEY = "daily-english-words/v1";
-  var state = { words: [], settings: { voiceURI:"", rate:1, autoSpeak:true, theme:"" } };
+  var state = { words: [], settings: { voiceURI:"", rate:1, autoSpeak:true, theme:"", netDict:false } };
 
   /* ---------- 저장소 ---------- */
   function load(){
@@ -314,6 +349,69 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     if(navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(function(){ toast(okMsg); }, fallback);
     } else fallback();
+  }
+
+  /* ---------- 내장 영한 사전 ---------- */
+  var DICT = [], DICT_MAP = {}, netEntry = null, netTimer = null;
+  var POS = { n:"명", v:"동", a:"형", ad:"부", prep:"전", conj:"접", pron:"대", int:"감", num:"수" };
+  function posLabel(p){ return POS[p] || p || ""; }
+  function hasHangul(t){ return /[\u3131-\u318E\uAC00-\uD7A3]/.test(t); }
+
+  function initDict(){
+    var raw = (window.WORD_DICT || "").trim();
+    if(!raw) return;
+    raw.split("\n").forEach(function(line){
+      var f = line.split("|");
+      if(f.length < 3 || !f[0]) return;
+      var e = { w:f[0].trim(), pos:f[1].trim(), m:f[2].trim() };
+      DICT.push(e);
+      DICT_MAP[e.w.toLowerCase()] = e;
+    });
+  }
+  function lookup(word){
+    return DICT_MAP[String(word || "").trim().toLowerCase()] || null;
+  }
+  /* 영어를 치면 그 단어를, 한글을 치면 그 뜻을 가진 영어 단어를 찾는다 */
+  function suggest(q, limit){
+    q = String(q || "").trim().toLowerCase();
+    if(!q) return [];
+    var exact = [], starts = [], inside = [], i, e;
+    if(hasHangul(q)){
+      for(i=0;i<DICT.length;i++){
+        e = DICT[i];
+        var at = e.m.indexOf(q);
+        if(at < 0) continue;
+        if(e.m === q) exact.push(e);
+        else if(at === 0) starts.push(e);
+        else inside.push(e);
+        if(exact.length + starts.length + inside.length > 120) break;
+      }
+      var byLen = function(a,b){ return a.m.length - b.m.length; };
+      starts.sort(byLen); inside.sort(byLen);
+    }else{
+      for(i=0;i<DICT.length;i++){
+        e = DICT[i];
+        var w = e.w.toLowerCase();
+        if(w === q) exact.push(e);
+        else if(w.indexOf(q) === 0) starts.push(e);
+        else if(w.indexOf(q) > 0) inside.push(e);
+      }
+      starts.sort(function(a,b){ return a.w.length - b.w.length; });
+    }
+    return exact.concat(starts, inside).slice(0, limit || 8);
+  }
+
+  /* 인터넷 사전 — 설정에서 켠 경우에만, 내장 사전에 없는 단어에 한해 조회한다 */
+  function askInternet(q, done){
+    var pair = hasHangul(q) ? "ko|en" : "en|ko";
+    var url = "https://api.mymemory.translated.net/get?langpair=" + pair + "&q=" + encodeURIComponent(q);
+    try{
+      fetch(url).then(function(r){ return r.json(); }).then(function(d){
+        var t = d && d.responseData && d.responseData.translatedText;
+        if(!t || String(t).toLowerCase() === q.toLowerCase()) return;
+        done({ w: hasHangul(q) ? String(t).trim() : q, pos:"", m: hasHangul(q) ? q : String(t).trim(), net:true });
+      })["catch"](function(){ /* 인터넷이 없거나 막혀 있으면 조용히 넘어간다 */ });
+    }catch(err){ /* fetch 자체를 못 쓰는 환경 */ }
   }
 
   /* ---------- 음성 ---------- */
@@ -375,11 +473,109 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     synth.speak(u);
   }
 
-  /* ---------- 단어 ---------- */
+  /* ---------- 단어 입력 · 추천 ---------- */
+  var sugItems = [], sugIdx = -1, meaningTouched = false;
+
+  function closeSuggest(){
+    var box = $("suggest");
+    box.hidden = true; box.innerHTML = "";
+    sugItems = []; sugIdx = -1;
+    $("word").setAttribute("aria-expanded", "false");
+  }
+  function renderSuggest(){
+    var q = $("word").value.trim();
+    if(!q){ closeSuggest(); return; }
+    sugItems = suggest(q, 8);
+    if(netEntry && !lookup(netEntry.w) && (netEntry.w.toLowerCase() === q.toLowerCase() || netEntry.m === q)) sugItems = [netEntry].concat(sugItems);
+    if(!sugItems.length){ closeSuggest(); return; }
+    var box = $("suggest");
+    box.innerHTML = sugItems.map(function(e, i){
+      return '<li role="option" data-i="' + i + '"><b>' + esc(e.w) + "</b>" +
+             (e.pos ? '<i class="pos">' + posLabel(e.pos) + "</i>" : "") +
+             "<span>" + esc(e.m) + (e.net ? " · 인터넷" : "") + "</span></li>";
+    }).join("");
+    box.hidden = false; sugIdx = -1;
+    $("word").setAttribute("aria-expanded", "true");
+  }
+  function moveSuggest(step){
+    if($("suggest").hidden || !sugItems.length) return false;
+    sugIdx += step;
+    if(sugIdx < -1) sugIdx = sugItems.length - 1;
+    if(sugIdx >= sugItems.length) sugIdx = -1;
+    var els = $("suggest").querySelectorAll("li");
+    for(var i=0;i<els.length;i++) els[i].classList.toggle("on", i === sugIdx);
+    if(sugIdx >= 0 && els[sugIdx].scrollIntoView) els[sugIdx].scrollIntoView({ block:"nearest" });
+    return true;
+  }
+  function chooseSuggest(i){
+    var e = sugItems[i];
+    if(!e) return;
+    $("word").value = e.w;
+    if(!meaningTouched || !$("meaning").value.trim()){ $("meaning").value = e.m; meaningTouched = false; }
+    closeSuggest();
+    showDictNote(e);
+    speak(e.w);
+  }
+  function showDictNote(e){
+    var n = $("dictNote");
+    if(!e){ n.hidden = true; n.innerHTML = ""; return; }
+    n.innerHTML = "<b>" + esc(e.w) + "</b>" +
+      (e.pos ? '<i class="pos">' + posLabel(e.pos) + "</i>" : "") +
+      "<span>" + esc(e.m) + "</span>" +
+      '<span class="src">' + (e.net ? "인터넷 사전" : "내장 사전") + "</span>";
+    n.hidden = false;
+  }
+  /* 입력한 단어가 사전에 정확히 있으면 뜻을 자동으로 채운다 */
+  function refreshDict(){
+    var q = $("word").value.trim();
+    var e = lookup(q);
+    if(!e && netEntry && (netEntry.w.toLowerCase() === q.toLowerCase() || netEntry.m === q)) e = netEntry;
+    if(e){
+      showDictNote(e);
+      if(!meaningTouched) $("meaning").value = e.m;
+    }else{
+      showDictNote(null);
+      if(!meaningTouched) $("meaning").value = "";
+    }
+  }
+  function scheduleInternet(){
+    clearTimeout(netTimer);
+    if(!state.settings.netDict || !canFetch()) return;
+    var q = $("word").value.trim();
+    if(q.length < 2 || lookup(q) || suggest(q, 1).length) return;
+    netTimer = setTimeout(function(){
+      askInternet(q, function(e){
+        if($("word").value.trim() !== q) return;   // 그 사이 입력이 바뀌었으면 버린다
+        netEntry = e;
+        refreshDict(); renderSuggest();
+      });
+    }, 700);
+  }
+  function canFetch(){ return typeof fetch === "function"; }
+
+  /* ---------- 단어 저장 ---------- */
   function addWord(){
     var w = $("word").value.trim().replace(/\s+/g, " ");
     var m = $("meaning").value.trim();
     if(!w){ $("word").focus(); return; }
+
+    var prefix = "";
+    if(hasHangul(w)){                       // 한글로 입력했으면 영어 단어로 바꿔 저장한다
+      var hit = suggest(w, 1)[0];
+      if(!hit && netEntry && netEntry.m === w && !hasHangul(netEntry.w)) hit = netEntry;
+      if(!hit){
+        toast("'" + w + "'에 해당하는 영어 단어를 찾지 못했어요.");
+        $("word").focus();
+        return;
+      }
+      if(!m) m = hit.m;
+      prefix = "'" + w + "' → ";
+      w = hit.w;
+    }
+    if(!m){                                  // 뜻이 비어 있으면 사전에서 채운다
+      var found = lookup(w) || (netEntry && netEntry.w.toLowerCase() === w.toLowerCase() ? netEntry : null);
+      if(found) m = found.m;
+    }
 
     var dup = null;
     for(var i=0;i<state.words.length;i++){
@@ -397,9 +593,12 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       });
       save(); render();
       if(state.settings.autoSpeak) speak(w);
-      toast("저장했어요: " + w);
+      toast(prefix + "저장했어요: " + w);
     }
-    $("word").value = ""; $("meaning").value = ""; $("word").focus();
+    $("word").value = ""; $("meaning").value = "";
+    meaningTouched = false; netEntry = null;
+    closeSuggest(); showDictNote(null);
+    $("word").focus();
   }
   function removeWord(id){
     var item = null;
@@ -533,7 +732,23 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       var w = $("word").value.trim();
       if(w) speak(w); else toast("들을 단어를 먼저 입력하세요.");
     };
-    $("word").onkeydown = function(e){ if(e.key === "Enter") addWord(); };
+    $("word").oninput = function(){ renderSuggest(); refreshDict(); scheduleInternet(); };
+    $("word").onkeydown = function(e){
+      if(e.key === "ArrowDown" && moveSuggest(1)){ e.preventDefault(); return; }
+      if(e.key === "ArrowUp" && moveSuggest(-1)){ e.preventDefault(); return; }
+      if(e.key === "Escape"){ closeSuggest(); return; }
+      if(e.key === "Enter"){
+        if(sugIdx >= 0){ e.preventDefault(); chooseSuggest(sugIdx); return; }
+        addWord();
+      }
+    };
+    $("word").onblur = function(){ setTimeout(closeSuggest, 180); };  // 항목을 탭할 시간을 준다
+    $("suggest").onmousedown = function(e){ e.preventDefault(); };    // 탭해도 입력창 초점이 유지되도록
+    $("suggest").onclick = function(e){
+      var li = e.target.closest("li[data-i]");
+      if(li) chooseSuggest(+li.getAttribute("data-i"));
+    };
+    $("meaning").oninput = function(){ meaningTouched = true; };
     $("meaning").onkeydown = function(e){ if(e.key === "Enter") addWord(); };
     $("search").oninput = render;
     $("speakAll").onclick = speakToday;
@@ -552,6 +767,10 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       save();
     };
     $("autoSpeak").onchange = function(){ state.settings.autoSpeak = this.checked; save(); };
+    $("netDict").onchange = function(){
+      state.settings.netDict = this.checked; save();
+      toast(this.checked ? "내장 사전에 없는 단어만 인터넷에서 찾습니다." : "인터넷 조회를 껐어요. 내장 사전만 사용합니다.");
+    };
 
     $("exportBtn").onclick = function(){
       var json = JSON.stringify({ exportedAt:new Date().toISOString(), words:state.words }, null, 2);
@@ -612,13 +831,21 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   }
 
   /* ---------- 시작 ---------- */
+  initDict();
   load();
   if(state.settings.theme) document.documentElement.setAttribute("data-theme", state.settings.theme);
   bind();
   $("rate").value = state.settings.rate;
   $("rateVal").textContent = Number(state.settings.rate).toFixed(2).replace(/0$/,"");
   $("autoSpeak").checked = !!state.settings.autoSpeak;
+  $("netDict").checked = !!state.settings.netDict;
+  $("dictCount").textContent = DICT.length.toLocaleString();
   render();
+
+  /* 홈 화면에 설치했을 때 오프라인으로도 열리도록 (http(s)에서만 동작) */
+  if("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")){
+    navigator.serviceWorker.register("sw.js")["catch"](function(){ /* 설치 실패해도 앱은 그대로 동작 */ });
+  }
 
   if(supported){
     pickVoices();

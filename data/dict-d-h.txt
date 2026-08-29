@@ -1,0 +1,511 @@
+daily|a|매일의, 일상의
+damage|n|손상, 피해
+dance|v|춤추다
+danger|n|위험
+dangerous|a|위험한
+dark|a|어두운
+data|n|자료, 데이터
+date|n|날짜, 데이트
+daughter|n|딸
+dawn|n|새벽, 동틀 녘
+day|n|날, 하루, 낮
+dead|a|죽은
+deaf|a|귀가 들리지 않는
+deal|v|다루다, 거래하다
+dear|a|친애하는, 소중한
+death|n|죽음
+debate|n|토론, 논쟁
+debt|n|빚, 부채
+decade|n|10년
+decide|v|결정하다
+decision|n|결정
+declare|v|선언하다, 신고하다
+decline|v|감소하다, 거절하다
+decorate|v|장식하다
+decrease|v|감소하다, 줄이다
+deep|a|깊은
+deer|n|사슴
+defeat|v|패배시키다, 이기다
+defend|v|방어하다, 변호하다
+define|v|정의하다
+definitely|ad|분명히, 틀림없이
+degree|n|정도, 학위, 도
+delay|v|미루다, 지연시키다
+delete|v|삭제하다, 지우다
+delicious|a|맛있는
+deliver|v|배달하다, 전달하다
+demand|n|요구, 수요
+democracy|n|민주주의
+demonstrate|v|보여 주다, 시위하다
+deny|v|부인하다, 거절하다
+department|n|부서, 학과
+depend|v|의존하다, ~에 달려 있다
+deposit|n|보증금, 예금
+depressed|a|우울한
+depth|n|깊이
+describe|v|묘사하다, 설명하다
+desert|n|사막
+deserve|v|~을 받을 만하다
+design|n|디자인, 설계
+desire|n|욕구, 바람
+desk|n|책상
+desperate|a|필사적인, 절박한
+despite|prep|~에도 불구하고
+dessert|n|후식, 디저트
+destroy|v|파괴하다
+detail|n|세부 사항
+detect|v|탐지하다, 발견하다
+determine|v|결정하다, 알아내다
+develop|v|발전시키다, 개발하다
+development|n|발전, 개발
+device|n|장치, 기기
+devote|v|바치다, 헌신하다
+diary|n|일기
+dictionary|n|사전
+die|v|죽다
+diet|n|식단, 식이 요법
+differ|v|다르다
+difference|n|차이
+different|a|다른
+difficult|a|어려운
+difficulty|n|어려움, 곤란
+dig|v|파다
+digital|a|디지털의
+dinner|n|저녁 식사
+direct|a|직접적인
+direction|n|방향, 지시
+director|n|감독, 이사
+dirty|a|더러운
+disabled|a|장애가 있는
+disagree|v|동의하지 않다
+disappear|v|사라지다
+disappointed|a|실망한
+disaster|n|재난, 참사
+discount|n|할인
+discover|v|발견하다
+discuss|v|논의하다
+discussion|n|토론, 논의
+disease|n|질병
+dish|n|접시, 요리
+dislike|v|싫어하다
+distance|n|거리
+distant|a|먼, 떨어진
+distinguish|v|구별하다
+distribute|v|분배하다, 유통시키다
+district|n|지구, 구역
+disturb|v|방해하다
+divide|v|나누다, 분할하다
+divorce|n|이혼
+dizzy|a|어지러운
+do|v|하다
+doctor|n|의사, 박사
+document|n|서류, 문서
+dog|n|개
+doll|n|인형
+dollar|n|달러
+domestic|a|국내의, 가정의
+door|n|문
+double|a|두 배의, 이중의
+doubt|n|의심
+down|ad|아래로
+download|v|내려받다
+downtown|n|도심, 시내
+dozen|n|12개, 다스
+draft|n|초안, 원고
+drag|v|끌다, 끌어당기다
+drama|n|드라마, 연극
+draw|v|그리다, 끌어당기다
+drawer|n|서랍
+dream|n|꿈
+dress|n|드레스, 옷
+drink|v|마시다
+drive|v|운전하다, 몰다
+driver|n|운전자, 기사
+drop|v|떨어뜨리다, 떨어지다
+drug|n|약, 마약
+drum|n|북, 드럼
+drunk|a|술 취한
+dry|a|마른, 건조한
+duck|n|오리
+due|a|~하기로 예정된, ~ 때문인
+dull|a|따분한, 무딘
+during|prep|~ 동안
+dust|n|먼지
+duty|n|의무, 임무
+each|a|각각의
+eager|a|열망하는, 간절한
+ear|n|귀
+early|a|이른, 초기의
+earn|v|벌다, 얻다
+earth|n|지구, 흙
+earthquake|n|지진
+ease|n|쉬움, 편안함
+easily|ad|쉽게
+east|n|동쪽
+easy|a|쉬운
+eat|v|먹다
+economy|n|경제
+edge|n|가장자리, 끝
+edit|v|편집하다, 수정하다
+education|n|교육
+effect|n|효과, 영향
+effective|a|효과적인
+efficient|a|효율적인
+effort|n|노력
+egg|n|달걀, 알
+either|a|둘 중 어느 하나의
+elbow|n|팔꿈치
+elderly|a|나이 드신, 연세가 많은
+elect|v|선출하다
+electric|a|전기의
+electricity|n|전기
+element|n|요소, 성분
+elementary|a|초등의, 기초적인
+elephant|n|코끼리
+elevator|n|승강기, 엘리베이터
+else|ad|그 밖에, 다른
+email|n|이메일
+embarrassed|a|당황한, 창피한
+emergency|n|비상사태, 응급
+emotion|n|감정
+emphasize|v|강조하다
+employ|v|고용하다
+employee|n|직원, 종업원
+empty|a|텅 빈
+enable|v|가능하게 하다
+encourage|v|격려하다, 장려하다
+end|n|끝, 마지막
+enemy|n|적
+energy|n|에너지, 활력
+engage|v|참여시키다, 약혼하다
+engine|n|엔진, 기관
+engineer|n|기술자, 공학자
+enjoy|v|즐기다
+enough|a|충분한
+enter|v|들어가다, 입력하다
+entertain|v|즐겁게 하다, 대접하다
+enthusiasm|n|열정, 열의
+entire|a|전체의, 온
+entrance|n|입구, 입학
+envelope|n|봉투
+environment|n|환경
+envy|v|부러워하다
+equal|a|같은, 동등한
+equipment|n|장비, 설비
+error|n|실수, 오류
+escape|v|탈출하다, 벗어나다
+especially|ad|특히
+essay|n|수필, 과제물
+essential|a|필수적인, 본질적인
+establish|v|설립하다, 확립하다
+estimate|v|추정하다, 견적을 내다
+even|ad|심지어, ~조차
+evening|n|저녁
+event|n|사건, 행사
+eventually|ad|결국, 마침내
+ever|ad|언젠가, 한 번이라도
+every|a|모든, 매 ~
+everybody|pron|모든 사람
+everyday|a|일상의, 매일의
+everyone|pron|모든 사람
+everything|pron|모든 것
+everywhere|ad|어디에나
+evidence|n|증거
+evil|a|사악한, 악한
+exact|a|정확한
+exam|n|시험
+examine|v|조사하다, 검사하다
+example|n|예, 본보기
+excellent|a|훌륭한, 탁월한
+except|prep|~을 제외하고
+exchange|v|교환하다, 환전하다
+excited|a|신이 난, 흥분한
+exciting|a|흥미진진한
+excuse|n|변명, 핑계
+exercise|n|운동, 연습
+exhausted|a|기진맥진한
+exhibition|n|전시회
+exist|v|존재하다
+exit|n|출구
+expand|v|확장하다, 넓히다
+expect|v|기대하다, 예상하다
+expensive|a|비싼
+experience|n|경험
+experiment|n|실험
+expert|n|전문가
+explain|v|설명하다
+explode|v|폭발하다
+explore|v|탐험하다, 탐구하다
+export|v|수출하다
+express|v|표현하다
+expression|n|표현, 표정
+extend|v|연장하다, 확대하다
+extra|a|추가의, 여분의
+extreme|a|극단적인, 극심한
+eye|n|눈
+face|n|얼굴, 표면
+fact|n|사실
+factor|n|요인, 요소
+factory|n|공장
+fail|v|실패하다, 낙제하다
+failure|n|실패
+fair|a|공정한, 상당한
+faith|n|믿음, 신앙
+fake|a|가짜의, 위조의
+fall|v|떨어지다, 넘어지다
+false|a|틀린, 거짓의
+familiar|a|익숙한, 친숙한
+family|n|가족
+famous|a|유명한
+fan|n|팬, 선풍기
+fancy|a|화려한, 고급의
+fantastic|a|환상적인, 굉장한
+far|ad|멀리
+farm|n|농장
+farmer|n|농부
+fashion|n|유행, 패션
+fast|a|빠른
+fat|a|뚱뚱한
+fate|n|운명
+father|n|아버지
+fault|n|잘못, 결함
+favor|n|호의, 부탁
+favorite|a|가장 좋아하는
+fear|n|두려움, 공포
+feature|n|특징, 이목구비
+fee|n|요금, 수수료
+feed|v|먹이다, 먹이를 주다
+feel|v|느끼다
+feeling|n|느낌, 감정
+female|a|여성의, 암컷의
+fence|n|울타리
+festival|n|축제
+fever|n|열
+few|a|거의 없는, 몇몇의
+field|n|들판, 분야
+fight|v|싸우다
+figure|n|숫자, 인물, 모습
+file|n|파일, 서류철
+fill|v|채우다
+film|n|영화, 필름
+final|a|마지막의, 최종의
+finally|ad|마침내, 마지막으로
+finance|n|재정, 금융
+find|v|찾다, 알아내다
+fine|a|좋은, 괜찮은, 미세한
+finger|n|손가락
+finish|v|끝내다, 마치다
+fire|n|불, 화재
+firm|n|회사
+first|a|첫 번째의
+fish|n|물고기, 생선
+fit|v|맞다, 어울리다
+fix|v|고치다, 고정하다
+flag|n|깃발
+flame|n|불꽃, 불길
+flash|n|섬광, 번쩍임
+flat|a|평평한
+flavor|n|맛, 풍미
+flight|n|비행, 항공편
+float|v|뜨다, 떠다니다
+flood|n|홍수
+floor|n|바닥, 층
+flour|n|밀가루
+flow|v|흐르다
+flower|n|꽃
+flu|n|독감
+fly|v|날다
+focus|v|집중하다, 초점을 맞추다
+fog|n|안개
+fold|v|접다, 개다
+follow|v|따라가다, 따르다
+food|n|음식, 식량
+fool|n|바보
+foot|n|발
+football|n|축구, 미식축구
+for|prep|~을 위해, ~ 동안
+force|n|힘, 무력
+forecast|n|예보, 예측
+foreign|a|외국의
+forest|n|숲, 삼림
+forever|ad|영원히
+forget|v|잊다
+forgive|v|용서하다
+fork|n|포크
+form|n|형태, 서식
+formal|a|공식적인, 격식을 차린
+former|a|이전의, 전자의
+fortunately|ad|다행히
+fortune|n|행운, 재산
+forward|ad|앞으로
+found|v|설립하다
+fountain|n|분수, 샘
+frame|n|틀, 액자
+free|a|자유로운, 무료의
+freedom|n|자유
+freeze|v|얼다, 얼리다
+frequent|a|잦은, 빈번한
+fresh|a|신선한, 새로운
+friend|n|친구
+friendly|a|친절한, 다정한
+frighten|v|겁먹게 하다
+from|prep|~에서, ~로부터
+front|n|앞, 정면
+frozen|a|얼어붙은, 냉동의
+fruit|n|과일, 열매
+fry|v|튀기다, 볶다
+fuel|n|연료
+full|a|가득 찬, 완전한
+fun|n|재미, 즐거움
+function|n|기능, 함수
+fund|n|기금, 자금
+funeral|n|장례식
+funny|a|웃기는, 재미있는
+fur|n|털, 모피
+furniture|n|가구
+further|a|더 이상의, 더 먼
+future|n|미래
+gain|v|얻다, 늘리다
+gallery|n|미술관, 화랑
+game|n|게임, 경기
+garage|n|차고, 정비소
+garbage|n|쓰레기
+garden|n|정원
+gas|n|기체, 가스, 휘발유
+gate|n|문, 출입구
+gather|v|모으다, 모이다
+general|a|일반적인, 전반적인
+generation|n|세대
+generous|a|너그러운, 후한
+gentle|a|온화한, 부드러운
+gentleman|n|신사
+gesture|n|몸짓, 제스처
+get|v|얻다, ~하게 되다
+ghost|n|유령
+gift|n|선물, 재능
+girl|n|소녀
+give|v|주다
+glad|a|기쁜
+glass|n|유리, 잔
+glasses|n|안경
+global|a|세계적인, 전 세계의
+glove|n|장갑
+glue|n|풀, 접착제
+go|v|가다
+goal|n|목표, 골
+god|n|신, 하느님
+gold|n|금
+golf|n|골프
+good|a|좋은, 착한
+goods|n|상품, 물건
+govern|v|통치하다, 다스리다
+government|n|정부
+grab|v|움켜쥐다, 붙잡다
+grade|n|성적, 학년, 등급
+gradually|ad|점차, 서서히
+graduate|v|졸업하다
+grain|n|곡물, 알갱이
+grammar|n|문법
+grand|a|웅장한, 위대한
+grandfather|n|할아버지
+grandmother|n|할머니
+grant|v|승인하다, 주다
+grape|n|포도
+grass|n|풀, 잔디
+grateful|a|고마워하는, 감사하는
+grave|n|무덤
+gravity|n|중력, 심각성
+great|a|위대한, 훌륭한
+green|a|초록색의
+greet|v|인사하다, 맞이하다
+grey|a|회색의
+grocery|n|식료품, 식료품점
+ground|n|땅, 지면
+group|n|무리, 집단
+grow|v|자라다, 기르다
+growth|n|성장, 증가
+guarantee|v|보장하다, 보증하다
+guard|n|경비원, 보호
+guess|v|추측하다, 짐작하다
+guest|n|손님
+guide|n|안내, 안내인
+guilty|a|죄책감을 느끼는, 유죄의
+guitar|n|기타
+gun|n|총
+guy|n|남자, 사람
+habit|n|습관, 버릇
+hair|n|머리카락, 털
+half|n|반, 절반
+hall|n|복도, 회관
+hand|n|손
+handle|v|다루다, 처리하다
+handsome|a|잘생긴
+hang|v|걸다, 매달다
+happen|v|일어나다, 발생하다
+happy|a|행복한, 기쁜
+harbor|n|항구
+hard|a|어려운, 딱딱한
+hardly|ad|거의 ~않다
+harm|n|해, 피해
+harmony|n|조화, 화합
+harvest|n|수확, 추수
+hat|n|모자
+hate|v|싫어하다, 미워하다
+have|v|가지다, 먹다
+head|n|머리, 우두머리
+headache|n|두통
+heal|v|낫다, 치유하다
+health|n|건강
+healthy|a|건강한
+hear|v|듣다, 들리다
+heart|n|심장, 마음
+heat|n|열, 더위
+heaven|n|천국, 하늘
+heavy|a|무거운, 심한
+heel|n|발뒤꿈치, 굽
+height|n|키, 높이
+hell|n|지옥
+hello|int|안녕하세요
+help|v|돕다
+helpful|a|도움이 되는
+hero|n|영웅, 주인공
+hesitate|v|망설이다, 주저하다
+hide|v|숨기다, 숨다
+high|a|높은
+highway|n|고속도로
+hill|n|언덕
+hire|v|고용하다, 빌리다
+history|n|역사
+hit|v|치다, 때리다
+hobby|n|취미
+hold|v|잡다, 열다, 유지하다
+hole|n|구멍
+holiday|n|휴일, 휴가
+holy|a|신성한, 거룩한
+home|n|집, 가정
+homework|n|숙제
+honest|a|정직한, 솔직한
+honey|n|꿀, 여보
+honor|n|명예, 영광
+hope|v|바라다, 희망하다
+horizon|n|수평선, 지평선
+horrible|a|끔찍한
+horse|n|말
+hospital|n|병원
+host|n|주인, 진행자
+hot|a|뜨거운, 더운, 매운
+hotel|n|호텔
+hour|n|시간
+house|n|집, 주택
+housework|n|집안일
+however|ad|그러나, 아무리 ~해도
+hug|v|껴안다, 포옹하다
+huge|a|거대한
+human|n|인간, 사람
+humor|n|유머, 익살
+hundred|num|백, 100
+hungry|a|배고픈
+hunt|v|사냥하다, 찾다
+hurry|v|서두르다
+hurt|v|다치게 하다, 아프다
+husband|n|남편
