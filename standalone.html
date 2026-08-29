@@ -2910,6 +2910,10 @@ zoo|n|동물원|e
       </div>
       <div class="setgrid" style="margin-top:16px">
         <div style="grid-column:1/-1">
+          <p class="hint" style="margin:0 0 10px; padding:9px 12px; background:var(--sunk); border-radius:8px">
+            🔒 담은 단어는 <b>이 기기의 브라우저 안에만</b> 저장됩니다. 서버로 올라가지 않고, 같은 주소를 쓰는 다른 사람과도 섞이지 않습니다.
+            기기를 바꾸거나 여럿이 한 기기를 쓸 때는 아래 백업으로 옮기세요.
+          </p>
           <label class="f" for="io">백업 / 복원 (JSON) — 복사해 두었다가 붙여넣고 가져오기</label>
           <textarea id="io" spellcheck="false" placeholder="여기에 백업 JSON을 붙여넣고 [가져오기]를 누르세요"></textarea>
           <div class="toolbar" style="margin:8px 0 0">
@@ -3589,7 +3593,7 @@ zoo|n|동물원|e
   }
 
   /* ---------- 홈 화면 설치 ---------- */
-  var APP_VERSION = "2026.08.29-3";
+  var APP_VERSION = "2026.08.29-4";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
