@@ -69,6 +69,8 @@ header{display:flex; align-items:center; gap:10px; margin-bottom:2px}
 h1{
   font-family:var(--serif); font-size:27px; font-weight:600; margin:0;
   letter-spacing:-.015em; line-height:1.2; text-wrap:balance;
+  word-break:keep-all; overflow-wrap:normal;   /* 한글 낱말 중간에서 줄바꿈 금지 */
+  flex:1 1 auto; min-width:0;
 }
 h1 em{font-style:italic; color:var(--accent)}
 .sub{color:var(--ink-2); font-size:13.5px; margin:0 0 20px}
@@ -164,6 +166,7 @@ button.icon{padding:7px 9px; font-size:14px; line-height:1}
 }
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{flex:0 0 auto; padding:9px 14px; font-size:13.5px; border-radius:999px}
+.tabs::after{content:""; flex:0 0 4px}
 .tabs button.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
 .tabs button.on:hover{color:var(--accent-ink)}
 .tabs b{font-family:var(--mono); font-size:11px; font-weight:500; opacity:.72; margin-left:6px}
@@ -261,8 +264,27 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 }
 .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
 @media (max-width:480px){
-  .wrap{padding:20px 12px 64px} h1{font-size:23px}
-  .stat{padding:11px 4px} .stat b{font-size:18px} .stat span{font-size:9.5px; letter-spacing:.04em}
+  .wrap{padding:18px 12px 60px}
+  header{gap:7px}
+  h1{font-size:20px; white-space:nowrap}
+  h1 small{font-size:9.5px; letter-spacing:.04em}
+  .ver{font-size:9.5px; padding:2px 7px; letter-spacing:0}
+  .sub{font-size:12.5px; margin-bottom:16px}
+  .card{padding:14px}
+  .stat{padding:11px 3px} .stat b{font-size:18px} .stat span{font-size:9px; letter-spacing:.02em}
+  .toolbar{gap:6px}
+  .tabs button{padding:8px 12px; font-size:13px}
+  #speakAll, #addTen{font-size:13.5px; padding:11px 12px}
+  .hint{font-size:12px}
+}
+@media (max-width:400px){
+  /* 아주 좁은 폰: 입력칸은 각각 한 줄, 버튼 둘은 나란히 */
+  .row > div{flex:1 1 100%}
+  #speakBtn, #saveBtn{flex:1 1 0; min-width:0}
+}
+@media (max-width:360px){
+  h1{font-size:18px}
+  .ver{display:none}          /* 아주 좁은 화면에서는 버전을 설정 안에서만 */
 }
 
 /* 터치 기기(태블릿·폰): 초점 시 화면 확대 방지 + 손가락에 맞는 터치 영역 */
@@ -1003,13 +1025,16 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
              LV[k] + "<b>" + levelWords(k).length + "</b></button>";
     }).join("");
     $("tabs").innerHTML = html;
+    var on = $("tabs").querySelector("button.on");
+    if(on && on.scrollIntoView) on.scrollIntoView({ block:"nearest", inline:"nearest" });
     var left = Math.max(0, goal() - todayCount());
     $("addTen").hidden = (t === "mine" || t === "recent" || t === "review");
     $("addTen").textContent = left > 0 ? "＋ 오늘 남은 " + left + "개 담기" : "＋ " + goal() + "개 더 담기";
-    $("speakAll").textContent = t === "recent" ? "📚 최근 " + goal() + "단어 듣기"
-                             : t === "review" ? "🔁 어제 단어 반복 듣기"
+    var narrow = window.matchMedia && window.matchMedia("(max-width:480px)").matches;
+    $("speakAll").textContent = t === "recent" ? (narrow ? "📚 " + goal() + "단어 듣기" : "📚 최근 " + goal() + "단어 듣기")
+                             : t === "review" ? (narrow ? "🔁 어제 것 듣기" : "🔁 어제 단어 반복 듣기")
                              : t === "mine"   ? "📚 오늘 단어 듣기"
-                                              : "🔊 이 화면 듣기";
+                                              : (narrow ? "🔊 화면 듣기" : "🔊 이 화면 듣기");
     $("quizTarget").textContent = tabName(t);
   }
 
@@ -1265,6 +1290,11 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   /* ---------- 홈 화면 설치 ---------- */
   /* 변경 내역 — 새 버전을 올릴 때 맨 위에 한 칸 추가하면 사용자에게 한 번 안내됩니다 */
   var RELEASES = [
+    { v:"2026.08.29-11", t:"폰 화면이 깔끔해졌어요", n:[
+        "제목이 <b>단 / 어장</b> 처럼 낱말 중간에서 잘리던 문제를 고쳤습니다.",
+        "좁은 폰에서 글자와 버튼 크기를 다시 맞춰, 한 손으로 쓰기 편해졌어요.",
+        "탭을 고르면 그 탭이 항상 화면 안에 보이도록 했습니다."
+    ]},
     { v:"2026.08.29-10", t:"처음 여는 분께 인사말이 생겼어요", n:[
         "앱을 처음 여는 분께 <b>🍚 반가워요!</b> 인사 팝업이 뜹니다.",
         "화면 맨 아래 <b>인사말 다시 보기</b>로 언제든 다시 볼 수 있어요."
@@ -1284,7 +1314,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     ]}
   ];
 
-  var APP_VERSION = "2026.08.29-10";
+  var APP_VERSION = "2026.08.29-11";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
