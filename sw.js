@@ -1,5 +1,5 @@
 /* 오프라인에서도 열리도록 앱 파일을 캐시에 담아 둔다. 파일을 고치면 CACHE 이름의 숫자를 올린다. */
-var CACHE = "eng-words-v5";
+var CACHE = "eng-words-v6";
 var ASSETS = [
   "./",
   "./index.html",
@@ -12,8 +12,13 @@ var ASSETS = [
 ];
 
 self.addEventListener("install", function(e){
+  /* 파일 하나가 없더라도 설치가 실패하지 않도록 개별로 담는다 (addAll 은 하나라도 실패하면 전체 실패) */
   e.waitUntil(
-    caches.open(CACHE).then(function(c){ return c.addAll(ASSETS); }).then(function(){ return self.skipWaiting(); })
+    caches.open(CACHE).then(function(c){
+      return Promise.all(ASSETS.map(function(url){
+        return c.add(url)["catch"](function(){ /* 이 파일은 나중에 필요할 때 받는다 */ });
+      }));
+    }).then(function(){ return self.skipWaiting(); })
   );
 });
 
