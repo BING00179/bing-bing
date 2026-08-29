@@ -6,7 +6,7 @@
  *   3) 화면이 스스로 한 번 새로고침되어 새 버전이 적용됩니다
  * 배포할 때 아래 VERSION 만 바꾸면 됩니다 (python3 bump-version.py).
  */
-var VERSION = "2026.08.29-11";
+var VERSION = "2026.08.29-12";
 var CACHE = "eng-words-" + VERSION;
 var ASSETS = [
   "./",

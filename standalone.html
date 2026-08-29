@@ -157,9 +157,25 @@ button.icon{padding:7px 9px; font-size:14px; line-height:1}
 .seg button + button{border-left:1px solid var(--line)}
 .seg button.on{background:var(--accent); color:var(--accent-ink)}
 .seg button.on:hover{color:var(--accent-ink)}
+.tabswrap{position:relative; margin-bottom:12px}
 .tabs{
-  display:flex; gap:6px; margin-bottom:12px; padding-bottom:4px;
+  display:flex; gap:6px; padding-bottom:4px;
   overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+  scroll-behavior:smooth;
+}
+.edge{
+  position:absolute; top:0; bottom:4px; width:42px; padding:0; border:0; border-radius:0;
+  display:flex; align-items:center; font-size:22px; font-weight:400; line-height:1;
+  color:var(--ink-2); cursor:pointer; z-index:2;
+}
+.edge:hover:not(:disabled){color:var(--accent); border:0}
+.edge.left{left:0; justify-content:flex-start; padding-left:2px;
+  background:linear-gradient(to right, var(--bg) 45%, transparent)}
+.edge.right{right:0; justify-content:flex-end; padding-right:2px;
+  background:linear-gradient(to left, var(--bg) 45%, transparent)}
+.edge.right:not([hidden]){animation:nudge 1.5s ease-in-out 3}
+@keyframes nudge{
+  0%,100%{transform:translateX(0)} 30%{transform:translateX(4px)} 60%{transform:translateX(0)}
 }
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{flex:0 0 auto; padding:9px 14px; font-size:13.5px; border-radius:999px}
@@ -3038,7 +3054,11 @@ zoo|n|동물원|e
     </details>
   </div>
 
-  <nav class="tabs" id="tabs" aria-label="단어 목록 선택"></nav>
+  <div class="tabswrap" id="tabsWrap">
+    <nav class="tabs" id="tabs" aria-label="단어 목록 선택"></nav>
+    <button type="button" class="edge left" id="tabsLeft" aria-label="왼쪽 탭 보기" hidden>‹</button>
+    <button type="button" class="edge right" id="tabsRight" aria-label="오른쪽 탭 보기" hidden>›</button>
+  </div>
 
   <div class="toolbar">
     <input id="search" type="search" enterkeyhint="search" placeholder="🔍 단어 · 뜻 검색 (한글도 됩니다)" autocomplete="off" autocorrect="off">
@@ -3627,6 +3647,7 @@ zoo|n|동물원|e
     $("tabs").innerHTML = html;
     var on = $("tabs").querySelector("button.on");
     if(on && on.scrollIntoView) on.scrollIntoView({ block:"nearest", inline:"nearest" });
+    updateTabEdges();
     var left = Math.max(0, goal() - todayCount());
     $("addTen").hidden = (t === "mine" || t === "recent" || t === "review");
     $("addTen").textContent = left > 0 ? "＋ 오늘 남은 " + left + "개 담기" : "＋ " + goal() + "개 더 담기";
@@ -3636,6 +3657,15 @@ zoo|n|동물원|e
                              : t === "mine"   ? "📚 오늘 단어 듣기"
                                               : (narrow ? "🔊 화면 듣기" : "🔊 이 화면 듣기");
     $("quizTarget").textContent = tabName(t);
+  }
+
+  /* 옆으로 더 있는지 알려 주는 좌우 표시 */
+  function updateTabEdges(){
+    var el = $("tabs");
+    if(!el) return;
+    var max = el.scrollWidth - el.clientWidth;
+    $("tabsLeft").hidden  = el.scrollLeft <= 2;
+    $("tabsRight").hidden = el.scrollLeft >= max - 2;
   }
 
   function render(){
@@ -3890,6 +3920,11 @@ zoo|n|동물원|e
   /* ---------- 홈 화면 설치 ---------- */
   /* 변경 내역 — 새 버전을 올릴 때 맨 위에 한 칸 추가하면 사용자에게 한 번 안내됩니다 */
   var RELEASES = [
+    { v:"2026.08.29-12", t:"탭이 더 있다는 걸 알려 드려요", n:[
+        "탭 줄 양옆에 <b>‹ ›</b> 표시가 생겼습니다. 옆에 탭이 더 있다는 뜻이에요.",
+        "화살표를 <b>눌러도</b> 넘어가고, 손가락으로 <b>쓸어 넘겨도</b> 됩니다.",
+        "끝까지 가면 그쪽 화살표는 사라집니다."
+    ]},
     { v:"2026.08.29-11", t:"폰 화면이 깔끔해졌어요", n:[
         "제목이 <b>단 / 어장</b> 처럼 낱말 중간에서 잘리던 문제를 고쳤습니다.",
         "좁은 폰에서 글자와 버튼 크기를 다시 맞춰, 한 손으로 쓰기 편해졌어요.",
@@ -3914,7 +3949,7 @@ zoo|n|동물원|e
     ]}
   ];
 
-  var APP_VERSION = "2026.08.29-11";
+  var APP_VERSION = "2026.08.29-12";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
@@ -4220,6 +4255,10 @@ zoo|n|동물원|e
       else if(confirm("삭제할까요?\n\n" + li.querySelector(".wword").textContent)) removeWord(li.getAttribute("data-id"));
     };
 
+    $("tabs").addEventListener("scroll", updateTabEdges, { passive:true });
+    window.addEventListener("resize", updateTabEdges);
+    $("tabsLeft").onclick  = function(){ $("tabs").scrollBy({ left:-170, behavior:"smooth" }); };
+    $("tabsRight").onclick = function(){ $("tabs").scrollBy({ left: 170, behavior:"smooth" }); };
     $("tabs").onclick = function(e){
       var b = e.target.closest("button[data-tab]");
       if(!b) return;
