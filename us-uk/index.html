@@ -175,9 +175,23 @@ button.icon{padding:7px 9px; font-size:14px; line-height:1}
 .more button{min-width:180px}
 .tabswrap{position:relative; margin-bottom:12px}
 .tabs{
-  display:flex; flex-wrap:wrap; gap:6px;     /* 옆으로 밀 필요 없이 전부 보이게 */
-  overflow:visible;
+  display:flex; gap:6px; padding-bottom:2px;
+  overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
 }
+.tabs::-webkit-scrollbar{display:none}
+.tabs::after{content:""; flex:0 0 2px}
+
+/* 잡고 밀 수 있는 바 — 옆에 더 있다는 걸 눈으로 보여 준다 */
+.dragbar{padding:7px 2px 2px; cursor:grab; touch-action:none; -webkit-user-select:none; user-select:none}
+.dragbar:active{cursor:grabbing}
+.dragbar .track{display:block; position:relative; height:6px; border-radius:999px; background:var(--line)}
+.dragbar i{
+  position:absolute; top:-2px; bottom:-2px; left:0; width:30%;
+  border-radius:999px; background:var(--ink-2); opacity:.45;
+  transition:opacity .15s, background .15s;
+}
+.dragbar:hover i{opacity:.7}
+.dragbar.on i{background:var(--accent); opacity:1}
 .edge{
   position:absolute; top:0; bottom:4px; width:42px; padding:0; border:0; border-radius:0;
   display:flex; align-items:center; font-size:22px; font-weight:400; line-height:1;
@@ -469,6 +483,9 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     <nav class="tabs" id="tabs" aria-label="단어 목록 선택"></nav>
     <button type="button" class="edge left" id="tabsLeft" aria-label="왼쪽 탭 보기" hidden>‹</button>
     <button type="button" class="edge right" id="tabsRight" aria-label="오른쪽 탭 보기" hidden>›</button>
+    <div class="dragbar" id="dragBar" role="scrollbar" aria-label="탭 이동" hidden>
+      <span class="track"><i id="dragThumb"></i></span>
+    </div>
   </div>
 
   <div class="toolbar">
@@ -1071,18 +1088,53 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     $("quizTarget").textContent = tabName(t);
   }
 
-  /* 옆으로 더 있는지 알려 주는 좌우 표시 */
+  /* 옆으로 더 있는지 알려 주는 좌우 화살표와 드래그 바 */
+  var THUMB_MIN = 20;                   /* 손잡이 최소 너비 (%) */
   function updateTabEdges(){
-    var el = $("tabs");
+    var el = $("tabs"), bar = $("dragBar"), th = $("dragThumb");
     if(!el) return;
     var max = el.scrollWidth - el.clientWidth;
-    if(max <= 2){                       /* 줄바꿈으로 전부 보이면 화살표가 필요 없다 */
+    if(max <= 2){                       /* 다 보이면 화살표도 바도 필요 없다 */
       $("tabsLeft").hidden = true;
       $("tabsRight").hidden = true;
+      if(bar) bar.hidden = true;
       return;
     }
     $("tabsLeft").hidden  = el.scrollLeft <= 2;
     $("tabsRight").hidden = el.scrollLeft >= max - 2;
+    if(!bar || !th) return;
+    bar.hidden = false;
+    var w = Math.max(THUMB_MIN, el.clientWidth / el.scrollWidth * 100);
+    th.style.width = w + "%";
+    th.style.left = (el.scrollLeft / max) * (100 - w) + "%";
+  }
+
+  function setupDragBar(){
+    var bar = $("dragBar"), el = $("tabs"), th = $("dragThumb");
+    if(!bar || !window.PointerEvent) return;
+    var dragging = false;
+
+    function seek(clientX){
+      var track = bar.querySelector(".track");
+      var r = track.getBoundingClientRect();
+      var tw = th.offsetWidth, usable = r.width - tw;
+      if(usable <= 0) return;
+      var p = (clientX - r.left - tw / 2) / usable;
+      p = Math.min(1, Math.max(0, p));
+      el.scrollLeft = p * (el.scrollWidth - el.clientWidth);
+      updateTabEdges();
+    }
+    bar.addEventListener("pointerdown", function(e){
+      dragging = true;
+      bar.classList.add("on");
+      if(bar.setPointerCapture) bar.setPointerCapture(e.pointerId);
+      seek(e.clientX);
+      e.preventDefault();
+    });
+    bar.addEventListener("pointermove", function(e){ if(dragging) seek(e.clientX); });
+    function stop(){ dragging = false; bar.classList.remove("on"); }
+    bar.addEventListener("pointerup", stop);
+    bar.addEventListener("pointercancel", stop);
   }
 
   function render(){
@@ -1365,6 +1417,11 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   /* ---------- 홈 화면 설치 ---------- */
   /* 변경 내역 — 새 버전을 올릴 때 맨 위에 한 칸 추가하면 사용자에게 한 번 안내됩니다 */
   var RELEASES = [
+    { v:"2026.08.29-15", t:"탭 아래에 드래그 바가 생겼어요", n:[
+        "탭 줄 아래 <b>회색 막대</b>를 잡고 밀면 좌우로 움직입니다.",
+        "양옆 <b>‹ ›</b> 화살표를 눌러도 되고, 탭을 손가락으로 쓸어도 됩니다.",
+        "막대의 길이와 위치가 <b>지금 어디쯤인지</b> 알려 줍니다."
+    ]},
     { v:"2026.08.29-14", t:"이제 옆으로 밀지 않아도 돼요", n:[
         "탭과 알파벳이 <b>줄바꿈되어 전부 한 화면에</b> 보입니다.",
         "옆으로 미는 걸 몰라도 모든 단계와 글자를 바로 누를 수 있어요."
@@ -1403,7 +1460,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     ]}
   ];
 
-  var APP_VERSION = "2026.08.29-14";
+  var APP_VERSION = "2026.08.29-15";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
@@ -1721,6 +1778,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     window.addEventListener("resize", updateTabEdges);
     $("tabsLeft").onclick  = function(){ $("tabs").scrollBy({ left:-170, behavior:"smooth" }); };
     $("tabsRight").onclick = function(){ $("tabs").scrollBy({ left: 170, behavior:"smooth" }); };
+    setupDragBar();
     $("tabs").onclick = function(e){
       var b = e.target.closest("button[data-tab]");
       if(!b) return;
