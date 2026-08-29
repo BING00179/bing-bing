@@ -219,6 +219,26 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 .result.ok{color:var(--good)} .result.no{color:var(--bad)}
 #quizScore{font-family:var(--mono); font-variant-numeric:tabular-nums}
 
+.modal{
+  position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+  padding:20px; background:rgba(10,16,15,.55); -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+}
+.modalcard{
+  background:var(--panel); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow);
+  padding:22px 22px 18px; width:100%; max-width:440px; max-height:82vh; overflow-y:auto;
+}
+.modalcard h2{font-family:var(--serif); font-size:21px; font-weight:600; margin:0 0 4px; letter-spacing:-.01em}
+.rel{margin-top:16px}
+.rel + .rel{border-top:1px solid var(--line); padding-top:14px}
+.rel h3{
+  margin:0 0 8px; font-size:14.5px; font-weight:700;
+  display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
+}
+.rel h3 i{font-family:var(--mono); font-style:normal; font-size:10.5px; font-weight:500; color:var(--ink-2);
+  border:1px solid var(--line); border-radius:4px; padding:1px 5px}
+.rel ul{margin:0; padding-left:19px; font-size:13.5px; line-height:1.8; color:var(--ink)}
+.rel li{margin-bottom:2px}
+#newsOk{width:100%; margin-top:20px; padding:13px}
 .toast{
   position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(8px);
   background:var(--ink); color:var(--bg); padding:10px 18px; border-radius:999px;
@@ -329,6 +349,9 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
           <label class="check"><input id="autoSpeak" type="checkbox" checked> 저장할 때 자동으로 발음</label>
         </div>
         <div style="grid-column:1/-1">
+          <p class="hint" style="margin:0"><a href="#" id="newsAgain" style="color:var(--accent); font-weight:600">📋 업데이트 내용 다시 보기</a></p>
+        </div>
+        <div style="grid-column:1/-1">
           <label class="f">설치 상태</label>
           <p class="hint" id="diag" style="margin:0; font-family:var(--mono); font-size:11.5px; line-height:1.9"></p>
         </div>
@@ -390,13 +413,20 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   <div id="list"></div>
 
 </div>
+<div class="modal" id="newsBox" hidden>
+  <div class="modalcard" role="dialog" aria-modal="true" aria-labelledby="newsTitle">
+    <h2 id="newsTitle">✨ 앱이 새로워졌어요</h2>
+    <div id="newsBody"></div>
+    <button id="newsOk" class="primary">확인했어요</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
 (function(){
   "use strict";
   var KEY = "daily-english-words/us-uk/v1";
-  var state = { words: [], looked: [], playLog: {}, settings: { accent:"en-US", voices:{}, rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"", installHidden:false } };
+  var state = { words: [], looked: [], playLog: {}, settings: { accent:"en-US", voices:{}, rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"", installHidden:false, seenVersion:"" } };
 
   /* ---------- 저장소 ---------- */
   function load(){
@@ -1217,7 +1247,24 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   }
 
   /* ---------- 홈 화면 설치 ---------- */
-  var APP_VERSION = "2026.08.29-8";
+  /* 변경 내역 — 새 버전을 올릴 때 맨 위에 한 칸 추가하면 사용자에게 한 번 안내됩니다 */
+  var RELEASES = [
+    { v:"2026.08.29-9", t:"업데이트 안내가 생겼어요", n:[
+        "앞으로 새 버전이 올라오면 <b>앱을 열 때 이렇게 한 번</b> 무엇이 달라졌는지 알려 드립니다.",
+        "오른쪽 위 <b>버전 배지</b>를 누르면 언제든 새 버전을 바로 확인할 수 있습니다.",
+        "지난 안내는 <b>⚙️ 발음 설정 → 업데이트 내용 다시 보기</b>에서 볼 수 있어요."
+    ]},
+    { v:"2026.08.29-8", t:"화면 위에 버전 표시", n:[
+        "현재 버전이 오른쪽 위에 항상 보입니다."
+    ]},
+    { v:"2026.08.29-7", t:"발음 들은 횟수와 어제 복습", n:[
+        "발음을 몇 번 들었는지 셉니다. 상단 <b>오늘 들은 횟수</b> 칸을 누르면 누적 횟수로 바뀝니다.",
+        "<b>어제 복습</b> 탭이 생겼어요. 어제 입력·재생·검색한 단어를 모아 다시 듣고 퀴즈를 풀 수 있습니다.",
+        "미국식·영국식을 골라 듣는 앱을 따로 만들었습니다."
+    ]}
+  ];
+
+  var APP_VERSION = "2026.08.29-9";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
@@ -1381,6 +1428,45 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     }, 3000);
 
     renderInstall(); renderDiag();
+  }
+
+  /* 사용자가 아직 못 본 변경 내역만 골라 낸다 */
+  function pendingReleases(){
+    var seen = state.settings.seenVersion;
+    if(!seen) return RELEASES.slice(0, 1);
+    for(var i=0;i<RELEASES.length;i++) if(RELEASES[i].v === seen) return RELEASES.slice(0, i);
+    return RELEASES.slice(0, 3);            /* 오래 안 열었으면 최근 세 개까지 */
+  }
+  function showNews(list, title){
+    if(!list.length) return;
+    $("newsTitle").textContent = title || "✨ 앱이 새로워졌어요";
+    $("newsBody").innerHTML = list.map(function(r){
+      return '<div class="rel"><h3>' + esc(r.t) + '<i>v' + esc(r.v) + "</i></h3><ul>" +
+             r.n.map(function(x){ return "<li>" + x + "</li>"; }).join("") + "</ul></div>";
+    }).join("");
+    $("newsBox").hidden = false;
+    $("newsOk").focus();
+  }
+  function closeNews(){
+    $("newsBox").hidden = true;
+    state.settings.seenVersion = APP_VERSION;
+    save();
+  }
+  function setupNews(){
+    $("newsOk").onclick = closeNews;
+    $("newsBox").onclick = function(e){ if(e.target === $("newsBox")) closeNews(); };
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape" && !$("newsBox").hidden) closeNews();
+    });
+    if($("newsAgain")) $("newsAgain").onclick = function(e){
+      e.preventDefault();
+      showNews(RELEASES.slice(0, 5), "📋 업데이트 내용");
+    };
+
+    /* 처음 쓰는 사람에게는 띄우지 않는다 — 쓰던 사람만 달라진 점을 본다 */
+    var used = state.words.length || (state.looked || []).length || Object.keys(state.playLog || {}).length;
+    if(!state.settings.seenVersion && !used){ state.settings.seenVersion = APP_VERSION; save(); return; }
+    setTimeout(function(){ showNews(pendingReleases()); }, 500);
   }
 
   function setupVersionBadge(){
@@ -1586,6 +1672,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   curTabId = "recent";   // 앱을 열면 언제나 최근 단어부터
   setupInstall();
   setupVersionBadge();
+  setupNews();
   $("dictCount").textContent = DICT.length.toLocaleString();
   render();
 

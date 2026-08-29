@@ -18,3 +18,11 @@ html = re.sub(r'var APP_VERSION = "[^"]+"', 'var APP_VERSION = "%s"' % new, html
 open(os.path.join(here, 'sw.js'), 'w', encoding='utf-8').write(sw)
 open(os.path.join(here, 'index.html'), 'w', encoding='utf-8').write(html)
 print('%s  →  %s' % (cur, new))
+
+# 변경 내역을 빠뜨리지 않도록 확인
+m = re.search(r'var RELEASES = \[\s*\{ v:"([^"]+)"', html)
+if not m or m.group(1) != new:
+    print('  ⚠  index.html 의 RELEASES 맨 위에 v"%s" 항목을 추가하세요.' % new)
+    print('     추가하지 않으면 사용자에게 업데이트 안내가 뜨지 않습니다.')
+else:
+    print('  ✓  변경 내역 준비됨: %s' % m.group(1))
