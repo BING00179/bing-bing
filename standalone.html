@@ -142,6 +142,11 @@ button.icon{padding:7px 9px; font-size:14px; line-height:1}
 .installtext span{font-size:12.5px; color:var(--ink-2)}
 .install ol{margin:12px 0 0; padding-left:22px; font-size:13.5px; line-height:1.75}
 .install ol b{background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:1px 6px; font-size:13px}
+.seg{display:flex; border:1px solid var(--line); border-radius:9px; overflow:hidden}
+.seg button{flex:1 1 0; border:0; border-radius:0; background:var(--sunk); font-size:13.5px; padding:11px 6px}
+.seg button + button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--accent); color:var(--accent-ink)}
+.seg button.on:hover{color:var(--accent-ink)}
 .tabs{
   display:flex; gap:6px; margin-bottom:12px; padding-bottom:4px;
   overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
@@ -2887,8 +2892,12 @@ zoo|n|동물원|e
     <details id="setBox">
       <summary>⚙️ 발음 설정 · 내보내기</summary>
       <div class="setgrid">
+        <div hidden>
+          <label class="f">발음 선택</label>
+          <div class="seg" id="accentSeg"></div>
+        </div>
         <div>
-          <label class="f" for="voice">목소리 (미국식 원어민)</label>
+          <label class="f" for="voice">목소리 (원어민)</label>
           <select id="voice"></select>
           <p class="hint" id="voiceNote" style="margin-top:6px"></p>
         </div>
@@ -2977,7 +2986,7 @@ zoo|n|동물원|e
 (function(){
   "use strict";
   var KEY = "daily-english-words/v1";
-  var state = { words: [], looked: [], playLog: {}, settings: { voiceURI:"", rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"", installHidden:false } };
+  var state = { words: [], looked: [], playLog: {}, settings: { accent:"en-US", voices:{}, rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"", installHidden:false } };
 
   /* ---------- 저장소 ---------- */
   function load(){
@@ -3109,42 +3118,76 @@ zoo|n|동물원|e
 
   /* ---------- 음성 ---------- */
   var synth = window.speechSynthesis;
-  var voices = [], usOnly = true;
+  /* 쓸 억양 목록. 한 개면 선택 UI가 숨겨지고, 두 개면 골라 들을 수 있습니다.
+     미국식·영국식 선택판은 build-variant.py 가 이 줄을 ["en-US","en-GB"] 로 바꿔 만듭니다. */
+  var ACCENTS = ["en-US"];
+  var ACCENT_NAME = { "en-US":"미국식", "en-GB":"영국식" };
+  var ACCENT_FLAG = { "en-US":"🇺🇸", "en-GB":"🇬🇧" };
+  var byAccent = {}, missing = {};
   var supported = !!synth && typeof SpeechSynthesisUtterance !== "undefined";
 
+  function accentOf(v){
+    var lang = (v.lang || "").replace("_", "-");
+    if(/^en-US/i.test(lang)) return "en-US";
+    if(/^en-(GB|UK)/i.test(lang)) return "en-GB";
+    return null;
+  }
+  function curAccent(){
+    var a = state.settings.accent;
+    return ACCENTS.indexOf(a) >= 0 ? a : ACCENTS[0];
+  }
   function pickVoices(){
     var english = (synth.getVoices() || []).filter(function(v){ return /^en[-_]/i.test(v.lang || ""); });
-    var us = english.filter(function(v){ return /^en[-_]US/i.test(v.lang || ""); });
-    usOnly = us.length > 0;
-    voices = usOnly ? us : english;          /* 미국식 목소리가 없는 기기에서만 다른 영어 목소리를 쓴다 */
+    byAccent = {}; missing = {};
+    ACCENTS.forEach(function(a){
+      var list = english.filter(function(v){ return accentOf(v) === a; });
+      missing[a] = !list.length;
+      byAccent[a] = list.length ? list : english.slice();   /* 그 억양이 없는 기기에서는 다른 영어 목소리로 */
+    });
+    renderAccentSeg();
     renderVoiceSelect();
   }
+  function renderAccentSeg(){
+    var seg = $("accentSeg");
+    if(!seg) return;
+    if(ACCENTS.length < 2){ seg.parentNode.hidden = true; return; }
+    seg.parentNode.hidden = false;
+    seg.innerHTML = ACCENTS.map(function(a){
+      return '<button type="button" data-a="' + a + '"' + (a === curAccent() ? ' class="on"' : "") + ">" +
+             ACCENT_FLAG[a] + " " + ACCENT_NAME[a] + "</button>";
+    }).join("");
+  }
   function renderVoiceSelect(){
-    var sel = $("voice");
+    var sel = $("voice"), a = curAccent(), list = byAccent[a] || [];
     sel.innerHTML = "";
-    if(!voices.length){
+    if(!list.length){
       sel.innerHTML = '<option value="">사용 가능한 목소리 없음</option>';
       $("voiceNote").textContent = "";
       return;
     }
-    voices.forEach(function(v){
+    list.forEach(function(v){
       var o = document.createElement("option");
       o.value = v.voiceURI;
       o.textContent = v.name + " (" + v.lang + ")";
       sel.appendChild(o);
     });
-    var want = state.settings.voiceURI;
-    if(!want || !voices.some(function(v){ return v.voiceURI === want; })){
-      want = voices[0].voiceURI;
-      state.settings.voiceURI = want;
+    if(!state.settings.voices) state.settings.voices = {};
+    var want = state.settings.voices[a];
+    if(!want || !list.some(function(v){ return v.voiceURI === want; })){
+      want = list[0].voiceURI;
+      state.settings.voices[a] = want;
       save();
     }
     sel.value = want;
-    $("voiceNote").textContent = usOnly ? "" : "이 기기에는 미국식 목소리가 없어 다른 영어 목소리로 재생합니다.";
+    $("voiceNote").textContent = missing[a]
+      ? "이 기기에는 " + ACCENT_NAME[a] + " 목소리가 없어 다른 영어 목소리로 재생합니다."
+      : "";
   }
-  function currentVoice(){
-    for(var i=0;i<voices.length;i++) if(voices[i].voiceURI === state.settings.voiceURI) return voices[i];
-    return voices[0] || null;
+  function voiceFor(accent){
+    var list = byAccent[accent] || byAccent[curAccent()] || [];
+    var want = (state.settings.voices || {})[accent];
+    for(var i=0;i<list.length;i++) if(list[i].voiceURI === want) return list[i];
+    return list[0] || null;
   }
   /* iOS·일부 태블릿은 첫 사용자 조작 안에서 한 번 소리를 내야 이후 재생이 허용된다 */
   var unlocked = false;
@@ -3193,14 +3236,15 @@ zoo|n|동물원|e
     $("playStat").title = "눌러서 오늘 / 누적 전환 (누적 " + playsTotal() + "번)";
   }
 
-  function speak(text, onend){
+  function speak(text, onend, accent){
     if(!supported || !text){ if(onend) onend(); return; }
     unlocked = true;
     countPlay(text);
     synth.cancel();
+    var a = (accent && ACCENTS.indexOf(accent) >= 0) ? accent : curAccent();
     var u = new SpeechSynthesisUtterance(text);
-    var v = currentVoice();
-    if(v){ u.voice = v; u.lang = v.lang; } else { u.lang = "en-US"; }
+    var v = voiceFor(a);
+    if(v){ u.voice = v; u.lang = v.lang; } else { u.lang = a; }
     u.rate = state.settings.rate;
     if(onend){ u.onend = onend; u.onerror = onend; }
     synth.speak(u);
@@ -3267,7 +3311,10 @@ zoo|n|동물원|e
       (e.pos ? '<i class="pos">' + posLabel(e.pos) + "</i>" : "") +
       (e.lv ? '<i class="lv">' + lvLabel(e.lv) + "</i>" : "") +
       "<span>" + esc(e.m) + "</span>" +
-      '<button type="button" class="mini" data-act="say">🔊 발음 듣기</button>' +
+      ACCENTS.map(function(a){
+        return '<button type="button" class="mini" data-act="say" data-a="' + a + '">🔊 ' +
+               (ACCENTS.length > 1 ? ACCENT_FLAG[a] + " " + ACCENT_NAME[a] : "발음 듣기") + "</button>";
+      }).join("") +
       '<span class="src">' + (e.net ? "인터넷 사전" : "내장 사전") + "</span>";
     n.hidden = false;
   }
@@ -3759,7 +3806,7 @@ zoo|n|동물원|e
   }
 
   /* ---------- 홈 화면 설치 ---------- */
-  var APP_VERSION = "2026.08.29-5";
+  var APP_VERSION = "2026.08.29-6";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
@@ -3998,12 +4045,21 @@ zoo|n|동물원|e
     };
 
     $("voice").onchange = function(){
-      state.settings.voiceURI = this.value; save();
+      if(!state.settings.voices) state.settings.voices = {};
+      state.settings.voices[curAccent()] = this.value; save();
       speak("Hello, this is my voice.");
     };
     $("dictNote").onclick = function(e){
       var b = e.target.closest("button[data-act='say']");
-      if(b) speak($("word").value.trim() || b.parentNode.querySelector("b").textContent);
+      if(b) speak($("word").value.trim() || b.parentNode.querySelector("b").textContent, null, b.getAttribute("data-a"));
+    };
+    $("accentSeg").onclick = function(e){
+      var b = e.target.closest("button[data-a]");
+      if(!b) return;
+      state.settings.accent = b.getAttribute("data-a");
+      save(); renderAccentSeg(); renderVoiceSelect();
+      speak("This is how I sound.");
+      toast(ACCENT_NAME[curAccent()] + " 발음으로 바꿨어요.");
     };
     $("rate").oninput = function(){
       state.settings.rate = parseFloat(this.value);
@@ -4092,6 +4148,8 @@ zoo|n|동물원|e
   $("autoSpeak").checked = !!state.settings.autoSpeak;
   $("netDict").checked = !!state.settings.netDict;
   if(!state.settings.goal) state.settings.goal = 10;
+  if(!state.settings.voices) state.settings.voices = {};
+  if(state.settings.voiceURI && !state.settings.voices["en-US"]) state.settings.voices["en-US"] = state.settings.voiceURI;
   $("goal").value = String(goal());
   curTabId = "recent";   // 앱을 열면 언제나 최근 단어부터
   setupInstall();

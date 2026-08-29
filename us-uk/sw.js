@@ -7,7 +7,7 @@
  * 배포할 때 아래 VERSION 만 바꾸면 됩니다 (python3 bump-version.py).
  */
 var VERSION = "2026.08.29-6";
-var CACHE = "eng-words-" + VERSION;
+var CACHE = "eng-words-usuk-" + VERSION;
 var ASSETS = [
   "./",
   "./index.html",

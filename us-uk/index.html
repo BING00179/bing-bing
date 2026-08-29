@@ -6,12 +6,12 @@
 <meta name="theme-color" content="#f4f6f5" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101614" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="영어 단어장">
+<meta name="apple-mobile-web-app-title" content="영어 단어장 US·UK">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-192.png" sizes="192x192">
-<title>매일 영어 단어장</title>
+<title>매일 영어 단어장 · 미국식/영국식</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap">
@@ -24,7 +24,7 @@
   /* 종이 사전의 지면 — 아주 옅은 청록 기운의 중성색 */
   --bg:#f4f6f5; --panel:#fffefc; --panel-2:#eceff0; --sunk:#e4e9e9;
   --ink:#15201f; --ink-2:#5d6b6a; --line:#dbe2e1;
-  --accent:#0e6a63; --accent-soft:#d8ebe8; --accent-ink:#ffffff;
+  --accent:#7a3f5e; --accent-soft:#f0dee7; --accent-ink:#ffffff;
   --good:#3f7d20; --bad:#a8342b;
   --shadow:0 1px 1px rgba(21,32,31,.04), 0 6px 20px rgba(21,32,31,.06);
   color-scheme:light;
@@ -33,7 +33,7 @@
   :root:not([data-theme="light"]){
     --bg:#101614; --panel:#18201e; --panel-2:#212b28; --sunk:#141c1a;
     --ink:#e6ece9; --ink-2:#93a4a0; --line:#2b3733;
-    --accent:#49b5a8; --accent-soft:#1d3a36; --accent-ink:#08110f;
+    --accent:#d98cb0; --accent-soft:#3a2130; --accent-ink:#1a0d14;
     --good:#8cc06a; --bad:#f08a80;
     --shadow:0 1px 1px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.32);
     color-scheme:dark;
@@ -42,7 +42,7 @@
 :root[data-theme="dark"]{
   --bg:#101614; --panel:#18201e; --panel-2:#212b28; --sunk:#141c1a;
   --ink:#e6ece9; --ink-2:#93a4a0; --line:#2b3733;
-  --accent:#49b5a8; --accent-soft:#1d3a36; --accent-ink:#08110f;
+  --accent:#d98cb0; --accent-soft:#3a2130; --accent-ink:#1a0d14;
   --good:#8cc06a; --bad:#f08a80;
   --shadow:0 1px 1px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.32);
   color-scheme:dark;
@@ -63,6 +63,7 @@ h1{
   letter-spacing:-.015em; line-height:1.2; text-wrap:balance;
 }
 h1 em{font-style:italic; color:var(--accent)}
+h1 small{font-family:var(--mono); font-size:12px; font-weight:500; color:var(--ink-2); letter-spacing:.06em; vertical-align:middle}
 .sub{color:var(--ink-2); font-size:13.5px; margin:0 0 20px}
 
 .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:16px; margin-bottom:14px}
@@ -240,10 +241,10 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 <div class="wrap">
 
   <header>
-    <h1>매일 영어 <em>단어장</em></h1>
+    <h1>매일 영어 <em>단어장</em> <small>US · UK</small></h1>
     <button id="themeBtn" class="ghost icon" title="밝게 / 어둡게" aria-label="밝게 어둡게 전환" style="margin-left:auto">🌗</button>
   </header>
-  <p class="sub">단어를 적으면 원어민 발음으로 읽어주고, 날짜별로 쌓아 둡니다.</p>
+  <p class="sub">미국식·영국식 발음을 골라 듣고, 날짜별로 쌓아 둡니다.</p>
 
   <div class="install" id="installBox" hidden>
     <div class="installrow">
@@ -385,7 +386,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 <script>
 (function(){
   "use strict";
-  var KEY = "daily-english-words/v1";
+  var KEY = "daily-english-words/us-uk/v1";
   var state = { words: [], looked: [], playLog: {}, settings: { accent:"en-US", voices:{}, rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"", installHidden:false } };
 
   /* ---------- 저장소 ---------- */
@@ -520,7 +521,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   var synth = window.speechSynthesis;
   /* 쓸 억양 목록. 한 개면 선택 UI가 숨겨지고, 두 개면 골라 들을 수 있습니다.
      미국식·영국식 선택판은 build-variant.py 가 이 줄을 ["en-US","en-GB"] 로 바꿔 만듭니다. */
-  var ACCENTS = ["en-US"];
+  var ACCENTS = ["en-US", "en-GB"];
   var ACCENT_NAME = { "en-US":"미국식", "en-GB":"영국식" };
   var ACCENT_FLAG = { "en-US":"🇺🇸", "en-GB":"🇬🇧" };
   var byAccent = {}, missing = {};
