@@ -89,6 +89,8 @@ serendipity|n|뜻밖의 행운
 
 ### 1단계 — 인터넷 주소 만들기 (GitHub Pages, 한 번만)
 
+> GitHub Pages는 **공개(public) 저장소에서 무료**입니다. 이 저장소가 비공개라면 `Settings → General → 맨 아래 Danger Zone → Change visibility → Make public`으로 공개로 바꾸거나, GitHub Pro 이상 플랜이 필요합니다.
+
 브라우저에서 이 저장소를 열고 (태블릿에서도 됩니다):
 
 1. **Settings** 탭 → 왼쪽 메뉴에서 **Pages**
