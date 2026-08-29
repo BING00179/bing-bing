@@ -9,7 +9,8 @@
 `index.html` 파일을 더블클릭해서 브라우저로 열면 끝입니다.
 
 > 발음 재생은 브라우저에 내장된 음성 합성(Web Speech API)을 사용합니다.
-> **Chrome · Edge · Safari**를 권장합니다. 인터넷 연결 없이도 동작합니다.
+> **Chrome · Edge · Safari**를 권장합니다.
+> 인터넷 없이도 동작합니다 (연결이 없으면 글꼴만 시스템 기본 글꼴로 대체됩니다).
 
 ## 사용법
 
@@ -59,4 +60,5 @@
 - 순수 HTML/CSS/JavaScript 한 파일. 빌드 도구, 외부 라이브러리, 네트워크 요청이 전혀 없습니다.
 - 발음: `SpeechSynthesis` API (`en-US` 우선, 없으면 `en-GB` → 그 외 영어 목소리)
 - 저장: `localStorage` 키 `daily-english-words/v1`
+- 글꼴: Newsreader(영어 단어) + IBM Plex Sans KR(한글 UI) + IBM Plex Mono(숫자), Google Fonts에서 불러오며 실패하면 시스템 글꼴로 대체됩니다.
 - 다크 모드: 시스템 설정을 따르고, 우측 상단 🌗 버튼으로 직접 바꿀 수도 있습니다.
