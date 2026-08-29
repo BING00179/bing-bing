@@ -67,7 +67,7 @@ h1 em{font-style:italic; color:var(--accent)}
 
 .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:var(--shadow); padding:16px; margin-bottom:14px}
 
-.stats{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line);
+.stats{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line);
   border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-bottom:18px}
 .stat{background:var(--panel); padding:12px 8px; text-align:center}
 .stat b{display:block; font-family:var(--mono); font-size:22px; font-weight:500;
@@ -77,6 +77,12 @@ h1 em{font-style:italic; color:var(--accent)}
 .stat .bar{height:3px; margin:8px 6px 0; background:var(--line); border-radius:2px; overflow:hidden}
 .stat .bar i{display:block; height:100%; width:0; background:var(--accent); border-radius:2px; transition:width .35s}
 .stat.done b{color:var(--accent)}
+.cnt{
+  font-family:var(--mono); font-size:10.5px; font-weight:500; color:var(--ink-2);
+  border:1px solid var(--line); border-radius:4px; padding:0 5px; flex:0 0 auto; line-height:1.6;
+}
+.why{font-size:10px; font-weight:600; color:var(--accent); flex:0 0 auto}
+.wmeta{display:flex; align-items:center; gap:6px; margin-top:3px; flex-wrap:wrap}
 
 label.f{display:block; font-size:11px; color:var(--ink-2); margin:0 0 5px;
   text-transform:uppercase; letter-spacing:.08em; font-weight:600}
@@ -206,7 +212,10 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   z-index:9; max-width:90vw; text-align:center;
 }
 .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
-@media (max-width:480px){ .wrap{padding:20px 12px 64px} h1{font-size:23px} .stat b{font-size:19px} }
+@media (max-width:480px){
+  .wrap{padding:20px 12px 64px} h1{font-size:23px}
+  .stat{padding:11px 4px} .stat b{font-size:18px} .stat span{font-size:9.5px; letter-spacing:.04em}
+}
 
 /* 터치 기기(태블릿·폰): 초점 시 화면 확대 방지 + 손가락에 맞는 터치 영역 */
 @media (pointer:coarse){
@@ -250,6 +259,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     <div class="stat" id="todayStat"><b id="stToday">0</b><span id="goalLabel">오늘 / 10</span>
       <div class="bar"><i id="goalBar"></i></div>
     </div>
+    <div class="stat" id="playStat"><b id="stPlays">0</b><span id="playsLabel">오늘 들은 횟수</span></div>
     <div class="stat"><b id="stStreak">0</b><span>연속 학습일</span></div>
   </div>
 
@@ -367,7 +377,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
 (function(){
   "use strict";
   var KEY = "daily-english-words/v1";
-  var state = { words: [], settings: { voiceURI:"", rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"", installHidden:false } };
+  var state = { words: [], looked: [], playLog: {}, settings: { voiceURI:"", rate:1, autoSpeak:true, theme:"", netDict:false, goal:10, cheeredOn:"", installHidden:false } };
 
   /* ---------- 저장소 ---------- */
   function load(){
@@ -376,6 +386,8 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       if(!raw) return;
       var d = JSON.parse(raw);
       if(d && Array.isArray(d.words)) state.words = d.words;
+      if(d && Array.isArray(d.looked)) state.looked = d.looked;
+      if(d && d.playLog) state.playLog = d.playLog;
       if(d && d.settings) for(var k in d.settings) state.settings[k] = d.settings[k];
     }catch(e){ /* 저장소를 못 읽어도 앱은 동작 */ }
   }
@@ -544,9 +556,47 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       u.volume = 0; synth.speak(u);
     }catch(e){ /* 실패해도 이후 재생 시도에 영향 없음 */ }
   }
+  /* 어떤 경로로 듣든 한 곳에서 센다 — 목록·모두 듣기·퀴즈·사전 미리듣기 모두 포함 */
+  function countPlay(text){
+    var w = String(text || "").trim();
+    if(!w || w.length < 2) return;
+    var counted = false, k = w.toLowerCase();
+    for(var i=0;i<state.words.length;i++){
+      if(state.words[i].word.toLowerCase() === k){
+        state.words[i].plays = (state.words[i].plays || 0) + 1;
+        state.words[i].lastPlayed = new Date().toISOString();
+        counted = true;
+        break;
+      }
+    }
+    if(!counted && !lookup(w)) return;          // 사전에도 단어장에도 없는 말은 세지 않는다
+    var day = dayKey();
+    state.playLog[day] = (state.playLog[day] || 0) + 1;
+    trimPlayLog();
+    save();
+    renderPlays();
+  }
+  function trimPlayLog(){                        // 최근 90일치만 남긴다
+    var keys = Object.keys(state.playLog).sort();
+    while(keys.length > 90) delete state.playLog[keys.shift()];
+  }
+  function playsToday(){ return state.playLog[dayKey()] || 0; }
+  function playsTotal(){
+    var n = 0;
+    for(var k in state.playLog) n += state.playLog[k];
+    return n;
+  }
+  var showTotalPlays = false;
+  function renderPlays(){
+    $("stPlays").textContent = showTotalPlays ? playsTotal() : playsToday();
+    $("playsLabel").textContent = showTotalPlays ? "누적 들은 횟수" : "오늘 들은 횟수";
+    $("playStat").title = "눌러서 오늘 / 누적 전환 (누적 " + playsTotal() + "번)";
+  }
+
   function speak(text, onend){
     if(!supported || !text){ if(onend) onend(); return; }
     unlocked = true;
+    countPlay(text);
     synth.cancel();
     var u = new SpeechSynthesisUtterance(text);
     var v = currentVoice();
@@ -598,7 +648,17 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     if(!meaningTouched || !$("meaning").value.trim()){ $("meaning").value = e.m; meaningTouched = false; }
     closeSuggest();
     showDictNote(e);
+    noteLookup(e);
     speak(e.w);
+  }
+  /* 사전에서 찾아본 단어를 기록해 둔다 (복습용, 최근 300개) */
+  function noteLookup(e){
+    if(!e || !e.w) return;
+    var k = e.w.toLowerCase();
+    state.looked = (state.looked || []).filter(function(l){ return l.w.toLowerCase() !== k; });
+    state.looked.push({ w:e.w, m:e.m, at:new Date().toISOString() });
+    if(state.looked.length > 300) state.looked = state.looked.slice(-300);
+    save();
   }
   function showDictNote(e){
     var n = $("dictNote");
@@ -618,6 +678,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     if(!e && netEntry && (netEntry.w.toLowerCase() === q.toLowerCase() || netEntry.m === q)) e = netEntry;
     if(e){
       showDictNote(e);
+      noteLookup(e);
       if(!meaningTouched) $("meaning").value = e.m;
     }else{
       showDictNote(null);
@@ -699,11 +760,9 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   function playWord(id){
     for(var i=0;i<state.words.length;i++){
       if(state.words[i].id === id){
-        state.words[i].plays = (state.words[i].plays||0) + 1;
-        save();
         var li = document.querySelector('li.w[data-id="'+id+'"]');
         if(li) li.classList.add("speaking");
-        speak(state.words[i].word, function(){ if(li) li.classList.remove("speaking"); });
+        speak(state.words[i].word, function(){ if(li) li.classList.remove("speaking"); render(); });
         return;
       }
     }
@@ -739,6 +798,11 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   function levelWords(tag){
     return DICT.filter(function(e){ return e.lv.indexOf(tag) > -1; });
   }
+  function savedWord(word){
+    var w = String(word).toLowerCase();
+    for(var i=0;i<state.words.length;i++) if(state.words[i].word.toLowerCase() === w) return state.words[i];
+    return null;
+  }
   function isSaved(word){
     var w = String(word).toLowerCase();
     for(var i=0;i<state.words.length;i++) if(state.words[i].word.toLowerCase() === w) return true;
@@ -749,8 +813,50 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   function curTab(){ return curTabId; }
   function tabName(t){
     if(t === "recent") return "최근 " + goal() + "단어";
+    if(t === "review") return "어제 복습";
     if(t === "mine") return "내 단어장";
     return LV[t] + " 필수";
+  }
+
+  /* 지난 학습일 — 어제(활동이 없으면 그 이전의 마지막 학습일)를 찾는다 */
+  function reviewDay(){
+    var days = {};
+    state.words.forEach(function(w){
+      days[dayKey(new Date(w.createdAt))] = 1;
+      if(w.lastPlayed) days[dayKey(new Date(w.lastPlayed))] = 1;
+    });
+    (state.looked || []).forEach(function(l){ days[dayKey(new Date(l.at))] = 1; });
+    var d = new Date();
+    for(var i=0;i<120;i++){
+      d.setDate(d.getDate() - 1);
+      if(days[dayKey(d)]) return dayKey(d);
+    }
+    return null;
+  }
+  /* 그날 입력하거나 듣거나 찾아본 단어를 한 목록으로 모은다 */
+  function reviewItems(){
+    var k = reviewDay();
+    if(!k) return [];
+    var out = [], at = {};
+    function push(w, m, why){
+      var key = String(w).toLowerCase();
+      if(at[key]){
+        var it = out[at[key] - 1];
+        if(it.why.indexOf(why) < 0) it.why += " · " + why;
+        if(!it.m && m) it.m = m;
+        return;
+      }
+      out.push({ w:w, m:m || "", why:why });
+      at[key] = out.length;
+    }
+    state.words.forEach(function(w){
+      if(dayKey(new Date(w.createdAt)) === k) push(w.word, w.meaning, "입력");
+      if(w.lastPlayed && dayKey(new Date(w.lastPlayed)) === k) push(w.word, w.meaning, "들음");
+    });
+    (state.looked || []).forEach(function(l){
+      if(dayKey(new Date(l.at)) === k) push(l.w, l.m, "찾음");
+    });
+    return out;
   }
 
   /* 가장 최근에 담은 단어 — 오늘 외울 활성 목록 */
@@ -762,15 +868,19 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   function activeWords(){
     var t = curTab();
     if(t === "recent") return recentWords().map(function(w){ return { w:w.word, m:w.meaning }; });
+    if(t === "review") return reviewItems().map(function(x){ return { w:x.w, m:x.m }; });
     if(t === "mine") return state.words.map(function(w){ return { w:w.word, m:w.meaning }; });
     return levelWords(t).map(function(e){ return { w:e.w, m:e.m }; });
   }
-  function addFromDict(word){
+  function addFromDict(word, meaning){
+    if(isSaved(word)) return false;
     var e = lookup(word);
-    if(!e || isSaved(e.w)) return false;
+    var w = e ? e.w : String(word).trim();
+    var m = meaning || (e ? e.m : "");
+    if(!w) return false;
     state.words.push({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
-      word: e.w, meaning: e.m, createdAt: stamp(), plays: 0
+      word: w, meaning: m, createdAt: stamp(), plays: 0
     });
     return true;
   }
@@ -779,6 +889,9 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     var t = curTab();
     var html = '<button type="button" data-tab="recent"' + (t === "recent" ? ' class="on"' : "") +
                ">최근 " + goal() + "단어<b>" + recentWords().length + "</b></button>";
+    var rv = reviewItems().length;
+    if(rv) html += '<button type="button" data-tab="review"' + (t === "review" ? ' class="on"' : "") +
+                   ">어제 복습<b>" + rv + "</b></button>";
     html += '<button type="button" data-tab="mine"' + (t === "mine" ? ' class="on"' : "") +
             ">내 단어장<b>" + state.words.length + "</b></button>";
     html += LV_ORDER.map(function(k){
@@ -787,9 +900,10 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     }).join("");
     $("tabs").innerHTML = html;
     var left = Math.max(0, goal() - todayCount());
-    $("addTen").hidden = (t === "mine" || t === "recent");
+    $("addTen").hidden = (t === "mine" || t === "recent" || t === "review");
     $("addTen").textContent = left > 0 ? "＋ 오늘 남은 " + left + "개 담기" : "＋ " + goal() + "개 더 담기";
     $("speakAll").textContent = t === "recent" ? "📚 최근 " + goal() + "단어 듣기"
+                             : t === "review" ? "🔁 어제 단어 반복 듣기"
                              : t === "mine"   ? "📚 오늘 단어 듣기"
                                               : "🔊 이 화면 듣기";
     $("quizTarget").textContent = tabName(t);
@@ -804,6 +918,8 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     renderGoal();
     renderTabs();
 
+    renderPlays();
+    if(curTab() === "review"){ renderReview(q); return; }
     if(curTab() === "recent"){ renderRecent(q); return; }
     if(curTab() !== "mine"){ renderLevel(q); return; }
 
@@ -835,7 +951,10 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
         html += '<li class="w" data-id="' + w.id + '">' +
           '<div class="wmain">' +
             '<div class="wword" data-act="play" title="눌러서 발음 듣기">' + esc(w.word) + "</div>" +
-            (w.meaning ? '<div class="wmean">' + esc(w.meaning) + "</div>" : "") +
+            '<div class="wmeta">' +
+              (w.meaning ? '<span class="wmean">' + esc(w.meaning) + "</span>" : "") +
+              (w.plays ? '<i class="cnt">🔊 ' + w.plays + "</i>" : "") +
+            "</div>" +
           "</div>" +
           '<div class="wacts">' +
             '<button class="icon" data-act="play" title="발음 듣기">🔊</button>' +
@@ -845,6 +964,47 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       html += "</ul></div>";
     });
     el.innerHTML = html;
+  }
+
+  function renderReview(q){
+    var day = reviewDay(), all = reviewItems();
+    var list = !q ? all : all.filter(function(x){
+      return x.w.toLowerCase().indexOf(q) > -1 || (x.m || "").indexOf(q) > -1;
+    });
+    if(!all.length){
+      $("list").innerHTML = '<div class="card"><div class="empty">아직 복습할 지난 기록이 없어요.<br>오늘 단어를 담고 들어 두면 내일 여기에 모입니다.</div></div>';
+      return;
+    }
+    var yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    var isYesterday = day === dayKey(yesterday);
+
+    var html = '<div class="daygroup"><div class="dayhead">' +
+      '<span class="today">' + (isYesterday ? "어제" : "지난 학습일") + "</span>" +
+      "<span>" + dayLabel(day) + "</span>" +
+      "<span>" + (q ? list.length + "개 찾음" : all.length + "개") + "</span>" +
+      '<span class="rule"></span></div><ul class="words">';
+    if(!list.length){
+      $("list").innerHTML = '<div class="card"><div class="empty">찾는 단어가 없어요.</div></div>';
+      return;
+    }
+    list.forEach(function(x){
+      var saved = isSaved(x.w), rec = savedWord(x.w);
+      html += '<li class="w" data-w="' + esc(x.w) + '" data-m="' + esc(x.m) + '">' +
+        '<div class="wmain">' +
+          '<div class="wword" data-act="play" title="눌러서 발음 듣기">' + esc(x.w) + "</div>" +
+          '<div class="wmeta">' +
+            (x.m ? '<span class="wmean">' + esc(x.m) + "</span>" : "") +
+            '<span class="why">' + esc(x.why) + "</span>" +
+            (rec && rec.plays ? '<i class="cnt">🔊 ' + rec.plays + "</i>" : "") +
+          "</div>" +
+        "</div>" +
+        '<div class="wacts">' +
+          '<button class="icon" data-act="play" title="발음 듣기">🔊</button>' +
+          '<button class="icon' + (saved ? "" : " ghost") + '" data-act="add"' + (saved ? " disabled" : "") +
+          ' title="' + (saved ? "이미 단어장에 있어요" : "내 단어장에 담기") + '">' + (saved ? "✓" : "＋") + "</button>" +
+        "</div></li>";
+    });
+    $("list").innerHTML = html + "</ul></div>";
   }
 
   function renderRecent(q){
@@ -875,8 +1035,11 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       html += '<li class="w" data-id="' + w.id + '">' +
         '<div class="wmain">' +
           '<div class="wword" data-act="play" title="눌러서 발음 듣기">' + esc(w.word) + "</div>" +
-          '<div class="wmean">' + (w.meaning ? esc(w.meaning) + " · " : "") +
-            (isToday ? "오늘" : dayLabel(dayKey(new Date(w.createdAt)))) + "</div>" +
+          '<div class="wmeta">' +
+            '<span class="wmean">' + (w.meaning ? esc(w.meaning) + " · " : "") +
+              (isToday ? "오늘" : dayLabel(dayKey(new Date(w.createdAt)))) + "</span>" +
+            (w.plays ? '<i class="cnt">🔊 ' + w.plays + "</i>" : "") +
+          "</div>" +
         "</div>" +
         '<div class="wacts">' +
           '<button class="icon" data-act="play" title="발음 듣기">🔊</button>' +
@@ -931,7 +1094,10 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   /* ---------- 모두 듣기 (활성 탭 기준) ---------- */
   function speakAll(){
     var items;
-    if(curTab() === "recent"){
+    if(curTab() === "review"){
+      items = reviewItems().map(function(x){ return x.w; });
+      if(!items.length){ toast("복습할 단어가 없어요."); return; }
+    }else if(curTab() === "recent"){
       items = recentWords().map(function(w){ return w.word; });
       if(!items.length){ toast("담은 단어가 없어요."); return; }
     }else if(curTab() === "mine"){
@@ -993,7 +1159,7 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
   }
 
   /* ---------- 홈 화면 설치 ---------- */
-  var APP_VERSION = "2026.08.29-4";
+  var APP_VERSION = "2026.08.29-5";
   var deferredPrompt = null, diag = { sw:"확인 중", mf:"확인 중", prompt:"대기 중" };
 
   /* 카카오톡·네이버 등 앱 안의 브라우저에서는 홈 화면 설치 자체가 막혀 있다 */
@@ -1196,9 +1362,10 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
       var act = t.getAttribute("data-act");
       var word = li.getAttribute("data-w");
 
-      if(word){                                   // 단계별 목록
-        if(act === "play"){ speak(word); return; }
-        if(act === "add" && addFromDict(word)){
+      if(word){                                   // 단계별 · 복습 목록
+        if(act === "play"){ speak(word); render(); return; }
+        var m = li.getAttribute("data-m") || "";
+        if(act === "add" && addFromDict(word, m)){
           save(); render();
           if(state.settings.autoSpeak) speak(word);
           toast("내 단어장에 담았어요: " + word);
@@ -1305,6 +1472,8 @@ textarea{min-height:104px; font-family:var(--mono); font-size:12px; line-height:
     $("quizSkip").onclick = quizNext;
     $("quizInput").onkeydown = function(e){ if(e.key === "Enter") quizCheck(); };
 
+    $("playStat").onclick = function(){ showTotalPlays = !showTotalPlays; renderPlays(); };
+    $("playStat").style.cursor = "pointer";
     $("themeBtn").onclick = function(){
       var now = document.documentElement.getAttribute("data-theme");
       var next = now === "dark" ? "light" : "dark";
