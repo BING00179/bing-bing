@@ -125,9 +125,38 @@ class BacktestConfig:
     exit_on_ma_break: int = 0         # 종가가 N일선 아래로 마감하면 청산. 0 = 사용 안 함
 
     max_hold_days: int = 20           # 최대 보유 거래일
-    commission_per_trade: float = 1.0  # 편도 수수료 ($)
+
+    # ── 거래비용 ──
+    # 정액과 정률을 둘 다 지원합니다. 미국은 건당 정액 수수료가 흔하고,
+    # 국내는 거래대금 대비 정률입니다. 증권거래세는 매도할 때만 붙습니다.
+    commission_per_trade: float = 1.0  # 편도 정액 수수료 (통화 단위)
+    commission_pct: float = 0.0       # 편도 정률 수수료 (거래대금 대비 %)
+    sell_tax_pct: float = 0.0         # 매도세 (%, 매도할 때만)
     slippage_pct: float = 0.1         # 편도 슬리피지 (%)
-    capital_per_trade: float = 10_000.0  # 1회 매매 투입 금액 ($)
+
+    # ⚠️ 통화 단위 주의. 미국장은 달러, 국내장은 원입니다.
+    # 국내장에서 이 값이 주가보다 작으면 살 수 있는 주식이 0주가 되어
+    # 매매가 한 건도 성립하지 않습니다.
+    capital_per_trade: float = 10_000.0  # 1회 매매 투입 금액
+
+
+@dataclass
+class BacktestKrConfig(BacktestConfig):
+    """국내장 백테스트 설정.
+
+    통화가 원이고 거래비용 구조가 달라서 기본값을 따로 둡니다.
+
+    비용 기본값은 2026년 8월 기준의 흔한 수준을 넣은 것입니다.
+    증권거래세율은 해마다 바뀌므로 반드시 현재 요율을 확인하고
+    본인 증권사 수수료로 맞춰 주세요. 비용을 낮게 잡으면 백테스트가
+    실제보다 좋게 나옵니다.
+    """
+
+    commission_per_trade: float = 0.0     # 국내는 정액이 아니라 정률
+    commission_pct: float = 0.015         # 편도 수수료율 (%)
+    sell_tax_pct: float = 0.18            # 증권거래세 (%, 매도 시)
+    slippage_pct: float = 0.15            # 편도 슬리피지 (%)
+    capital_per_trade: float = 10_000_000.0  # 1회 투입 1천만원
 
 
 @dataclass
@@ -138,6 +167,7 @@ class Config:
     scanner_b_kr: ScannerBKrConfig = field(default_factory=ScannerBKrConfig)
     market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
+    backtest_kr: BacktestKrConfig = field(default_factory=BacktestKrConfig)
     universe_file: str = "data/universe.txt"
     universe_file_kr: str = "data/universe_kr.txt"
     output_dir: str = "output"
@@ -155,6 +185,7 @@ class Config:
             scanner_b_kr=ScannerBKrConfig(**raw.get("scanner_b_kr", {})),
             market_filter=MarketFilterConfig(**raw.get("market_filter", {})),
             backtest=BacktestConfig(**raw.get("backtest", {})),
+            backtest_kr=BacktestKrConfig(**raw.get("backtest_kr", {})),
             universe_file=raw.get("universe_file", "data/universe.txt"),
             universe_file_kr=raw.get("universe_file_kr", "data/universe_kr.txt"),
             output_dir=raw.get("output_dir", "output"),

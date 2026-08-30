@@ -229,3 +229,64 @@ def test_ma_break_exit():
     trades = run("TEST", daily, cfg, SB)
     assert trades
     assert any(t.exit_reason == "ma_break" for t in trades)
+
+
+# ── 거래비용과 통화 단위 ──
+
+
+def test_all_signals_skipped_when_capital_is_below_share_price():
+    """투입금이 주가보다 작으면 매매가 0건이 됩니다.
+
+    국내장 백테스트가 0건으로 나왔던 실제 원인입니다. 미국장용
+    달러 금액(10,000)을 원화로 그대로 읽어서, 7만원짜리 주식을
+    한 주도 못 사고 신호를 전부 버렸습니다.
+    """
+    daily = make_daily(rising(60, start=70_000.0, step=700.0))
+    cfg = BacktestConfig(capital_per_trade=10_000.0)     # 주가보다 작음
+    assert run("TEST", daily, cfg, SB) == []
+
+    enough = BacktestConfig(capital_per_trade=10_000_000.0)
+    assert run("TEST", daily, enough, SB), "투입금을 키우면 매매가 성립해야 합니다"
+
+
+def test_percent_commission_is_charged_on_both_sides():
+    daily = make_daily(rising(60, step=5.0))
+    free = run("TEST", daily, TRAILING, SB)
+    charged = run(
+        "TEST", daily,
+        BacktestConfig(commission_per_trade=0.0, commission_pct=0.5,
+                       take_profit_pct=0.0, trailing_stop_pct=7.0,
+                       slippage_pct=0.0, max_hold_days=20),
+        SB,
+    )
+    assert free and charged
+    assert summarize(charged)["total_pnl"] < summarize(free)["total_pnl"]
+
+
+def test_sell_tax_is_charged_only_once():
+    """증권거래세는 매도할 때만 붙습니다.
+
+    같은 요율을 왕복 수수료로 넣었을 때보다 손실이 작아야 합니다.
+    """
+    daily = make_daily(rising(60, step=5.0))
+    base = BacktestConfig(commission_per_trade=0.0, take_profit_pct=0.0,
+                          trailing_stop_pct=7.0, slippage_pct=0.0, max_hold_days=20)
+    taxed = run("TEST", daily, BacktestConfig(**{**base.__dict__, "sell_tax_pct": 0.5}), SB)
+    both_ways = run("TEST", daily, BacktestConfig(**{**base.__dict__, "commission_pct": 0.5}), SB)
+
+    assert taxed and both_ways
+    assert summarize(taxed)["total_pnl"] > summarize(both_ways)["total_pnl"]
+
+
+def test_korean_defaults_can_buy_a_typical_korean_share():
+    """국내장 기본 설정으로 실제 주가대의 종목을 살 수 있어야 합니다."""
+    from src.config import BacktestKrConfig
+
+    kr = BacktestKrConfig()
+    for share_price in (5_000, 71_000, 400_000):
+        assert kr.capital_per_trade // share_price >= 1, (
+            f"{share_price:,}원 주식을 한 주도 못 삽니다 "
+            f"(투입금 {kr.capital_per_trade:,.0f}원)"
+        )
+    assert kr.sell_tax_pct > 0, "국내장은 매도세가 반영돼야 합니다"
+    assert kr.commission_pct > 0, "국내장 수수료는 정률입니다"

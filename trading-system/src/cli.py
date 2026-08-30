@@ -386,7 +386,7 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
             print(f"  ! {code}: 일봉 {len(daily)}개로는 200일선 검증이 어렵습니다.")
             continue
 
-        trades = bt_module.run(code, daily, cfg.backtest, cfg.scanner_b)
+        trades = bt_module.run(code, daily, cfg.backtest_kr, cfg.scanner_b)
         all_trades.extend(trades)
         stats = bt_module.summarize(trades)
         stats["code"] = code
@@ -398,11 +398,19 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
         )
 
     total = bt_module.summarize(all_trades)
+    if total["trades"] == 0 and per_code:
+        print(
+            "\n⚠️ 매매가 한 건도 없습니다. 전략 결과가 아니라 설정 문제일 수 있습니다.\n"
+            f"   지금 투입금은 {cfg.backtest_kr.capital_per_trade:,.0f}원입니다. "
+            "주가보다 작으면 한 주도 못 사서 신호가 전부 무시됩니다.\n"
+            "   config.json 의 backtest_kr.capital_per_trade 를 확인하세요."
+        )
+
     out = _output_dir(cfg)
     bt_module.trades_to_frame(all_trades).to_csv(out / "kr_backtest_trades.csv", index=False)
     pd.DataFrame(per_code).to_csv(out / "kr_backtest_by_code.csv", index=False)
 
-    bt = cfg.backtest
+    bt = cfg.backtest_kr
     print("\n".join([
         "", "=" * 58,
         "[국내장 백테스트 요약] Trend Join Long",
@@ -420,13 +428,14 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
         "-" * 58,
         f"  조건: 손절 {bt.stop_loss_pct}% / 익절 {bt.take_profit_pct}%"
         f" / 최대보유 {bt.max_hold_days}일",
-        f"  비용: 수수료 {bt.commission_per_trade:,.0f}원 x2 /"
-        f" 슬리피지 {bt.slippage_pct}% x2",
+        f"  투입금: 1회 {bt.capital_per_trade:,.0f}원",
+        f"  비용: 수수료 {bt.commission_pct}% x2 / 증권거래세 {bt.sell_tax_pct}%"
+        f" / 슬리피지 {bt.slippage_pct}% x2",
         "",
         "  ※ 조건 3(시가 위 유지)은 일봉 백테스트에서 빠져 있습니다.",
         "  ※ 손절·익절이 같은 날 함께 닿으면 손절로 처리했습니다.",
-        "  ※ 국내장 거래비용(증권거래세 등)은 슬리피지·수수료 설정에",
-        "     포함시켜 계산하세요. 기본값은 미국장 기준입니다.",
+        "  ※ 증권거래세율은 해마다 바뀝니다. 현재 요율과 본인 증권사",
+        "     수수료로 config.json 의 backtest_kr 을 맞춰 주세요.",
         "=" * 58,
     ]))
     print(f"\n결과 저장: {out}/kr_backtest_trades.csv")

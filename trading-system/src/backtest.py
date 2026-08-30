@@ -69,6 +69,7 @@ def run(
     signals = sig["signal"].to_numpy(dtype=bool)
     n = len(daily)
 
+    skipped_too_expensive = 0
     i = 0
     while i < n - 1:
         if not signals[i]:
@@ -83,7 +84,11 @@ def run(
 
         shares = int(bt.capital_per_trade // entry_price)
         if shares < 1:
-            i += 1                             # 주가가 투입금보다 비싸면 건너뜀
+            # 투입금이 주가보다 작으면 한 주도 못 삽니다. 이게 계속
+            # 발생하면 매매가 0건으로 나오는데, 전략이 나빠서가 아니라
+            # 설정 통화 단위가 안 맞는 경우가 대부분입니다.
+            skipped_too_expensive += 1
+            i += 1
             continue
 
         initial_stop = entry_price * (1.0 - bt.stop_loss_pct / 100.0)
@@ -127,8 +132,16 @@ def run(
 
         fill = _apply_costs(float(exit_price), "sell", bt.slippage_pct)
         gross = (fill - entry_price) * shares
-        pnl = gross - bt.commission_per_trade * 2   # 왕복 수수료
-        invested = entry_price * shares
+
+        buy_value = entry_price * shares
+        sell_value = fill * shares
+        commission = (
+            bt.commission_per_trade * 2                                  # 정액 왕복
+            + (buy_value + sell_value) * bt.commission_pct / 100.0       # 정률 왕복
+        )
+        tax = sell_value * bt.sell_tax_pct / 100.0                       # 매도세
+        pnl = gross - commission - tax
+        invested = buy_value
 
         trades.append(
             Trade(
@@ -146,6 +159,12 @@ def run(
         )
         i = exit_idx + 1                        # 청산 다음 날부터 다시 탐색
 
+    if not trades and skipped_too_expensive:
+        print(
+            f"  ! {ticker}: 신호 {skipped_too_expensive}건이 나왔지만 투입금"
+            f" {bt.capital_per_trade:,.0f} 으로는 한 주도 살 수 없어 전부 건너뛰었습니다."
+            " capital_per_trade 의 통화 단위를 확인하세요."
+        )
     return trades
 
 
