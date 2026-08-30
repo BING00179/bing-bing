@@ -69,5 +69,19 @@
     "sell_tax_pct": 0.18,
     "slippage_pct": 0.15,
     "capital_per_trade": 10000000.0
+  },
+  "ranking": {
+    "enabled": true,
+    "top_n": 3,
+    "min_score": 0.0,
+    "gap_full_mark_pct": 15.0,
+    "turnover_full_mark": 100000000000.0,
+    "trend_full_mark_pct": 30.0,
+    "trend_overheat_penalty": 2.0,
+    "near_high_penalty": 20.0,
+    "weight_gap": 1.0,
+    "weight_turnover": 1.0,
+    "weight_trend": 1.5,
+    "weight_near_high": 1.5
   }
 }

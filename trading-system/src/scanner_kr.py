@@ -26,8 +26,10 @@ import pandas as pd
 from .config import ScannerAKrConfig, ScannerBConfig
 from .data import DataUnavailable
 from .data_kr import fetch_daily, normalize_code, split_today
+from .config import RankingConfig
 from .indicators import sma, trend_aligned
 from .markets import KR
+from .ranking import Score, score as compute_score
 
 
 @dataclass
@@ -64,10 +66,21 @@ class SignalKr:
     open_price: float
     today_high: float
     failed: list[str]
+    gap_pct: float = 0.0        # 전일 종가 대비 시가 상승률
+    turnover: float = 0.0       # 오늘 거래대금 (원)
+    score: Score | None = None  # 순위 점수 (매기지 않았으면 None)
 
     @property
     def passed(self) -> bool:
         return not self.failed
+
+    def as_line(self, rank: int | None = None) -> str:
+        label = f"{self.code} {self.name}".strip()
+        head = f"{rank}. " if rank else "   "
+        line = f"{head}{label:<16} {self.price:>9,.0f}원"
+        if self.score is not None:
+            line += f"  {self.score.as_line()}"
+        return line
 
 
 def _limit_price(prev_close: float) -> float:
@@ -160,6 +173,8 @@ def evaluate_kr(
     open_price: float,
     cfg: ScannerBConfig,
     name: str = "",
+    gap_pct: float = 0.0,
+    turnover: float = 0.0,
 ) -> SignalKr:
     """Trend Join Long 5조건 판정 (국내장판).
 
@@ -202,6 +217,8 @@ def evaluate_kr(
         open_price=open_price,
         today_high=today_high,
         failed=[k for k, ok in checks.items() if not ok],
+        gap_pct=gap_pct,
+        turnover=turnover,
     )
 
 
@@ -219,14 +236,20 @@ def scan_b_code(
     if history.empty:
         raise DataUnavailable(f"{code}: 전일까지의 일봉이 없습니다.")
 
+    prev_close = float(history["close"].iloc[-1])
+    open_price = float(current["open"])
+    gap = (open_price - prev_close) / prev_close * 100.0 if prev_close > 0 else 0.0
+
     return evaluate_kr(
         code=code,
         history=history,
         price=float(current["close"]),
         today_high=float(current["high"]),
-        open_price=float(current["open"]),
+        open_price=open_price,
         cfg=cfg,
         name=(names or {}).get(code, ""),
+        gap_pct=gap,
+        turnover=float(current["close"] * current["volume"]),
     )
 
 
@@ -250,6 +273,24 @@ def scan_b(
         if result.passed:
             passed.append(result)
     return passed, errors
+
+
+def rank(results: list[SignalKr], cfg: RankingConfig) -> list[SignalKr]:
+    """점수를 매겨 높은 순으로 정렬합니다. 목록에서 빼지는 않습니다."""
+    if not cfg.enabled:
+        return results
+    for r in results:
+        r.score = compute_score(
+            gap_pct=r.gap_pct,
+            turnover=r.turnover,
+            price=r.price,
+            sma_slow=r.sma_slow,
+            today_high=r.today_high,
+            cfg=cfg,
+        )
+    kept = [r for r in results if r.score is None or r.score.total >= cfg.min_score]
+    kept.sort(key=lambda r: (r.score.total if r.score else 0.0), reverse=True)
+    return kept
 
 
 def to_frame_a(hits: list[GapHitKr]) -> pd.DataFrame:
@@ -281,7 +322,11 @@ def format_report_a(
 
 
 def format_report_b(
-    results: list[SignalKr], when: str, errors: list[str] | None = None, scanned: int = 0
+    results: list[SignalKr],
+    when: str,
+    errors: list[str] | None = None,
+    scanned: int = 0,
+    top_n: int = 3,
 ) -> str:
     errors = errors or []
     header = f"[국내 전략 스캐너 · Trend Join Long] {when}"
@@ -296,13 +341,32 @@ def format_report_b(
         return line + (f"\n(조회 실패 {len(errors)}종목)" if errors else "")
 
     lines = [header, f"매수 신호 {len(results)}종목", ""]
-    for r in results:
-        label = f"{r.code} {r.name}".strip()
-        lines.append(
-            f"{label:<16} {r.price:>9,.0f}원  "
-            f"전일고가 {r.prev_high:,.0f} / 200MA {r.sma_slow:,.0f}"
-        )
+
+    ranked = results[0].score is not None if results else False
+    if ranked and top_n > 0:
+        top = results[:top_n]
+        rest = results[top_n:]
+
+        lines.append(f"⭐ 추천 상위 {len(top)}종목")
+        lines += [r.as_line(i) for i, r in enumerate(top, 1)]
+
+        if rest:
+            lines += ["", f"── 나머지 조건 통과 {len(rest)}종목 ──"]
+            lines += [r.as_line(i) for i, r in enumerate(rest, len(top) + 1)]
+    else:
+        for r in results:
+            label = f"{r.code} {r.name}".strip()
+            lines.append(
+                f"{label:<16} {r.price:>9,.0f}원  "
+                f"전일고가 {r.prev_high:,.0f} / 200MA {r.sma_slow:,.0f}"
+            )
+
     if errors:
         lines += ["", f"(조회 실패 {len(errors)}종목)"]
-    lines += ["", "※ 신호일 뿐 매매 권유가 아닙니다. 최종 판단은 본인 기준으로."]
+    lines += [
+        "",
+        "※ 점수는 같은 조건을 통과한 것들 중 상대적으로 뚜렷한 쪽을",
+        "   고르는 장치입니다. 점수가 높다고 더 오른다는 근거는 없습니다.",
+        "※ 신호일 뿐 매매 권유가 아닙니다. 최종 판단은 본인 기준으로.",
+    ]
     return "\n".join(lines)

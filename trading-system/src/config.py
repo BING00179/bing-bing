@@ -75,6 +75,36 @@ class ScannerBConfig:
 
 
 @dataclass
+class RankingConfig:
+    """신호 점수와 상위 몇 개만 알릴지.
+
+    조건을 통과한 종목이 여럿이면 전부 사는 대신 점수 순으로
+    상위 top_n 개만 알림으로 보냅니다. 자본이 흩어지지 않고
+    거래 횟수도 줄어듭니다.
+
+    ⚠️ 점수가 높다고 더 오른다는 근거는 없습니다. 같은 조건을
+    통과한 것들 중 상대적으로 뚜렷한 쪽을 고르는 장치일 뿐입니다.
+    """
+
+    enabled: bool = True
+    top_n: int = 3                    # 하루에 알릴 최대 종목 수
+    min_score: float = 0.0            # 이 점수 미만은 아예 제외
+
+    # 각 항목이 만점을 받는 기준
+    gap_full_mark_pct: float = 15.0        # 갭 15% 면 만점
+    turnover_full_mark: float = 100_000_000_000.0  # 거래대금 1000억이면 만점
+    trend_full_mark_pct: float = 30.0      # 200일선 대비 +30% 면 만점
+    trend_overheat_penalty: float = 2.0    # 그 위로는 1%p 당 2점 감점
+    near_high_penalty: float = 20.0        # 고가에서 1% 멀어질 때마다 20점 감점
+
+    # 가중치 (합이 1일 필요는 없습니다)
+    weight_gap: float = 1.0
+    weight_turnover: float = 1.0
+    weight_trend: float = 1.5
+    weight_near_high: float = 1.5
+
+
+@dataclass
 class MarketFilterConfig:
     """시장 필터 기준값.
 
@@ -166,6 +196,7 @@ class Config:
     scanner_a_kr: ScannerAKrConfig = field(default_factory=ScannerAKrConfig)
     scanner_b_kr: ScannerBKrConfig = field(default_factory=ScannerBKrConfig)
     market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
+    ranking: RankingConfig = field(default_factory=RankingConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     backtest_kr: BacktestKrConfig = field(default_factory=BacktestKrConfig)
     universe_file: str = "data/universe.txt"
@@ -184,6 +215,7 @@ class Config:
             scanner_a_kr=ScannerAKrConfig(**raw.get("scanner_a_kr", {})),
             scanner_b_kr=ScannerBKrConfig(**raw.get("scanner_b_kr", {})),
             market_filter=MarketFilterConfig(**raw.get("market_filter", {})),
+            ranking=RankingConfig(**raw.get("ranking", {})),
             backtest=BacktestConfig(**raw.get("backtest", {})),
             backtest_kr=BacktestKrConfig(**raw.get("backtest_kr", {})),
             universe_file=raw.get("universe_file", "data/universe.txt"),

@@ -336,8 +336,12 @@ def cmd_scan_kr_b(args: argparse.Namespace) -> int:
 
     print(f"국내 전략 스캔 시작 — 대상 {len(codes)}종목")
     results, errors = scanner_kr.scan_b(codes, cfg.scanner_b, names)
+    results = scanner_kr.rank(results, cfg.ranking)
 
-    report = scanner_kr.format_report_b(results, _timestamp_kr(), errors, scanned=len(codes))
+    report = scanner_kr.format_report_b(
+        results, _timestamp_kr(), errors, scanned=len(codes),
+        top_n=cfg.ranking.top_n if cfg.ranking.enabled else 0,
+    )
     report = _with_market_state(report, state, state_error)
 
     out = out_dir / f"kr_scan_b_{now_kst():%Y%m%d_%H%M}.csv"
@@ -347,6 +351,8 @@ def cmd_scan_kr_b(args: argparse.Namespace) -> int:
                 "code": r.code, "name": r.name, "price": r.price,
                 "prev_high": r.prev_high, "prev_close": r.prev_close,
                 "sma_slow": r.sma_slow, "open": r.open_price, "today_high": r.today_high,
+                "gap_pct": r.gap_pct, "turnover": r.turnover,
+                "score": r.score.total if r.score else None,
             }
             for r in results
         ]
