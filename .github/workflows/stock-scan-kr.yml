@@ -1,0 +1,95 @@
+# 국내장 종목 스캐너 — 깃허브 서버에서 자동 실행
+#
+# 내 PC 를 켜둘 필요가 없습니다. 깃허브가 대신 돌리고
+#   · 텔레그램으로 알림을 보내고
+#   · 웹페이지(stocks/)를 갱신해 저장소에 올립니다.
+#
+# ── 처음 한 번만 설정 ──
+# Settings > Secrets and variables > Actions 에 등록:
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+#
+# 웹페이지 주소는 Settings > Pages 에서 확인하세요.
+# 보통 https://<사용자>.github.io/<저장소>/stocks/ 입니다.
+
+name: 국내 종목 스캔
+
+on:
+  schedule:
+    # 깃허브 예약은 UTC 기준입니다. 한국시간 09:00~15:20 = UTC 00:00~06:20.
+    # 실제 실행 여부는 파이썬이 한국시간을 직접 보고 판단합니다.
+    - cron: "*/30 0-6 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "장 시간이 아니어도 강제 실행"
+        type: boolean
+        default: true
+
+concurrency:
+  group: stock-scan-kr
+  cancel-in-progress: false
+
+permissions:
+  contents: write        # 웹페이지를 저장소에 올리기 위해 필요
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: trading-system/requirements.txt
+
+      - name: 라이브러리 설치
+        working-directory: trading-system
+        run: pip install -r requirements.txt
+
+      - name: 시장 상태 확인
+        working-directory: trading-system
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m src.cli market --no-telegram
+
+      - name: 스캐너 A — 시가갭
+        working-directory: trading-system
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m src.cli scan-kr-a ${{ inputs.force && '--force' || '' }}
+
+      - name: 스캐너 B — 전략 조건 + 웹페이지 갱신
+        working-directory: trading-system
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m src.cli scan-kr-b --web ${{ inputs.force && '--force' || '' }}
+
+      - name: 웹페이지 저장소에 올리기
+        run: |
+          if [ -z "$(git status --porcelain stocks/)" ]; then
+            echo "바뀐 내용이 없어 올리지 않습니다."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stocks/
+          git commit -m "스캔 결과 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
+          # 다른 커밋이 먼저 올라갔을 수 있으므로 한 번 당겨서 합칩니다.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: 결과 파일 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kr-scan-${{ github.run_id }}
+          path: trading-system/output/
+          retention-days: 30
+          if-no-files-found: ignore

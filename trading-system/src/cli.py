@@ -22,6 +22,7 @@ import pandas as pd
 
 from . import backtest as bt_module
 from . import market_filter as mf_module
+from . import report_html
 from . import scanner_a, scanner_b, scanner_kr
 from .config import Config
 from .data import NY, DataUnavailable, fetch_daily, load_csv, read_universe
@@ -344,6 +345,14 @@ def cmd_scan_kr_b(args: argparse.Namespace) -> int:
     )
     report = _with_market_state(report, state, state_error)
 
+    # 웹페이지 갱신 — 깃허브가 이 파일을 저장소에 올리면 Pages 가 서비스합니다.
+    if args.web:
+        page = report_html.update(
+            _resolve(args.web_dir), _timestamp_kr(), state, results,
+            cfg.ranking.top_n if cfg.ranking.enabled else 0,
+        )
+        print(f"웹페이지 갱신: {page}")
+
     out = out_dir / f"kr_scan_b_{now_kst():%Y%m%d_%H%M}.csv"
     pd.DataFrame(
         [
@@ -512,6 +521,8 @@ def build_parser() -> argparse.ArgumentParser:
     kb.add_argument("--universe", help="종목코드 목록 파일 (없으면 스캐너 A 결과 사용)")
     kb.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
     kb.add_argument("--force", action="store_true", help="실행 시간대 밖에서도 실행")
+    kb.add_argument("--web", action="store_true", help="웹페이지(HTML) 갱신")
+    kb.add_argument("--web-dir", default="../stocks", help="웹페이지를 저장할 폴더")
     kb.set_defaults(func=cmd_scan_kr_b)
 
     m = sub.add_parser("market", help="[국내] 시장 상태만 확인")

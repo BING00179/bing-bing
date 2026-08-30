@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date
 
 import pandas as pd
@@ -26,6 +26,8 @@ import pandas as pd
 from .config import ScannerAKrConfig, ScannerBConfig
 from .data import DataUnavailable
 from .data_kr import fetch_daily, normalize_code, split_today
+from .anomaly import check as anomaly_check
+from .anomaly import fetch_supply
 from .config import RankingConfig
 from .indicators import sma, trend_aligned
 from .markets import KR
@@ -56,6 +58,21 @@ class GapHitKr:
 
 
 @dataclass
+class Check:
+    """조건 하나의 판정 근거.
+
+    통과 여부만 남기면 나중에 "왜 이 종목이 뽑혔지?" 를 확인할 수
+    없습니다. 실제로 비교한 숫자와 그 조건이 무엇을 뜻하는지를
+    함께 남깁니다.
+    """
+
+    label: str      # ① 전날 고가 돌파
+    passed: bool
+    detail: str     # 현재가 152,000원 ≥ 전날 고가 148,500원
+    why: str        # 어제 팔려던 물량을 소화하고 올라섰다는 뜻
+
+
+@dataclass
 class SignalKr:
     code: str
     name: str
@@ -66,6 +83,15 @@ class SignalKr:
     open_price: float
     today_high: float
     failed: list[str]
+    checks: list[Check] = field(default_factory=list)
+    closes: list[float] = field(default_factory=list)   # 최근 종가 (차트용)
+    sma_fast_v: float = 0.0
+    sma_mid_v: float = 0.0
+    fundamentals: object | None = None                  # Fundamentals
+    anomaly: object | None = None                       # AnomalyReport
+    supply_summary: str = ""                            # 수급 요약
+    volumes: list[float] = field(default_factory=list)
+    today_volume: float = 0.0
     gap_pct: float = 0.0        # 전일 종가 대비 시가 상승률
     turnover: float = 0.0       # 오늘 거래대금 (원)
     score: Score | None = None  # 순위 점수 (매기지 않았으면 None)
@@ -199,12 +225,53 @@ def evaluate_kr(
         trend_aligned(history["close"], cfg.sma_fast, cfg.sma_mid, cfg.sma_slow).iloc[-1]
     )
 
+    ma_fast = float(sma(history["close"], cfg.sma_fast).iloc[-1])
+    ma_mid = float(sma(history["close"], cfg.sma_mid).iloc[-1])
+
+    details = [
+        Check(
+            label="① 전날 고가 돌파",
+            passed=price >= prev_high * tol,
+            detail=f"현재가 {price:,.0f}원 vs 전날 고가 {prev_high:,.0f}원",
+            why="어제 팔려던 물량을 소화하고 그 위로 올라섰는가",
+        ),
+        Check(
+            label=f"② 전날 종가 > {cfg.sma_slow}일선",
+            passed=prev_close > sma_slow,
+            detail=f"전날 종가 {prev_close:,.0f}원 vs {cfg.sma_slow}일선 {sma_slow:,.0f}원",
+            why="장기 상승 추세 안에 있는 종목만 본다 (하락 종목의 반등은 제외)",
+        ),
+        Check(
+            label="③ 시가 위 유지",
+            passed=price >= open_price * tol,
+            detail=f"현재가 {price:,.0f}원 vs 오늘 시가 {open_price:,.0f}원",
+            why="동시호가로 정해진 시가 아래로 밀린 종목은 제외",
+        ),
+        Check(
+            label="④ 오늘 고가 갱신 중",
+            passed=price >= today_high * near_high,
+            detail=(
+                f"현재가 {price:,.0f}원 vs 오늘 고가 {today_high:,.0f}원 "
+                f"(허용 {cfg.close_near_high_pct}%)"
+            ),
+            why="지금 이 순간에도 사는 사람이 있는가",
+        ),
+        Check(
+            label="⑤ 상승 추세 정렬",
+            passed=aligned,
+            detail=(
+                f"종가 {prev_close:,.0f} > {cfg.sma_fast}일 {ma_fast:,.0f} > "
+                f"{cfg.sma_mid}일 {ma_mid:,.0f} > {cfg.sma_slow}일 {sma_slow:,.0f}"
+            ),
+            why="단기·중기·장기 이동평균이 모두 위를 향하는가 (정배열)",
+        ),
+    ]
     checks = {
-        "1_전날고가돌파": price >= prev_high * tol,
-        "2_전날종가>200MA": prev_close > sma_slow,
-        "3_시가위유지": price >= open_price * tol,
-        "4_오늘고가돌파": price >= today_high * near_high,
-        "5_상승추세정렬": aligned,
+        "1_전날고가돌파": details[0].passed,
+        "2_전날종가>200MA": details[1].passed,
+        "3_시가위유지": details[2].passed,
+        "4_오늘고가돌파": details[3].passed,
+        "5_상승추세정렬": details[4].passed,
     }
 
     return SignalKr(
@@ -217,6 +284,11 @@ def evaluate_kr(
         open_price=open_price,
         today_high=today_high,
         failed=[k for k, ok in checks.items() if not ok],
+        checks=details,
+        closes=[float(v) for v in history["close"].tail(60)] + [price],
+        volumes=[float(v) for v in history["volume"].tail(20)],
+        sma_fast_v=ma_fast,
+        sma_mid_v=ma_mid,
         gap_pct=gap_pct,
         turnover=turnover,
     )
@@ -240,7 +312,7 @@ def scan_b_code(
     open_price = float(current["open"])
     gap = (open_price - prev_close) / prev_close * 100.0 if prev_close > 0 else 0.0
 
-    return evaluate_kr(
+    signal = evaluate_kr(
         code=code,
         history=history,
         price=float(current["close"]),
@@ -251,6 +323,8 @@ def scan_b_code(
         gap_pct=gap,
         turnover=float(current["close"] * current["volume"]),
     )
+    signal.today_volume = float(current["volume"])
+    return signal
 
 
 def scan_b(
@@ -272,6 +346,37 @@ def scan_b(
             continue
         if result.passed:
             passed.append(result)
+
+    if passed:
+        try:
+            from .fundamentals import fetch_bulk  # noqa: PLC0415
+
+            info = fetch_bulk([r.code for r in passed])
+            for r in passed:
+                r.fundamentals = info.get(r.code)
+                if r.fundamentals is not None and not r.name:
+                    r.name = r.fundamentals.name
+        except Exception as exc:  # noqa: BLE001 - 부가 정보라 실패해도 진행
+            print(f"  ! 기업 정보 조회 실패 (스캔은 계속): {exc}")
+
+    # 이상 징후 점검. 매수 여부를 가르지는 않고, 사람이 보고 판단할
+    # 재료로만 붙입니다.
+    for r in passed:
+        cap = getattr(r.fundamentals, "market_cap", 0.0) or 0.0
+        r.anomaly = anomaly_check(
+            closes=r.closes,
+            volumes=r.volumes,
+            today_volume=r.today_volume,
+            turnover=r.turnover,
+            market_cap=cap,
+            price=r.price,
+            sma_slow=r.sma_slow,
+        )
+        summary, flag = fetch_supply(r.code)
+        r.supply_summary = summary
+        if flag is not None:
+            r.anomaly.flags.append(flag)
+
     return passed, errors
 
 
