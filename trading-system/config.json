@@ -16,12 +16,44 @@
   },
   "backtest": {
     "stop_loss_pct": 3.0,
-    "take_profit_pct": 6.0,
-    "max_hold_days": 5,
+    "take_profit_pct": 0.0,
+    "trailing_stop_pct": 7.0,
+    "exit_on_ma_break": 0,
+    "max_hold_days": 20,
     "commission_per_trade": 1.0,
     "slippage_pct": 0.1,
     "capital_per_trade": 10000.0
   },
   "universe_file": "data/universe.txt",
-  "output_dir": "output"
+  "output_dir": "output",
+  "scanner_a_kr": {
+    "min_gap_pct": 5.0,
+    "min_price": 1000.0,
+    "min_turnover": 1000000000.0,
+    "exclude_limit_up": true,
+    "max_results": 20,
+    "run_start_kst": "09:00",
+    "run_end_kst": "15:20"
+  },
+  "scanner_b_kr": {
+    "run_start_kst": "10:00",
+    "run_end_kst": "15:20"
+  },
+  "market_filter": {
+    "enabled": true,
+    "index_code": "KS11",
+    "index_name": "코스피",
+    "sma_slow": 200,
+    "rsi_window": 14,
+    "rsi_oversold": 30.0,
+    "rsi_overbought": 75.0,
+    "drawdown_window": 252,
+    "drawdown_caution_pct": 10.0,
+    "drawdown_danger_pct": 20.0,
+    "volatility_window": 20,
+    "volatility_caution_pct": 25.0,
+    "volatility_danger_pct": 35.0,
+    "block_on_caution": false
+  },
+  "universe_file_kr": "data/universe_kr.txt"
 }

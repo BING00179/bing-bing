@@ -20,9 +20,22 @@ from zoneinfo import ZoneInfo
 NY = ZoneInfo("America/New_York")
 
 
+SEOUL = ZoneInfo("Asia/Seoul")
+
+
 def now_et() -> datetime:
     """지금의 미국 동부시간."""
     return datetime.now(NY)
+
+
+def now_kst() -> datetime:
+    """지금의 한국시간."""
+    return datetime.now(SEOUL)
+
+
+def now_in(timezone: str) -> datetime:
+    """주어진 시간대의 현재 시각."""
+    return datetime.now(ZoneInfo(timezone))
 
 
 def parse_hhmm(value: str) -> time:

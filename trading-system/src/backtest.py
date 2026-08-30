@@ -10,6 +10,9 @@
   * 손절과 익절이 같은 날 둘 다 닿았으면 '손절 먼저'로 처리합니다.
     일봉만으로는 어느 쪽이 먼저였는지 알 수 없으므로 불리한 쪽을 택합니다.
   * 한 종목에서 포지션이 겹치지 않습니다(청산 전 재진입 없음).
+  * 추격 손절선은 '어제까지의 최고가'로 계산합니다. 오늘 장중에
+    찍은 고가를 오늘의 손절선에 쓰면, 하루 안에 고점을 찍고 되돌린
+    움직임을 미리 알고 판 셈이 되어 결과가 부풀려집니다.
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ import numpy as np
 import pandas as pd
 
 from .config import BacktestConfig, ScannerBConfig
+from .indicators import sma
 from .strategy import signals_from_daily
 
 
@@ -53,6 +57,10 @@ def run(
     sig = signals_from_daily(daily, sb)
     trades: list[Trade] = []
 
+    ma_break = None
+    if bt.exit_on_ma_break > 0:
+        ma_break = sma(daily["close"], bt.exit_on_ma_break).to_numpy(dtype=float)
+
     opens = daily["open"].to_numpy(dtype=float)
     highs = daily["high"].to_numpy(dtype=float)
     lows = daily["low"].to_numpy(dtype=float)
@@ -78,21 +86,39 @@ def run(
             i += 1                             # 주가가 투입금보다 비싸면 건너뜀
             continue
 
-        stop_price = entry_price * (1.0 - bt.stop_loss_pct / 100.0)
-        target_price = entry_price * (1.0 + bt.take_profit_pct / 100.0)
+        initial_stop = entry_price * (1.0 - bt.stop_loss_pct / 100.0)
+        use_target = bt.take_profit_pct > 0
+        use_trailing = bt.trailing_stop_pct > 0
+        target_price = (
+            entry_price * (1.0 + bt.take_profit_pct / 100.0) if use_target else None
+        )
 
         exit_idx = None
         exit_price = None
         exit_reason = ""
         last_idx = min(entry_idx + bt.max_hold_days - 1, n - 1)
+        peak = entry_price                     # 진입 후 최고가 (어제까지)
 
         for j in range(entry_idx, last_idx + 1):
+            # 오늘의 손절선은 어제까지의 정보로만 정합니다.
+            stop_price = initial_stop
+            if use_trailing:
+                trail = peak * (1.0 - bt.trailing_stop_pct / 100.0)
+                stop_price = max(stop_price, trail)
+
             if lows[j] <= stop_price:          # 손절 우선(보수적)
-                exit_idx, exit_price, exit_reason = j, stop_price, "stop"
+                exit_idx = j
+                exit_price = stop_price
+                exit_reason = "trail" if use_trailing and stop_price > initial_stop else "stop"
                 break
-            if highs[j] >= target_price:
+            if use_target and highs[j] >= target_price:
                 exit_idx, exit_price, exit_reason = j, target_price, "target"
                 break
+            if ma_break is not None and j > entry_idx and closes[j] < ma_break[j]:
+                exit_idx, exit_price, exit_reason = j, closes[j], "ma_break"
+                break
+
+            peak = max(peak, highs[j])         # 다음 날 손절선에 반영
 
         if exit_idx is None:
             exit_idx = last_idx

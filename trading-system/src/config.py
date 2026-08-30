@@ -28,6 +28,34 @@ class ScannerAConfig:
 
 
 @dataclass
+class ScannerAKrConfig:
+    """국내장 시가갭 스캐너 조건.
+
+    미국판과 두 가지가 다릅니다.
+      * 갭 기준: 프리마켓 체결가가 아니라 동시호가로 정해진 '시가'
+      * 유동성 기준: 거래량(주)이 아니라 거래대금(원)
+        국내는 주가 편차가 커서 1만원짜리 10만주와 100만원짜리
+        1천주가 전혀 다른 의미라, 거래대금이 실질적인 기준입니다.
+    """
+
+    min_gap_pct: float = 5.0          # 전일 종가 대비 시가 상승률 하한 (%)
+    min_price: float = 1_000.0        # 주가 하한 (원) — 동전주 제외
+    min_turnover: float = 1_000_000_000.0  # 거래대금 하한 (원, 기본 10억)
+    exclude_limit_up: bool = True     # 상한가 종목 제외 (매수 체결이 안 됨)
+    max_results: int = 20
+    run_start_kst: str = "09:00"      # 이 시간대(KST) 밖에서는 실행하지 않음
+    run_end_kst: str = "15:20"
+
+
+@dataclass
+class ScannerBKrConfig:
+    """국내장 전략 스캐너 실행 시간대."""
+
+    run_start_kst: str = "10:00"
+    run_end_kst: str = "15:20"
+
+
+@dataclass
 class ScannerBConfig:
     """전략 스캐너(스캐너 B) — Trend Join Long 조건."""
 
@@ -47,6 +75,31 @@ class ScannerBConfig:
 
 
 @dataclass
+class MarketFilterConfig:
+    """시장 필터 기준값.
+
+    "지금 시장이 살 만한가"를 판정합니다. 기준을 빡빡하게 잡으면
+    신호가 거의 안 나오고, 느슨하게 잡으면 필터가 무의미해집니다.
+    아래 값은 흔히 쓰는 출발점일 뿐 최적화된 값이 아닙니다.
+    """
+
+    enabled: bool = True
+    index_code: str = "KS11"          # 코스피 지수 (코스닥은 KQ11)
+    index_name: str = "코스피"
+    sma_slow: int = 200               # 지수 장기 추세선
+    rsi_window: int = 14
+    rsi_oversold: float = 30.0
+    rsi_overbought: float = 75.0
+    drawdown_window: int = 252        # 고점 기준 구간 (약 1년)
+    drawdown_caution_pct: float = 10.0
+    drawdown_danger_pct: float = 20.0
+    volatility_window: int = 20
+    volatility_caution_pct: float = 25.0
+    volatility_danger_pct: float = 35.0
+    block_on_caution: bool = False    # '주의'에서도 신호를 막을지
+
+
+@dataclass
 class BacktestConfig:
     """백테스트 실행 조건.
 
@@ -55,8 +108,23 @@ class BacktestConfig:
     """
 
     stop_loss_pct: float = 3.0        # 진입가 대비 손절 폭 (%)
-    take_profit_pct: float = 6.0      # 진입가 대비 익절 폭 (%)
-    max_hold_days: int = 5            # 최대 보유 거래일
+
+    # ── 청산 방식 두 가지 ──
+    # take_profit_pct: 정해진 이익률에 닿으면 판다 (고정 익절)
+    # trailing_stop_pct: 최고가에서 이만큼 밀리면 판다 (추격 손절)
+    #
+    # 추세추종은 "이익은 끝까지 끌고 가고, 꺾이면 나온다"가 핵심이라
+    # 고정 익절과 상성이 나쁩니다. +6% 에서 자동으로 팔면 20% 갈
+    # 종목도 6% 에서 끊깁니다. 추격 손절을 켜면 오르는 동안은 계속
+    # 따라 올라가고, 고점에서 정해진 폭만큼 밀릴 때 나옵니다.
+    #
+    # 0 으로 두면 그 방식은 사용하지 않습니다. 둘 다 켜도 되고,
+    # 둘 다 0 이면 최대보유일까지 들고 갑니다.
+    take_profit_pct: float = 0.0      # 고정 익절 (%). 0 = 사용 안 함
+    trailing_stop_pct: float = 7.0    # 추격 손절 (%). 0 = 사용 안 함
+    exit_on_ma_break: int = 0         # 종가가 N일선 아래로 마감하면 청산. 0 = 사용 안 함
+
+    max_hold_days: int = 20           # 최대 보유 거래일
     commission_per_trade: float = 1.0  # 편도 수수료 ($)
     slippage_pct: float = 0.1         # 편도 슬리피지 (%)
     capital_per_trade: float = 10_000.0  # 1회 매매 투입 금액 ($)
@@ -66,8 +134,12 @@ class BacktestConfig:
 class Config:
     scanner_a: ScannerAConfig = field(default_factory=ScannerAConfig)
     scanner_b: ScannerBConfig = field(default_factory=ScannerBConfig)
+    scanner_a_kr: ScannerAKrConfig = field(default_factory=ScannerAKrConfig)
+    scanner_b_kr: ScannerBKrConfig = field(default_factory=ScannerBKrConfig)
+    market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     universe_file: str = "data/universe.txt"
+    universe_file_kr: str = "data/universe_kr.txt"
     output_dir: str = "output"
 
     @classmethod
@@ -79,8 +151,12 @@ class Config:
         return cls(
             scanner_a=ScannerAConfig(**raw.get("scanner_a", {})),
             scanner_b=ScannerBConfig(**raw.get("scanner_b", {})),
+            scanner_a_kr=ScannerAKrConfig(**raw.get("scanner_a_kr", {})),
+            scanner_b_kr=ScannerBKrConfig(**raw.get("scanner_b_kr", {})),
+            market_filter=MarketFilterConfig(**raw.get("market_filter", {})),
             backtest=BacktestConfig(**raw.get("backtest", {})),
             universe_file=raw.get("universe_file", "data/universe.txt"),
+            universe_file_kr=raw.get("universe_file_kr", "data/universe_kr.txt"),
             output_dir=raw.get("output_dir", "output"),
         )
 
