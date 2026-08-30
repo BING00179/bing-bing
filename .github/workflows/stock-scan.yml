@@ -19,7 +19,13 @@ on:
     # 실제 실행 여부는 파이썬이 ET 를 직접 보고 판단합니다.
     #   ET 08:30~15:05  =  서머타임 UTC 12:30~19:05 / 겨울 UTC 13:30~20:05
     - cron: "*/30 12-20 * * 1-5"
-  workflow_dispatch:      # Actions 탭에서 손으로 즉시 실행할 때
+  # Actions 탭에서 손으로 즉시 실행할 때
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "실행 시간대(평일 미국 장중)를 무시하고 강제 실행"
+        type: boolean
+        default: true
 
 # 앞 실행이 아직 안 끝났으면 새로 시작하지 않습니다(중복 알림 방지).
 concurrency:
@@ -47,19 +53,28 @@ jobs:
       - name: 라이브러리 설치
         run: pip install -r requirements.txt
 
+      # 손으로 실행할 때만. 텔레그램 토큰·채팅 ID 가 제대로 등록됐는지
+      # 스캔 결과와 무관하게 바로 확인합니다.
+      - name: 텔레그램 연결 확인
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m src.cli test-telegram
+
       - name: 스캐너 A — 프리마켓 갭
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           BENZINGA_API_KEY: ${{ secrets.BENZINGA_API_KEY }}
-        run: python -m src.cli scan-a
+        run: python -m src.cli scan-a ${{ inputs.force && '--force' || '' }}
 
       # 같은 실행 안에서 이어지므로 스캐너 B 가 A 의 결과 파일을 그대로 씁니다.
       - name: 스캐너 B — 전략 조건 필터링
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m src.cli scan-b
+        run: python -m src.cli scan-b ${{ inputs.force && '--force' || '' }}
 
       - name: 결과 파일 보관
         if: always()
