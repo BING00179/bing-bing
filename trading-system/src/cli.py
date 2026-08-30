@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +23,8 @@ import pandas as pd
 
 from . import backtest as bt_module
 from . import market_filter as mf_module
+from . import notify_policy
+from . import watchlist as wl_module
 from . import report_html
 from . import scanner_a, scanner_b, scanner_kr
 from .config import Config
@@ -293,7 +296,21 @@ def cmd_scan_kr_a(args: argparse.Namespace) -> int:
     scanner_kr.to_frame_a(hits).to_csv(out, index=False)
     print(f"\n결과 저장: {out}")
 
-    _notify(report, not args.no_telegram)
+    # 스캐너 A 는 시장 판정이 바뀔 때만 알립니다. 30분마다 같은 내용을
+    # 보내면 알림을 꺼버리게 되고, 정작 진짜 신호를 놓칩니다.
+    web_dir = _resolve(args.web_dir)
+    today = now_kst().strftime("%Y-%m-%d")
+    st = notify_policy.NotifyState.load(web_dir, today)
+    verdict = state.verdict if state is not None else ""
+    changed = bool(verdict) and verdict != st.market_verdict
+
+    if changed:
+        notify_policy.commit(st, [], verdict)
+        st.save(web_dir)
+    else:
+        print("알림 생략 — 시장 판정에 변화가 없습니다.")
+
+    _notify(report, not args.no_telegram and changed)
     # 휴장일은 실패가 아닙니다. 진짜 조회 실패일 때만 실패로 끝냅니다.
     return 1 if errors and len(errors) >= max(len(codes) - closed, 1) else 0
 
@@ -372,11 +389,154 @@ def cmd_scan_kr_b(args: argparse.Namespace) -> int:
     ).to_csv(out, index=False)
     print(f"\n결과 저장: {out}")
 
-    # 시장이 위험할 때 스캐너 A 가 이미 같은 경고를 보냈습니다.
-    # B 가 또 보내면 똑같은 메시지가 두 번 옵니다.
-    duplicate_alert = state is not None and not state.tradable
-    _notify(report, not args.no_telegram and not duplicate_alert)
+    # 오늘 이미 알린 종목만 다시 뜨면 보내지 않습니다.
+    web_dir = _resolve(args.web_dir)
+    today = now_kst().strftime("%Y-%m-%d")
+    st = notify_policy.NotifyState.load(web_dir, today)
+    codes_now = [r.code for r in results]
+    decision = notify_policy.decide(st, codes_now, "")
+
+    if decision.send:
+        # 새로 뜬 종목만 앞에 따로 표시합니다.
+        fresh = ", ".join(
+            f"{r.name or r.code}" for r in results if r.code in decision.new_codes
+        )
+        report = f"🆕 새 신호: {fresh}\n\n{report}"
+        notify_policy.commit(st, codes_now, "")
+        st.save(web_dir)
+    else:
+        print(f"알림 생략 — {decision.reason}")
+
+    _notify(report, not args.no_telegram and decision.send)
     return 1 if errors and len(errors) >= max(len(codes) - closed, 1) else 0
+
+
+def cmd_watchlist(args: argparse.Namespace) -> int:
+    """장 마감 후 내일 볼 종목을 추립니다."""
+    cfg = Config.load(args.config)
+    wc = wl_module.WatchConfig(
+        sma_slow=cfg.watchlist.sma_slow, sma_mid=cfg.watchlist.sma_mid,
+        sma_fast=cfg.watchlist.sma_fast,
+        near_breakout_pct=cfg.watchlist.near_breakout_pct,
+        breakout_window=cfg.watchlist.breakout_window,
+        strong_close_pct=cfg.watchlist.strong_close_pct,
+        min_turnover=cfg.watchlist.min_turnover,
+        min_price=cfg.watchlist.min_price,
+        max_results=cfg.watchlist.max_results,
+    )
+
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+    names = _names_for(codes, path)
+    print(f"내일 관찰 후보 탐색 — 대상 {len(codes)}종목")
+
+    found: list = []
+    for code in codes:
+        try:
+            daily = fetch_daily_kr(code, years=1.5)
+        except DataUnavailable:
+            continue
+        except Exception:  # noqa: BLE001 - 한 종목 실패로 전체를 멈추지 않음
+            continue
+        cand = wl_module.evaluate(code, daily, wc, names.get(code, ""))
+        if cand:
+            found.append(cand)
+
+    ranked = wl_module.rank(found, wc)
+    report = wl_module.format_report(ranked, _timestamp_kr(), scanned=len(codes))
+
+    out = _output_dir(cfg) / f"kr_watchlist_{now_kst():%Y%m%d}.csv"
+    pd.DataFrame([
+        {"code": c.code, "name": c.name, "close": c.close,
+         "recent_high": c.recent_high, "to_breakout_pct": c.to_breakout_pct,
+         "sma_slow": c.sma_slow, "turnover": c.turnover,
+         "day_change_pct": c.day_change_pct, "reasons": " · ".join(c.reasons)}
+        for c in ranked
+    ]).to_csv(out, index=False)
+    print(f"\n결과 저장: {out}")
+
+    # 마감 요약에 함께 넣을 수 있도록 파일로도 남깁니다.
+    web_dir = _resolve(args.web_dir)
+    web_dir.mkdir(parents=True, exist_ok=True)
+    (web_dir / "watchlist.json").write_text(
+        json.dumps(
+            {
+                "date": now_kst().strftime("%Y-%m-%d"),
+                "items": [
+                    {"code": c.code, "name": c.name, "close": c.close,
+                     "to_breakout_pct": c.to_breakout_pct,
+                     "recent_high": c.recent_high,
+                     "day_change_pct": c.day_change_pct,
+                     "turnover": c.turnover, "reasons": c.reasons}
+                    for c in ranked
+                ],
+            },
+            ensure_ascii=False, indent=1,
+        ),
+        encoding="utf-8",
+    )
+
+    _notify(report, not args.no_telegram)
+    return 0
+
+
+def cmd_daily_summary(args: argparse.Namespace) -> int:
+    """장 마감 후 오늘 하루를 한 번에 정리해 보냅니다."""
+    web_dir = _resolve(args.web_dir)
+    entries = report_html.load_history(web_dir / "history.json")
+    today = now_kst().strftime("%Y-%m-%d")
+
+    entry = next((e for e in reversed(entries) if e.get("date") == today), None)
+    if entry is None:
+        print("오늘 스캔 기록이 없습니다. 요약을 보내지 않습니다.")
+        return 0
+
+    lines = [f"📋 오늘 마감 요약 — {today}"]
+
+    market = entry.get("market") or {}
+    if market:
+        mark = {"정상": "🟢", "주의": "🟡", "위험": "🔴"}.get(market.get("verdict"), "")
+        lines.append(
+            f"{mark} 시장 {market.get('verdict')} · "
+            f"{market.get('index_name')} {market.get('close', 0):,.1f} · "
+            f"고점대비 -{market.get('drawdown_pct', 0):.1f}%"
+        )
+
+    signals = entry.get("signals") or []
+    if not signals:
+        lines += ["", "오늘 매수 신호는 없었습니다."]
+    else:
+        lines += ["", f"매수 신호 {len(signals)}종목"]
+        for r in signals:
+            star = "⭐ " if r.get("recommended") else "   "
+            score = f" · {r['score']:.0f}점" if r.get("score") is not None else ""
+            lines.append(
+                f"{star}{r.get('name') or r.get('code')} "
+                f"{r.get('price', 0):,.0f}원{score}"
+            )
+
+    # 내일 관찰 후보를 함께 붙입니다.
+    watch_path = web_dir / "watchlist.json"
+    if watch_path.exists():
+        try:
+            watch = json.loads(watch_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            watch = {}
+        if watch.get("date") == today and watch.get("items"):
+            lines += ["", f"🔭 내일 관찰 후보 {len(watch['items'])}종목 (돌파 임박 순)"]
+            for item in watch["items"]:
+                lines.append(
+                    f"   {item.get('name') or item.get('code')} "
+                    f"{item.get('close', 0):,.0f}원 · "
+                    f"돌파까지 {item.get('to_breakout_pct', 0):.1f}%"
+                )
+
+    if args.url:
+        lines += ["", f"자세히: {args.url}"]
+    lines += ["", "※ 신호일 뿐 매매 권유가 아닙니다."]
+
+    _notify("\n".join(lines), not args.no_telegram)
+    return 0
 
 
 def cmd_market(args: argparse.Namespace) -> int:
@@ -542,6 +702,7 @@ def build_parser() -> argparse.ArgumentParser:
     ka.add_argument("--universe", help="종목코드 목록 파일")
     ka.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
     ka.add_argument("--force", action="store_true", help="실행 시간대 밖에서도 실행")
+    ka.add_argument("--web-dir", default="../stocks", help="알림 기록을 둘 폴더")
     ka.set_defaults(func=cmd_scan_kr_a)
 
     kb = sub.add_parser("scan-kr-b", help="[국내] 전략 스캐너 (Trend Join Long)")
@@ -556,6 +717,18 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
     m.add_argument("--detail", action="store_true", help="판정에 쓴 원본 값 표시")
     m.set_defaults(func=cmd_market)
+
+    w = sub.add_parser("watchlist", help="[국내] 내일 관찰 후보 추리기 (장 마감 후)")
+    w.add_argument("--universe", help="종목코드 목록 파일")
+    w.add_argument("--web-dir", default="../stocks", help="결과를 둘 폴더")
+    w.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
+    w.set_defaults(func=cmd_watchlist)
+
+    ds = sub.add_parser("daily-summary", help="[국내] 오늘 마감 요약 보내기")
+    ds.add_argument("--web-dir", default="../stocks", help="기록이 있는 폴더")
+    ds.add_argument("--url", default="", help="웹페이지 주소 (메시지에 첨부)")
+    ds.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
+    ds.set_defaults(func=cmd_daily_summary)
 
     kc = sub.add_parser("backtest-kr", help="[국내] 과거 데이터로 전략 검증")
     kc.add_argument("--universe", help="종목코드 목록 파일")

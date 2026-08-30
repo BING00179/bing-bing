@@ -15,9 +15,16 @@ name: 국내 종목 스캔
 
 on:
   schedule:
-    # 깃허브 예약은 UTC 기준입니다. 한국시간 09:00~15:20 = UTC 00:00~06:20.
-    # 실제 실행 여부는 파이썬이 한국시간을 직접 보고 판단합니다.
-    - cron: "*/30 0-6 * * 1-5"
+    # 깃허브 예약은 UTC 기준입니다. UTC 시각 + 9 = 한국시간.
+    # 실제 실행 여부는 파이썬이 한국시간을 직접 보고 판단하므로,
+    # 장 시간 밖에 걸린 것은 한 줄 찍고 즉시 끝납니다.
+    #
+    # 장 시작 직후와 마감 직전을 촘촘하게 잡았습니다.
+    # 갭은 09:00 동시호가로 정해지고, 그날의 진짜 방향은 마감 무렵에
+    # 나옵니다. 중간 시간대는 상대적으로 덜 중요합니다.
+    - cron: "*/10 0 * * 1-5"      # 한국시간 09:00~09:50, 10분마다 (장 시작)
+    - cron: "*/30 1-4 * * 1-5"    # 한국시간 10:00~13:30, 30분마다 (중간)
+    - cron: "*/10 5,6 * * 1-5"    # 한국시간 14:00~15:20, 10분마다 (장 마감)
   workflow_dispatch:
     inputs:
       force:
@@ -71,7 +78,43 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python -m src.cli scan-kr-b --web ${{ inputs.force && '--force' || '' }}
 
-      - name: 웹페이지 저장소에 올리기
+      # 장 마감 후 내일 볼 종목을 미리 추립니다.
+      # 장중 스캐너가 "지금 살까"를 본다면, 이쪽은 "내일 뭘 볼까"입니다.
+      - name: 내일 관찰 후보 추리기
+        if: github.event_name == 'schedule'
+        working-directory: trading-system
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          HOUR=$(TZ=Asia/Seoul date +%H)
+          MIN=$(TZ=Asia/Seoul date +%M)
+          if [ "$HOUR" = "15" ] && [ "$MIN" -ge 20 ] && [ "$MIN" -le 40 ]; then
+            python -m src.cli watchlist --no-telegram
+          else
+            echo "마감 시각이 아니므로 건너뜁니다. (현재 $HOUR:$MIN KST)"
+          fi
+
+      # 장 마감 무렵 한 번만 하루 요약을 보냅니다.
+      # 신호가 뜰 때마다 오는 알림과 별개로, 오늘 전체를 한눈에 봅니다.
+      - name: 마감 요약 보내기
+        if: github.event_name == 'schedule'
+        working-directory: trading-system
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          HOUR=$(TZ=Asia/Seoul date +%H)
+          MIN=$(TZ=Asia/Seoul date +%M)
+          # 한국시간 15:20~15:40 사이의 실행에서만 보냅니다.
+          if [ "$HOUR" = "15" ] && [ "$MIN" -ge 20 ] && [ "$MIN" -le 40 ]; then
+            python -m src.cli daily-summary \
+              --url "https://bing00179.github.io/bing-bing/stocks/"
+          else
+            echo "마감 시각이 아니므로 요약을 보내지 않습니다. (현재 $HOUR:$MIN KST)"
+          fi
+
+      - name: 웹페이지와 기록 저장소에 올리기
         run: |
           if [ -z "$(git status --porcelain stocks/)" ]; then
             echo "바뀐 내용이 없어 올리지 않습니다."
@@ -79,7 +122,7 @@ jobs:
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add stocks/
+          git add stocks/          # index.html · history.json · notified.json
           git commit -m "스캔 결과 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
           # 다른 커밋이 먼저 올라갔을 수 있으므로 한 번 당겨서 합칩니다.
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true

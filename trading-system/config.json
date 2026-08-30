@@ -83,5 +83,17 @@
     "weight_turnover": 1.0,
     "weight_trend": 1.5,
     "weight_near_high": 1.5
+  },
+  "watchlist": {
+    "enabled": true,
+    "sma_slow": 200,
+    "sma_mid": 50,
+    "sma_fast": 20,
+    "near_breakout_pct": 3.0,
+    "breakout_window": 20,
+    "strong_close_pct": 1.5,
+    "min_turnover": 1000000000.0,
+    "min_price": 1000.0,
+    "max_results": 10
   }
 }

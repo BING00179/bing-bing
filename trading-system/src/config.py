@@ -75,6 +75,27 @@ class ScannerBConfig:
 
 
 @dataclass
+class WatchlistConfig:
+    """내일 관찰 후보 조건.
+
+    장 마감 후 실행합니다. 장중 스캐너와 달리 갭 조건이 없습니다.
+    내일 갭이 뜰지는 아직 모르기 때문입니다. 대신 '돌파 직전에서
+    힘을 모은 종목' 을 찾습니다.
+    """
+
+    enabled: bool = True
+    sma_slow: int = 200
+    sma_mid: int = 50
+    sma_fast: int = 20
+    near_breakout_pct: float = 3.0     # 최근 고가에서 몇 % 이내면 돌파 임박
+    breakout_window: int = 20          # 최근 고가를 볼 기간 (거래일)
+    strong_close_pct: float = 1.5      # 종가가 당일 고가에서 몇 % 이내여야 강한 마감
+    min_turnover: float = 1_000_000_000.0
+    min_price: float = 1_000.0
+    max_results: int = 10
+
+
+@dataclass
 class RankingConfig:
     """신호 점수와 상위 몇 개만 알릴지.
 
@@ -197,6 +218,7 @@ class Config:
     scanner_b_kr: ScannerBKrConfig = field(default_factory=ScannerBKrConfig)
     market_filter: MarketFilterConfig = field(default_factory=MarketFilterConfig)
     ranking: RankingConfig = field(default_factory=RankingConfig)
+    watchlist: WatchlistConfig = field(default_factory=WatchlistConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     backtest_kr: BacktestKrConfig = field(default_factory=BacktestKrConfig)
     universe_file: str = "data/universe.txt"
@@ -216,6 +238,7 @@ class Config:
             scanner_b_kr=ScannerBKrConfig(**raw.get("scanner_b_kr", {})),
             market_filter=MarketFilterConfig(**raw.get("market_filter", {})),
             ranking=RankingConfig(**raw.get("ranking", {})),
+            watchlist=WatchlistConfig(**raw.get("watchlist", {})),
             backtest=BacktestConfig(**raw.get("backtest", {})),
             backtest_kr=BacktestKrConfig(**raw.get("backtest_kr", {})),
             universe_file=raw.get("universe_file", "data/universe.txt"),
