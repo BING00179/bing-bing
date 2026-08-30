@@ -52,9 +52,18 @@ def run(
     daily: pd.DataFrame,
     bt: BacktestConfig,
     sb: ScannerBConfig,
+    market_ok: pd.Series | None = None,
 ) -> list[Trade]:
-    """한 종목의 일봉 전체에 대해 매매를 시뮬레이션합니다."""
+    """한 종목의 일봉 전체에 대해 매매를 시뮬레이션합니다.
+
+    market_ok 를 주면 그날 시장이 살 만하지 않았던 날의 신호는
+    버립니다. 실제 시스템이 시장 필터로 신호를 막는 것과 같습니다.
+    날짜가 없는 종목(신규 상장 등)은 판정 불가로 보고 매수하지 않습니다.
+    """
     sig = signals_from_daily(daily, sb)
+    if market_ok is not None:
+        allowed = market_ok.reindex(daily.index).astype("boolean").fillna(False).astype(bool)
+        sig["signal"] = sig["signal"] & allowed
     trades: list[Trade] = []
 
     ma_break = None

@@ -609,8 +609,8 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
         )
 
     out = _output_dir(cfg)
-    bt_module.trades_to_frame(all_trades).to_csv(out / "kr_backtest_trades.csv", index=False)
-    pd.DataFrame(per_code).to_csv(out / "kr_backtest_by_code.csv", index=False)
+    bt_module.trades_to_frame(all_trades).to_csv(out / (f"kr_backtest_trades{'_filtered' if args.market_filter else ''}.csv"), index=False)
+    pd.DataFrame(per_code).to_csv(out / (f"kr_backtest_by_code{'_filtered' if args.market_filter else ''}.csv"), index=False)
 
     bt = cfg.backtest_kr
     print("\n".join([
@@ -733,6 +733,10 @@ def build_parser() -> argparse.ArgumentParser:
     kc = sub.add_parser("backtest-kr", help="[국내] 과거 데이터로 전략 검증")
     kc.add_argument("--universe", help="종목코드 목록 파일")
     kc.add_argument("--years", type=float, default=3.0, help="검증 기간 (년, 기본 3)")
+    kc.add_argument(
+        "--market-filter", action="store_true",
+        help="지수 상태가 나쁜 날의 신호는 버리고 검증",
+    )
     kc.set_defaults(func=cmd_backtest_kr)
 
     ku = sub.add_parser("kr-universe", help="[국내] 전 종목 목록 뽑기")

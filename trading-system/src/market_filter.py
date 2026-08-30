@@ -131,6 +131,45 @@ def evaluate(
     )
 
 
+def tradable_series(
+    index_daily: pd.DataFrame, cfg: MarketFilterConfig
+) -> pd.Series:
+    """날짜별로 '그날 시장이 살 만했는가' 를 계산합니다.
+
+    evaluate() 는 마지막 하루만 판정합니다. 백테스트에서는 과거 매일의
+    판정이 필요하므로, 같은 규칙을 전 구간에 한 번에 적용합니다.
+
+    ⚠️ 미래를 보지 않습니다. 각 날짜의 판정에는 그날 종가까지만
+    쓰입니다. 이동평균·고점·변동성 모두 그 시점까지의 값입니다.
+    (drawdown_from_high 와 realized_volatility 는 rolling 이라
+     그 자체로 과거만 봅니다.)
+    """
+    close = index_daily["close"]
+    ma = sma(close, cfg.sma_slow)
+    rsi_v = rsi(close, cfg.rsi_window)
+    dd = drawdown_from_high(close, cfg.drawdown_window)
+    vol = realized_volatility(close, cfg.volatility_window)
+
+    below_ma = close <= ma
+    dd_danger = dd >= cfg.drawdown_danger_pct
+    vol_danger = vol >= cfg.volatility_danger_pct
+    danger = below_ma | dd_danger | vol_danger
+
+    dd_caution = (dd >= cfg.drawdown_caution_pct) & ~dd_danger
+    vol_caution = (vol >= cfg.volatility_caution_pct) & ~vol_danger
+    rsi_caution = (rsi_v <= cfg.rsi_oversold) | (rsi_v >= cfg.rsi_overbought)
+    caution = (dd_caution | vol_caution | rsi_caution) & ~danger
+
+    if cfg.block_on_caution:
+        ok = ~(danger | caution)
+    else:
+        ok = ~danger
+
+    # 지표가 아직 안 만들어진 앞 구간은 판정 불가 → 매수하지 않습니다.
+    warmup = ma.isna() | dd.isna() | vol.isna() | rsi_v.isna()
+    return (ok & ~warmup).fillna(False).astype(bool)
+
+
 def to_row(state: MarketState) -> dict:
     row = asdict(state)
     row["reasons"] = " | ".join(state.reasons)
