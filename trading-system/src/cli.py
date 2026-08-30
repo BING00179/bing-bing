@@ -24,9 +24,26 @@ from . import backtest as bt_module
 from . import scanner_a, scanner_b
 from .config import Config
 from .data import NY, DataUnavailable, fetch_daily, load_csv, read_universe
+from .market_time import now_et, should_run
 from .notify import TelegramNotConfigured, send
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _force_utf8_output() -> None:
+    """윈도우 콘솔에서 한글·기호가 깨지거나 오류로 죽는 것을 막습니다.
+
+    윈도우의 기본 콘솔 인코딩은 cp949 라서 '⚠️' 같은 문자를 출력하면
+    UnicodeEncodeError 로 프로그램이 통째로 멈춥니다. 알림 문구 하나
+    때문에 스캔이 죽으면 안 되므로 출력 스트림을 UTF-8 로 바꿉니다.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
 
 
 def _resolve(path: str) -> Path:
@@ -54,8 +71,20 @@ def _notify(text: str, enabled: bool) -> None:
         print(f"[알림 생략] {exc}")
 
 
+def _gate(start: str, end: str, force: bool) -> bool:
+    """실행 시간대인지 확인. 아니면 이유를 찍고 False."""
+    if force:
+        return True
+    ok, reason = should_run(now_et(), start, end)
+    if not ok:
+        print(f"건너뜁니다 — {reason}. 지금 실행하려면 --force 를 붙이세요.")
+    return ok
+
+
 def cmd_scan_a(args: argparse.Namespace) -> int:
     cfg = Config.load(args.config)
+    if not _gate(cfg.scanner_a.run_start_et, cfg.scanner_a.run_end_et, args.force):
+        return 0
     universe = read_universe(_resolve(args.universe or cfg.universe_file))
     print(f"프리마켓 갭 스캔 시작 — 대상 {len(universe)}종목")
 
@@ -84,6 +113,9 @@ def _latest_scan_a(cfg: Config) -> list[str]:
 def cmd_scan_b(args: argparse.Namespace) -> int:
     cfg = Config.load(args.config)
 
+    if not _gate(cfg.scanner_b.run_start_et, cfg.scanner_b.run_end_et, args.force):
+        return 0
+
     if args.universe:
         tickers = read_universe(_resolve(args.universe))
     else:
@@ -91,13 +123,6 @@ def cmd_scan_b(args: argparse.Namespace) -> int:
         if not tickers:
             print("스캐너 A 결과가 없어 전체 티커 목록으로 대체합니다.")
             tickers = read_universe(_resolve(cfg.universe_file))
-
-    if not scanner_b.is_after_earliest_hour(cfg.scanner_b) and not args.force:
-        print(
-            f"아직 ET {cfg.scanner_b.earliest_hour_et}시 전입니다. "
-            "지금 실행하려면 --force 를 붙이세요."
-        )
-        return 1
 
     print(f"전략 스캔 시작 — 대상 {len(tickers)}종목")
     results, errors = scanner_b.scan(tickers, cfg.scanner_b)
@@ -217,12 +242,13 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--universe", help="티커 목록 파일")
     a.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
     a.add_argument("--no-news", action="store_true", help="뉴스 헤드라인 조회 생략")
+    a.add_argument("--force", action="store_true", help="실행 시간대 밖에서도 실행")
     a.set_defaults(func=cmd_scan_a)
 
     b = sub.add_parser("scan-b", help="전략 스캐너 (Trend Join Long)")
     b.add_argument("--universe", help="티커 목록 파일 (없으면 스캐너 A 결과 사용)")
     b.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
-    b.add_argument("--force", action="store_true", help="오전 10시 전에도 실행")
+    b.add_argument("--force", action="store_true", help="실행 시간대 밖에서도 실행")
     b.set_defaults(func=cmd_scan_b)
 
     c = sub.add_parser("backtest", help="과거 데이터로 전략 검증")
@@ -239,6 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_output()
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)

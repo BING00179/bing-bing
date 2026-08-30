@@ -23,6 +23,8 @@ class ScannerAConfig:
     min_price: float = 3.0            # 주가 하한 ($)
     min_premarket_volume: int = 50_000  # 프리마켓 누적 거래량 하한 (주)
     max_results: int = 20
+    run_start_et: str = "08:30"       # 이 시간대(ET) 밖에서는 실행하지 않음
+    run_end_et: str = "14:00"
 
 
 @dataclass
@@ -40,6 +42,8 @@ class ScannerBConfig:
     close_near_high_pct: float = 0.5
     earliest_hour_et: int = 10        # 이 시각(ET) 이후에만 신호 인정
     require_premarket_high: bool = True  # 조건 3 적용 여부
+    run_start_et: str = "10:00"       # 이 시간대(ET) 밖에서는 실행하지 않음
+    run_end_et: str = "15:05"
 
 
 @dataclass

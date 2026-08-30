@@ -1,0 +1,43 @@
+# trading-system 테스트 — 코드를 고칠 때마다 자동으로 돌려 깨진 곳을 잡습니다.
+
+name: 테스트
+
+on:
+  push:
+    paths:
+      - "trading-system/**"
+      - ".github/workflows/tests.yml"
+  pull_request:
+    paths:
+      - "trading-system/**"
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: trading-system
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: trading-system/requirements.txt
+
+      - name: 라이브러리 설치
+        run: pip install -r requirements.txt
+
+      - name: 테스트 실행
+        run: python -m pytest tests/ -q
+
+      - name: 백테스트가 실제로 도는지 확인 (합성 데이터)
+        run: |
+          python scripts/make_sample_data.py
+          printf 'AAPL\nMSFT\nNVDA\n' > /tmp/u.txt
+          python -m src.cli backtest --csv-dir data/daily --universe /tmp/u.txt
