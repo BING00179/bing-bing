@@ -282,9 +282,11 @@ def cmd_scan_kr_a(args: argparse.Namespace) -> int:
     state, state_error = _market_state(cfg)
 
     print(f"국내 시가갭 스캔 시작 — 대상 {len(codes)}종목")
-    hits, errors = scanner_kr.scan_a(codes, kr, names)
+    hits, errors, closed = scanner_kr.scan_a(codes, kr, names)
 
-    report = scanner_kr.format_report_a(hits, _timestamp_kr(), errors, scanned=len(codes))
+    report = scanner_kr.format_report_a(
+        hits, _timestamp_kr(), errors, scanned=len(codes), closed=closed
+    )
     report = _with_market_state(report, state, state_error)
 
     out = _output_dir(cfg) / f"kr_scan_a_{now_kst():%Y%m%d_%H%M}.csv"
@@ -292,7 +294,8 @@ def cmd_scan_kr_a(args: argparse.Namespace) -> int:
     print(f"\n결과 저장: {out}")
 
     _notify(report, not args.no_telegram)
-    return 1 if errors and len(errors) >= len(codes) else 0
+    # 휴장일은 실패가 아닙니다. 진짜 조회 실패일 때만 실패로 끝냅니다.
+    return 1 if errors and len(errors) >= max(len(codes) - closed, 1) else 0
 
 
 def _with_market_state(report: str, state, state_error: str) -> str:
@@ -324,7 +327,8 @@ def cmd_scan_kr_b(args: argparse.Namespace) -> int:
             frame = pd.read_csv(files[-1], dtype={"code": str})
             if "code" in frame.columns:
                 codes = frame["code"].astype(str).str.zfill(6).tolist()
-            print(f"스캐너 A 결과 사용: {files[-1].name}")
+            if codes:
+                print(f"스캐너 A 결과 사용: {files[-1].name} ({len(codes)}종목)")
         if not codes:
             print("스캐너 A 결과가 없어 전체 종목 목록으로 대체합니다.")
             path = _resolve(cfg.universe_file_kr)
@@ -336,11 +340,11 @@ def cmd_scan_kr_b(args: argparse.Namespace) -> int:
     state, state_error = _market_state(cfg)
 
     print(f"국내 전략 스캔 시작 — 대상 {len(codes)}종목")
-    results, errors = scanner_kr.scan_b(codes, cfg.scanner_b, names)
+    results, errors, closed = scanner_kr.scan_b(codes, cfg.scanner_b, names)
     results = scanner_kr.rank(results, cfg.ranking)
 
     report = scanner_kr.format_report_b(
-        results, _timestamp_kr(), errors, scanned=len(codes),
+        results, _timestamp_kr(), errors, scanned=len(codes), closed=closed,
         top_n=cfg.ranking.top_n if cfg.ranking.enabled else 0,
     )
     report = _with_market_state(report, state, state_error)
@@ -368,8 +372,11 @@ def cmd_scan_kr_b(args: argparse.Namespace) -> int:
     ).to_csv(out, index=False)
     print(f"\n결과 저장: {out}")
 
-    _notify(report, not args.no_telegram)
-    return 1 if errors and len(errors) >= len(codes) else 0
+    # 시장이 위험할 때 스캐너 A 가 이미 같은 경고를 보냈습니다.
+    # B 가 또 보내면 똑같은 메시지가 두 번 옵니다.
+    duplicate_alert = state is not None and not state.tradable
+    _notify(report, not args.no_telegram and not duplicate_alert)
+    return 1 if errors and len(errors) >= max(len(codes) - closed, 1) else 0
 
 
 def cmd_market(args: argparse.Namespace) -> int:
@@ -378,6 +385,26 @@ def cmd_market(args: argparse.Namespace) -> int:
     index = fetch_index(cfg.market_filter.index_code)
     state = mf_module.evaluate(index, cfg.market_filter, cfg.market_filter.index_name)
     report = f"[시장 상태] {_timestamp_kr()}\n{state.as_report()}"
+
+    if args.detail:
+        # 판정이 이상해 보일 때 원본 값을 직접 확인할 수 있게 합니다.
+        # 네이버 금융 같은 곳의 지수와 대조해 보세요.
+        closes = index["close"]
+        returns = closes.pct_change().dropna()
+        recent = returns.tail(cfg.market_filter.volatility_window)
+        print("\n── 판정에 쓴 원본 값 ──")
+        print(f"  {cfg.market_filter.index_code} 일봉 {len(closes)}개 "
+              f"({closes.index[0]:%Y-%m-%d} ~ {closes.index[-1]:%Y-%m-%d})")
+        print("  최근 5일 종가: "
+              + ", ".join(f"{v:,.2f}" for v in closes.tail(5)))
+        print(f"  {cfg.market_filter.drawdown_window}일 최고: "
+              f"{closes.tail(cfg.market_filter.drawdown_window).max():,.2f}")
+        print(f"  최근 {len(recent)}일 일간등락 최소/최대: "
+              f"{recent.min() * 100:+.2f}% / {recent.max() * 100:+.2f}%")
+        print(f"  일간등락 표준편차: {recent.std() * 100:.2f}%"
+              f"  → 연율화 {recent.std() * (252 ** 0.5) * 100:.1f}%")
+        print("  ※ 지수 값이 실제와 다르면 데이터 출처 문제입니다.")
+
     _notify(report, not args.no_telegram)
     return 0
 
@@ -527,6 +554,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     m = sub.add_parser("market", help="[국내] 시장 상태만 확인")
     m.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
+    m.add_argument("--detail", action="store_true", help="판정에 쓴 원본 값 표시")
     m.set_defaults(func=cmd_market)
 
     kc = sub.add_parser("backtest-kr", help="[국내] 과거 데이터로 전략 검증")

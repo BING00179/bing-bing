@@ -25,7 +25,7 @@ import pandas as pd
 
 from .config import ScannerAKrConfig, ScannerBConfig
 from .data import DataUnavailable
-from .data_kr import fetch_daily, normalize_code, split_today
+from .data_kr import NoTodayBar, fetch_daily, normalize_code, split_today
 from .anomaly import check as anomaly_check
 from .anomaly import fetch_supply
 from .config import RankingConfig
@@ -126,7 +126,7 @@ def scan_a_code(
     history, current = split_today(daily, today)
 
     if current is None:
-        return None                       # 오늘 봉이 없음 (휴장·거래정지 등)
+        raise NoTodayBar(f"{code}: 오늘 거래가 없습니다.")
     if history.empty:
         raise DataUnavailable(f"{code}: 전일 종가를 구할 일봉이 없습니다.")
 
@@ -172,13 +172,20 @@ def scan_a(
     cfg: ScannerAKrConfig,
     names: dict[str, str] | None = None,
     today: date | None = None,
-) -> tuple[list[GapHitKr], list[str]]:
-    """(조건 통과 종목, 조회 실패 종목)."""
+) -> tuple[list[GapHitKr], list[str], int]:
+    """(조건 통과 종목, 조회 실패 종목, 오늘 거래 없는 종목 수)."""
     hits: list[GapHitKr] = []
     errors: list[str] = []
+    closed = 0
     for code in codes:
         try:
             hit = scan_a_code(code, cfg, names, today)
+        except NoTodayBar:
+            closed += 1                   # 휴장일·거래정지. 오류가 아닙니다
+            continue
+        except NoTodayBar:
+            closed += 1                   # 휴장일·거래정지. 오류가 아닙니다
+            continue
         except DataUnavailable as exc:
             errors.append(f"{code}: {exc}")
             continue
@@ -188,7 +195,7 @@ def scan_a(
         if hit:
             hits.append(hit)
     hits.sort(key=lambda h: h.gap_pct, reverse=True)
-    return hits[: cfg.max_results], errors
+    return hits[: cfg.max_results], errors, closed
 
 
 def evaluate_kr(
@@ -304,7 +311,7 @@ def scan_b_code(
     daily = fetch_daily(code, years=2.0)
     history, current = split_today(daily, today)
     if current is None:
-        raise DataUnavailable(f"{code}: 오늘 거래가 없습니다.")
+        raise NoTodayBar(f"{code}: 오늘 거래가 없습니다.")
     if history.empty:
         raise DataUnavailable(f"{code}: 전일까지의 일봉이 없습니다.")
 
@@ -335,6 +342,7 @@ def scan_b(
 ) -> tuple[list[SignalKr], list[str]]:
     passed: list[SignalKr] = []
     errors: list[str] = []
+    closed = 0
     for code in codes:
         try:
             result = scan_b_code(code, cfg, names, today)
@@ -377,7 +385,7 @@ def scan_b(
         if flag is not None:
             r.anomaly.flags.append(flag)
 
-    return passed, errors
+    return passed, errors, closed
 
 
 def rank(results: list[SignalKr], cfg: RankingConfig) -> list[SignalKr]:
@@ -405,7 +413,11 @@ def to_frame_a(hits: list[GapHitKr]) -> pd.DataFrame:
 
 
 def format_report_a(
-    hits: list[GapHitKr], when: str, errors: list[str] | None = None, scanned: int = 0
+    hits: list[GapHitKr],
+    when: str,
+    errors: list[str] | None = None,
+    scanned: int = 0,
+    closed: int = 0,
 ) -> str:
     errors = errors or []
     header = f"[국내 시가갭 스캐너] {when}"
@@ -415,9 +427,17 @@ def format_report_a(
             f"{header}\n⚠️ {scanned}종목 전부 조회에 실패했습니다. 스캔 결과가 아닙니다.\n"
             f"첫 오류: {errors[0]}"
         )
+    if closed and scanned and closed >= scanned:
+        return f"{header}\n휴장일입니다. 오늘 거래된 종목이 없습니다."
+
     if not hits:
         line = f"{header}\n조건에 맞는 종목이 없습니다."
-        return line + (f"\n(조회 실패 {len(errors)}종목)" if errors else "")
+        extra = []
+        if errors:
+            extra.append(f"조회 실패 {len(errors)}종목")
+        if closed:
+            extra.append(f"오늘 거래 없음 {closed}종목")
+        return line + (f"\n({' · '.join(extra)})" if extra else "")
 
     lines = [header, f"조건 통과 {len(hits)}종목", ""]
     lines += [h.as_line() for h in hits]
@@ -431,6 +451,7 @@ def format_report_b(
     when: str,
     errors: list[str] | None = None,
     scanned: int = 0,
+    closed: int = 0,
     top_n: int = 3,
 ) -> str:
     errors = errors or []
@@ -441,9 +462,17 @@ def format_report_b(
             f"{header}\n⚠️ {scanned}종목 전부 조회에 실패했습니다. 스캔 결과가 아닙니다.\n"
             f"첫 오류: {errors[0]}"
         )
+    if closed and scanned and closed >= scanned:
+        return f"{header}\n휴장일입니다. 오늘 거래된 종목이 없습니다."
+
     if not results:
         line = f"{header}\n매수 신호 종목이 없습니다."
-        return line + (f"\n(조회 실패 {len(errors)}종목)" if errors else "")
+        extra = []
+        if errors:
+            extra.append(f"조회 실패 {len(errors)}종목")
+        if closed:
+            extra.append(f"오늘 거래 없음 {closed}종목")
+        return line + (f"\n({' · '.join(extra)})" if extra else "")
 
     lines = [header, f"매수 신호 {len(results)}종목", ""]
 

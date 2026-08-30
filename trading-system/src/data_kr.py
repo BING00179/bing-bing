@@ -23,6 +23,15 @@ from .data import COLUMNS, DataUnavailable
 TICKER_PATTERN = re.compile(r"^\d{6}$")
 
 
+class NoTodayBar(DataUnavailable):
+    """오늘 거래가 없습니다 — 휴장일이거나 거래정지 종목.
+
+    조회 실패와 구분해야 합니다. 휴장일에 전 종목이 이 상태가 되는데,
+    이걸 오류로 세면 '전부 조회 실패' 로 보고돼 시스템이 고장난 것처럼
+    보입니다.
+    """
+
+
 def normalize_code(value: str) -> str:
     """'5930' 이나 'A005930' 같은 입력을 '005930' 으로 맞춥니다."""
     raw = str(value).strip().upper()

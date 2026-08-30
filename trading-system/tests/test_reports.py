@@ -74,3 +74,39 @@ def test_earliest_hour_guard():
     ny = ZoneInfo("America/New_York")
     assert not scanner_b.is_after_earliest_hour(cfg, datetime(2026, 1, 2, 9, 0, tzinfo=ny))
     assert scanner_b.is_after_earliest_hour(cfg, datetime(2026, 1, 2, 10, 0, tzinfo=ny))
+
+
+# ── 휴장일은 오류가 아닙니다 ──
+
+
+def test_scanner_a_holiday_is_not_reported_as_failure():
+    from src import scanner_kr
+
+    text = scanner_kr.format_report_a([], WHEN, errors=[], scanned=14, closed=14)
+    assert "휴장일" in text
+    assert "실패" not in text
+    assert "조건에 맞는 종목이 없습니다" not in text
+
+
+def test_scanner_b_holiday_is_not_reported_as_failure():
+    from src import scanner_kr
+
+    text = scanner_kr.format_report_b([], WHEN, errors=[], scanned=14, closed=14)
+    assert "휴장일" in text
+    assert "매수 신호 종목이 없습니다" not in text
+
+
+def test_partial_suspension_is_disclosed_but_not_called_a_holiday():
+    from src import scanner_kr
+
+    text = scanner_kr.format_report_b([], WHEN, errors=[], scanned=14, closed=3)
+    assert "휴장일" not in text
+    assert "오늘 거래 없음 3종목" in text
+
+
+def test_errors_and_suspensions_are_counted_separately():
+    from src import scanner_kr
+
+    text = scanner_kr.format_report_a([], WHEN, errors=["A: 오류"], scanned=10, closed=4)
+    assert "조회 실패 1종목" in text
+    assert "오늘 거래 없음 4종목" in text
