@@ -65,6 +65,7 @@ jobs:
         run: python -m src.cli market --no-telegram
 
       - name: 스캐너 A — 시가갭
+        continue-on-error: true   # 조회 실패로 웹페이지 갱신까지 막지 않습니다
         working-directory: trading-system
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -72,6 +73,7 @@ jobs:
         run: python -m src.cli scan-kr-a ${{ inputs.force && '--force' || '' }}
 
       - name: 스캐너 B — 전략 조건 + 웹페이지 갱신
+        continue-on-error: true   # 조회 실패로 웹페이지 갱신까지 막지 않습니다
         working-directory: trading-system
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

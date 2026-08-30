@@ -183,14 +183,13 @@ def scan_a(
         except NoTodayBar:
             closed += 1                   # 휴장일·거래정지. 오류가 아닙니다
             continue
-        except NoTodayBar:
-            closed += 1                   # 휴장일·거래정지. 오류가 아닙니다
-            continue
         except DataUnavailable as exc:
             errors.append(f"{code}: {exc}")
+            print(f"  ! {code}: {exc}")
             continue
         except Exception as exc:  # noqa: BLE001 - 한 종목 실패로 전체를 멈추지 않음
             errors.append(f"{code}: 예기치 못한 오류 - {exc}")
+            print(f"  ! {code}: 예기치 못한 오류 - {exc}")
             continue
         if hit:
             hits.append(hit)
@@ -346,11 +345,16 @@ def scan_b(
     for code in codes:
         try:
             result = scan_b_code(code, cfg, names, today)
+        except NoTodayBar:
+            closed += 1                   # 휴장일·거래정지. 오류가 아닙니다
+            continue
         except DataUnavailable as exc:
             errors.append(f"{code}: {exc}")
+            print(f"  ! {code}: {exc}")
             continue
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{code}: 예기치 못한 오류 - {exc}")
+            print(f"  ! {code}: 예기치 못한 오류 - {exc}")
             continue
         if result.passed:
             passed.append(result)

@@ -311,8 +311,30 @@ def cmd_scan_kr_a(args: argparse.Namespace) -> int:
         print("알림 생략 — 시장 판정에 변화가 없습니다.")
 
     _notify(report, not args.no_telegram and changed)
-    # 휴장일은 실패가 아닙니다. 진짜 조회 실패일 때만 실패로 끝냅니다.
-    return 1 if errors and len(errors) >= max(len(codes) - closed, 1) else 0
+    return _scan_exit_code(len(codes), closed, errors)
+
+
+def _scan_exit_code(total: int, closed: int, errors: list[str]) -> int:
+    """스캔 결과를 종료 코드로.
+
+    구분해야 할 세 가지가 있습니다.
+      휴장일        오늘 거래된 종목이 없음. 정상입니다
+      일부 실패     몇 종목만 조회 안 됨. 정상 진행으로 봅니다
+      전부 실패     조회 가능했던 종목이 하나도 안 됨. 이건 문제입니다
+
+    휴장일에 실패로 끝내면 뒤따르는 웹페이지 갱신과 저장소 커밋까지
+    막힙니다. 실제로 그래서 페이지가 안 올라갔습니다.
+    """
+    scannable = total - closed
+    if scannable <= 0:
+        print(f"오늘 거래된 종목이 없습니다 ({total}종목 전부 휴장·거래정지).")
+        return 0
+    if errors and len(errors) >= scannable:
+        print(f"⚠️ 조회 가능했던 {scannable}종목이 전부 실패했습니다.")
+        return 1
+    if errors:
+        print(f"조회 실패 {len(errors)}종목 (거래된 {scannable}종목 중).")
+    return 0
 
 
 def _with_market_state(report: str, state, state_error: str) -> str:
@@ -408,7 +430,7 @@ def cmd_scan_kr_b(args: argparse.Namespace) -> int:
         print(f"알림 생략 — {decision.reason}")
 
     _notify(report, not args.no_telegram and decision.send)
-    return 1 if errors and len(errors) >= max(len(codes) - closed, 1) else 0
+    return _scan_exit_code(len(codes), closed, errors)
 
 
 def cmd_watchlist(args: argparse.Namespace) -> int:

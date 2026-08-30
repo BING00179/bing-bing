@@ -110,3 +110,38 @@ def test_errors_and_suspensions_are_counted_separately():
     text = scanner_kr.format_report_a([], WHEN, errors=["A: 오류"], scanned=10, closed=4)
     assert "조회 실패 1종목" in text
     assert "오늘 거래 없음 4종목" in text
+
+
+# ── 스캔 종료 코드 ──
+
+
+def _exit(total, closed, errors):
+    from src.cli import _scan_exit_code
+
+    return _scan_exit_code(total, closed, errors)
+
+
+def test_holiday_exits_normally():
+    """휴장일에 실패로 끝내면 웹페이지 갱신과 커밋까지 막힙니다."""
+    assert _exit(14, 14, []) == 0
+
+
+def test_all_scannable_stocks_failing_is_an_error():
+    assert _exit(14, 0, [f"{i}: 오류" for i in range(14)]) == 1
+
+
+def test_partial_failure_is_not_an_error():
+    assert _exit(14, 0, ["A: 오류", "B: 오류"]) == 0
+
+
+def test_mostly_closed_with_a_few_errors_is_still_an_error():
+    """거래된 3종목이 전부 실패했으면 문제입니다."""
+    assert _exit(14, 11, ["A: 오류", "B: 오류", "C: 오류"]) == 1
+
+
+def test_closed_stocks_are_not_counted_as_failures():
+    assert _exit(14, 11, ["A: 오류"]) == 0
+
+
+def test_clean_scan_exits_normally():
+    assert _exit(14, 0, []) == 0
