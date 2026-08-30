@@ -20,7 +20,10 @@ import pandas as pd
 
 from .data import COLUMNS, DataUnavailable
 
-TICKER_PATTERN = re.compile(r"^\d{6}$")
+# 국내 종목코드는 6자리이고, 보통주는 숫자만 쓰지만 우선주·신형우선주·
+# 신주인수권 등은 알파벳이 섞입니다 (예: 00088K 한화3우B, 0009K0).
+# 숫자만 허용하면 이런 종목을 만나는 순간 오류로 멈춥니다.
+TICKER_PATTERN = re.compile(r"^[0-9A-Z]{6}$")
 
 
 class NoTodayBar(DataUnavailable):
@@ -38,10 +41,10 @@ def normalize_code(value: str) -> str:
     raw = raw.removeprefix("A")
     raw = raw.split(".")[0]              # '005930.KS' 형태도 허용
     if raw.isdigit():
-        raw = raw.zfill(6)
+        raw = raw.zfill(6)               # 엑셀에서 앞의 0 이 잘린 경우
     if not TICKER_PATTERN.match(raw):
         raise DataUnavailable(
-            f"국내 종목코드는 숫자 6자리여야 합니다: {value!r} → {raw!r}"
+            f"국내 종목코드는 숫자·영문 6자리여야 합니다: {value!r} → {raw!r}"
         )
     return raw
 
@@ -182,9 +185,20 @@ def read_universe_kr(path) -> list[str]:
         raise DataUnavailable(f"종목 목록 파일이 없습니다: {path}")
 
     codes: list[str] = []
+    bad: list[str] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.split("#", 1)[0].strip()
         if not line:
             continue
-        codes.append(normalize_code(line.split()[0]))
+        try:
+            codes.append(normalize_code(line.split()[0]))
+        except DataUnavailable:
+            # 한 줄이 이상하다고 1800종목 전체를 포기할 이유는 없습니다.
+            bad.append(line.split()[0])
+
+    if bad:
+        preview = ", ".join(bad[:5]) + (" …" if len(bad) > 5 else "")
+        print(f"  ! 형식이 맞지 않아 건너뛴 줄 {len(bad)}개: {preview}")
+    if not codes:
+        raise DataUnavailable(f"읽을 수 있는 종목코드가 없습니다: {path}")
     return codes

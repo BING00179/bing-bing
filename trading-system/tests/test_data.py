@@ -100,3 +100,57 @@ def test_read_universe_strips_comments_and_blanks(tmp_path):
 def test_read_universe_missing_file(tmp_path):
     with pytest.raises(DataUnavailable):
         read_universe(tmp_path / "nope.txt")
+
+
+# ── 국내 종목코드 ──
+
+
+def test_korean_code_may_contain_letters():
+    """우선주·신주인수권 등은 코드에 알파벳이 들어갑니다.
+
+    숫자만 허용하면 코스닥 전 종목을 훑다가 이런 종목을 만나는
+    순간 전체가 멈춥니다. 실제로 '0009K0' 에서 멈췄습니다.
+    """
+    from src.data_kr import normalize_code
+
+    assert normalize_code("0009K0") == "0009K0"
+    assert normalize_code("00088K") == "00088K"
+    assert normalize_code("005930") == "005930"
+
+
+def test_short_numeric_code_gets_leading_zeros():
+    """엑셀에서 옮기면 앞의 0 이 잘립니다."""
+    from src.data_kr import normalize_code
+
+    assert normalize_code("5930") == "005930"
+
+
+def test_clearly_invalid_code_is_rejected():
+    from src.data_kr import normalize_code
+
+    for bad in ("삼성전자", "12345678", ""):
+        with pytest.raises(DataUnavailable):
+            normalize_code(bad)
+
+
+def test_universe_file_skips_bad_lines_instead_of_failing(tmp_path, capsys):
+    """한 줄이 이상하다고 1800종목 전체를 포기하지 않습니다."""
+    from src.data_kr import read_universe_kr
+
+    path = tmp_path / "u.txt"
+    path.write_text(
+        "005930 삼성전자\n0009K0 우선주\n삼성전자\n# 주석\n000660 SK하이닉스\n",
+        encoding="utf-8",
+    )
+    codes = read_universe_kr(path)
+    assert codes == ["005930", "0009K0", "000660"]
+    assert "건너뛴 줄 1개" in capsys.readouterr().out
+
+
+def test_universe_file_with_no_valid_codes_raises(tmp_path):
+    from src.data_kr import read_universe_kr
+
+    path = tmp_path / "u.txt"
+    path.write_text("# 주석만\n삼성전자\n", encoding="utf-8")
+    with pytest.raises(DataUnavailable, match="읽을 수 있는 종목코드가 없습니다"):
+        read_universe_kr(path)
