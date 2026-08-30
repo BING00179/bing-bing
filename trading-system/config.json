@@ -1,0 +1,27 @@
+{
+  "scanner_a": {
+    "min_gap_pct": 5.0,
+    "min_price": 3.0,
+    "min_premarket_volume": 50000,
+    "max_results": 20
+  },
+  "scanner_b": {
+    "sma_slow": 200,
+    "sma_fast": 20,
+    "sma_mid": 50,
+    "breakout_tolerance_pct": 0.0,
+    "close_near_high_pct": 0.5,
+    "earliest_hour_et": 10,
+    "require_premarket_high": true
+  },
+  "backtest": {
+    "stop_loss_pct": 3.0,
+    "take_profit_pct": 6.0,
+    "max_hold_days": 5,
+    "commission_per_trade": 1.0,
+    "slippage_pct": 0.1,
+    "capital_per_trade": 10000.0
+  },
+  "universe_file": "data/universe.txt",
+  "output_dir": "output"
+}

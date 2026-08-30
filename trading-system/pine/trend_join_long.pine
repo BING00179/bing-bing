@@ -1,0 +1,102 @@
+//@version=5
+// ============================================================================
+// Trend Join Long — 백테스팅용 전략 스크립트
+//
+// 사용법
+//   1) TradingView 차트 하단 "Pine 에디터" 열기
+//   2) 이 파일 내용을 통째로 붙여넣고 "차트에 추가"
+//   3) "전략 테스터" 탭에서 결과 확인
+//
+// 주의
+//   * Pine Script 는 백테스팅·신호용입니다. 실제 자동매매까지는
+//     증권사 API 와의 별도 연동이 필요합니다.
+//   * 조건 3(프리마켓 고가 돌파)은 일봉 차트에 프리마켓 정보가 없어
+//     "확장 시간(Extended hours)" 을 켠 인트라데이 차트에서만 유효합니다.
+//     일봉에서 돌리면 이 조건은 자동으로 건너뜁니다.
+//   * 수수료와 슬리피지를 반드시 켜고 보세요. 아래 strategy() 에
+//     기본값을 넣어두었습니다. 이걸 빼면 결과가 크게 낙관적으로 나옵니다.
+// ============================================================================
+
+strategy("Trend Join Long",
+     overlay        = true,
+     initial_capital= 10000,
+     default_qty_type = strategy.percent_of_equity,
+     default_qty_value= 100,
+     commission_type= strategy.commission.cash_per_order,
+     commission_value = 1.0,
+     slippage       = 2,
+     currency       = currency.USD)
+
+// ---------------------------------------------------------------- 입력값
+smaSlowLen = input.int(200, "장기 이동평균 (조건 2)", minval = 1)
+smaMidLen  = input.int(50,  "중기 이동평균 (조건 5)", minval = 1)
+smaFastLen = input.int(20,  "단기 이동평균 (조건 5)", minval = 1)
+
+usePremarket = input.bool(true, "조건 3: 프리마켓 고가 돌파 사용")
+startHour    = input.int(10, "실행 허용 시각 (거래소 시간, 시)", minval = 0, maxval = 23)
+
+stopPct   = input.float(3.0, "손절 (%)", minval = 0.1, step = 0.1)
+targetPct = input.float(6.0, "익절 (%)", minval = 0.1, step = 0.1)
+maxBars   = input.int(5, "최대 보유 봉 수", minval = 1)
+
+// ---------------------------------------------------------------- 지표
+smaSlow = ta.sma(close, smaSlowLen)
+smaMid  = ta.sma(close, smaMidLen)
+smaFast = ta.sma(close, smaFastLen)
+
+isIntraday = timeframe.isintraday
+
+// 전일 일봉 고가·종가 (일봉 차트에서는 직전 봉)
+prevDayHigh  = isIntraday ? request.security(syminfo.tickerid, "D", high[1],  lookahead = barmerge.lookahead_off) : high[1]
+prevDayClose = isIntraday ? request.security(syminfo.tickerid, "D", close[1], lookahead = barmerge.lookahead_off) : close[1]
+prevDaySma   = isIntraday ? request.security(syminfo.tickerid, "D", ta.sma(close, smaSlowLen)[1], lookahead = barmerge.lookahead_off) : smaSlow[1]
+
+// 오늘 프리마켓 고가 / 오늘 장중 고가 (인트라데이 + 확장시간 차트에서만 의미 있음)
+var float preHigh   = na
+var float todayHigh = na
+newSession = ta.change(time("D")) != 0
+inRegular  = not na(time(timeframe.period, "0930-1600"))
+
+if newSession
+    preHigh   := na
+    todayHigh := na
+
+if isIntraday and not inRegular
+    preHigh := na(preHigh) ? high : math.max(preHigh, high)
+
+if isIntraday and inRegular
+    todayHigh := na(todayHigh) ? high : math.max(todayHigh, high)
+
+// ---------------------------------------------------------------- 5가지 조건
+c1 = close > prevDayHigh                                   // 전날 일봉 고가 위
+c2 = prevDayClose > prevDaySma                             // 전날 종가 > 200일선
+c3 = not usePremarket or not isIntraday or na(preHigh) ? true : close > preHigh
+c4 = isIntraday ? (na(todayHigh) or close >= todayHigh) : close >= high * 0.995
+c5 = close > smaFast and smaFast > smaMid and smaMid > smaSlow  // 상승 추세 정렬
+
+timeOk = not isIntraday or hour >= startHour
+enough = not na(smaSlow) and not na(smaMid) and not na(smaFast)
+
+buySignal = c1 and c2 and c3 and c4 and c5 and timeOk and enough
+
+// ---------------------------------------------------------------- 매매
+if buySignal and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+
+if strategy.position_size > 0
+    entryPrice = strategy.position_avg_price
+    strategy.exit("Exit",
+         from_entry = "Long",
+         stop  = entryPrice * (1 - stopPct   / 100),
+         limit = entryPrice * (1 + targetPct / 100))
+
+    // 최대 보유 봉 수를 넘기면 시장가 청산
+    if bar_index - strategy.opentrades.entry_bar_index(0) >= maxBars
+        strategy.close("Long", comment = "timeout")
+
+// ---------------------------------------------------------------- 표시
+plot(smaSlow, "200 MA", color = color.new(color.orange, 0), linewidth = 2)
+plot(smaMid,  "50 MA",  color = color.new(color.blue,   0))
+plot(smaFast, "20 MA",  color = color.new(color.teal,   0))
+plotshape(buySignal, "매수 신호", shape.triangleup, location.belowbar,
+     color = color.new(color.green, 0), size = size.small)
