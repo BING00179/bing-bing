@@ -148,6 +148,90 @@ def cost_weight(trades: pd.DataFrame, cost_pct_round_trip: float = 0.51) -> dict
     }
 
 
+def same_day_losses(trades: pd.DataFrame) -> dict:
+    """진입 당일에 끝난 매매를 따로 뜯어봅니다.
+
+    이 매매들은 '신호가 틀렸다' 가 아니라 '손절선이 너무 가까웠다'
+    일 수 있습니다. 둘은 완전히 다른 문제입니다.
+
+      신호가 틀렸다   → 전략을 버려야 합니다
+      손절이 가까웠다 → 손절폭만 고치면 됩니다
+
+    구분하려면 나머지 매매가 어땠는지를 봐야 합니다. 1일 매매를
+    뺐을 때 나머지가 이익이면 신호 자체는 살아 있는 것입니다.
+    """
+    same_day = trades[trades["hold_days"] <= 1]
+    rest = trades[trades["hold_days"] > 1]
+
+    return {
+        "1일_건수": len(same_day),
+        "1일_비중": round(len(same_day) / len(trades) * 100, 1) if len(trades) else 0.0,
+        "1일_승률": round((same_day["pnl"] > 0).mean() * 100, 1) if len(same_day) else 0.0,
+        "1일_손익": round(float(same_day["pnl"].sum()), 0),
+        "1일_평균수익률": round(float(same_day["return_pct"].mean()), 2)
+        if len(same_day) else 0.0,
+        "나머지_건수": len(rest),
+        "나머지_승률": round((rest["pnl"] > 0).mean() * 100, 1) if len(rest) else 0.0,
+        "나머지_손익": round(float(rest["pnl"].sum()), 0),
+        "나머지_PF": round(_pf(rest), 3) if len(rest) else 0.0,
+        "전체_손익": round(float(trades["pnl"].sum()), 0),
+    }
+
+
+def stop_width_needed(trades: pd.DataFrame, widths=(3, 5, 8, 10, 12, 15)) -> pd.DataFrame:
+    """손절을 얼마로 뒀으면 몇 건이 살아남았을까.
+
+    ⚠️ 이건 어림셈입니다. 손절폭을 넓히면 그 매매의 이후 경로도
+       달라지는데, 여기서는 '진입 당일에 그 폭까지 안 갔을 종목이
+       몇 개인가' 만 셉니다. 실제 결과는 백테스트를 다시 돌려야
+       나옵니다. 방향을 잡는 데까지만 쓰세요.
+
+    손절로 끝난 매매의 실제 손실률을 보면, 그 손실률보다 넓은
+    손절을 걸었을 때 그날 살아남았을 매매를 셀 수 있습니다.
+    """
+    stopped = trades[
+        (trades["hold_days"] <= 1) & (trades["pnl"] <= 0)
+    ]
+    if stopped.empty:
+        return pd.DataFrame()
+
+    losses = stopped["return_pct"].abs()
+    rows = []
+    for width in widths:
+        survived = int((losses < width).sum())
+        rows.append({
+            "손절폭": f"{width}%",
+            "그날_살아남을_건수": survived,
+            "비중": round(survived / len(stopped) * 100, 1),
+            "여전히_잘릴_건수": len(stopped) - survived,
+        })
+    return pd.DataFrame(rows).set_index("손절폭")
+
+
+def loss_depth(trades: pd.DataFrame) -> pd.DataFrame:
+    """손실로 끝난 매매가 얼마나 깊게 갔나.
+
+    손실이 손절선 근처에 몰려 있으면 '손절에 걸린 것' 이고,
+    넓게 퍼져 있으면 '진짜로 떨어진 것' 입니다.
+    """
+    losers = trades[trades["pnl"] <= 0]
+    if losers.empty:
+        return pd.DataFrame()
+
+    depth = losers["return_pct"].abs()
+    return pd.DataFrame({
+        "값": [
+            len(losers),
+            round(float(depth.min()), 2),
+            round(float(depth.quantile(0.25)), 2),
+            round(float(depth.median()), 2),
+            round(float(depth.quantile(0.75)), 2),
+            round(float(depth.max()), 2),
+            round(float(depth.mean()), 2),
+        ]
+    }, index=["건수", "최소", "25%", "중앙", "75%", "최대", "평균"])
+
+
 def _table(frame: pd.DataFrame, title: str) -> list[str]:
     lines = [f"── {title} ──"]
     lines.append(frame.to_string(float_format=lambda v: f"{v:,.2f}"))
@@ -172,6 +256,33 @@ def report(trades: pd.DataFrame, top: int = 10) -> str:
     for k, v in conc.items():
         lines.append(f"  {k:<24} {v:>18,}" if isinstance(v, (int, float)) else f"  {k:<24} {v:>18}")
     lines += [""]
+
+    same = same_day_losses(trades)
+    lines += ["── 진입 당일에 끝난 매매 ──"]
+    for k, v in same.items():
+        lines.append(f"  {k:<24} {v:>18,}")
+    # 1일 매매가 상당수이고 나머지는 이익이면, 문제는 신호가 아니라
+    # 손절폭일 수 있습니다. 전체가 흑자든 적자든 같은 이야기입니다.
+    if (
+        same["1일_비중"] >= 20
+        and same["1일_손익"] < 0
+        and same["나머지_손익"] > 0
+    ):
+        lines += [
+            "",
+            "  → 1일 매매를 빼면 나머지는 이익입니다.",
+            "     신호가 틀린 게 아니라 손절선이 너무 가까웠을 수 있습니다.",
+            f"     1일 매매가 전체의 {same['1일_비중']}% 를 차지합니다.",
+        ]
+    lines += [""]
+
+    depth = loss_depth(trades)
+    if not depth.empty:
+        lines += _table(depth, "손실 깊이 (손실 매매의 손실률 분포)")
+
+    widths = stop_width_needed(trades)
+    if not widths.empty:
+        lines += _table(widths, "손절폭을 넓혔다면 (진입 당일 기준 어림셈)")
 
     cost = cost_weight(trades)
     lines += ["── 거래비용의 무게 ──"]
