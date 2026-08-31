@@ -382,6 +382,80 @@ def financial_trend(key: str, corp_code: str, years: int = 5,
     return frame
 
 
+# fnlttSinglAcntAll 은 재무제표 전체를 줍니다 — 현금흐름표 포함.
+# 주요계정(fnlttSinglAcnt)에는 현금흐름이 없어서 따로 부릅니다.
+
+CASHFLOW_KEYS = {
+    "영업활동현금흐름": ("영업활동현금흐름", "영업활동으로인한현금흐름",
+                    "영업활동으로 인한 현금흐름"),
+    "설비투자": ("유형자산의취득", "유형자산의 취득",
+              "유형자산의증가", "유형자산의 증가"),
+}
+
+
+def finstate_all(key: str, corp_code: str, year: int,
+                 report: str = "11011", fs_div: str = "CFS") -> pd.DataFrame:
+    """한 사업연도의 재무제표 전체. 자료가 없으면 빈 DataFrame."""
+    try:
+        payload = _get("fnlttSinglAcntAll.json", key, corp_code=corp_code,
+                       bsns_year=str(year), reprt_code=report, fs_div=fs_div)
+    except DartError as exc:
+        if exc.status == NO_DATA:
+            return pd.DataFrame()
+        raise
+    return pd.DataFrame(payload.get("list", []))
+
+
+def cash_flow(key: str, corp_code: str, years: int = 5,
+              end_year: int | None = None) -> pd.DataFrame:
+    """연도별 영업활동현금흐름·설비투자·잉여현금흐름.
+
+    잉여현금흐름 = 영업활동현금흐름 − 설비투자.
+    설비투자를 못 찾으면 잉여현금흐름도 빈칸으로 둡니다. 0 으로 채우면
+    투자를 안 한 회사처럼 보여 현금이 남아도는 것으로 둔갑합니다.
+    """
+    end_year = end_year or (pd.Timestamp.today().year - 1)
+    collected: dict[int, dict[str, float]] = {}
+
+    for target in range(end_year, end_year - years, -3):
+        raw = pd.DataFrame()
+        for div in ("CFS", "OFS"):
+            raw = finstate_all(key, corp_code, target, fs_div=div)
+            if not raw.empty:
+                break
+        if raw.empty or "sj_div" not in raw.columns:
+            continue
+        flows = raw[raw["sj_div"] == "CF"]
+        if flows.empty:
+            continue
+
+        for _, row in flows.iterrows():
+            account = _squeeze(row.get("account_nm", ""))
+            for label, needles in CASHFLOW_KEYS.items():
+                if any(_squeeze(n) == account for n in needles):
+                    for column, offset in (("thstrm_amount", 0),
+                                           ("frmtrm_amount", 1),
+                                           ("bfefrmtrm_amount", 2)):
+                        value = _to_number(row.get(column))
+                        if pd.isna(value):
+                            continue
+                        collected.setdefault(target - offset, {}).setdefault(label, value)
+                    break
+
+    if not collected:
+        return pd.DataFrame()
+
+    frame = pd.DataFrame(collected).T.sort_index()
+    for column in ("영업활동현금흐름", "설비투자"):
+        if column not in frame.columns:
+            frame[column] = float("nan")
+    # 설비투자는 유출이라 보고서에 음수로 적히기도 합니다. 크기로 통일합니다.
+    frame["설비투자"] = frame["설비투자"].abs()
+    frame["잉여현금흐름"] = frame["영업활동현금흐름"] - frame["설비투자"]
+    frame.index.name = "사업연도"
+    return frame.tail(years)
+
+
 def derived(trend: pd.DataFrame) -> pd.DataFrame:
     """추세표에서 바로 계산되는 비율들. 계산이 안 되면 그 열은 빼놓습니다."""
     out = pd.DataFrame(index=trend.index)
