@@ -170,14 +170,42 @@ def test_no_such_hint_when_the_rest_also_loses():
     assert "손절선이 너무 가까웠을 수 있습니다" not in report(trades)
 
 
-def test_stop_width_table_counts_survivors():
-    from src.analyze import stop_width_needed
+def test_clustering_detects_losses_pinned_to_the_stop():
+    """손실이 한 점에 몰려 있으면 손절선에 잘린 것입니다."""
+    from src.analyze import stop_clustering
 
-    table = stop_width_needed(_mixed_trades(), widths=(3, 5, 10))
-    assert "5%" in table.index
-    # 손실이 평균 3.1% 이므로 5% 손절이면 대부분 살아남습니다.
-    assert table.loc["5%", "비중"] > 90
-    assert table.loc["3%", "비중"] < table.loc["10%", "비중"]
+    trades = _mixed_trades()
+    # 실제 결과처럼 손실을 전부 같은 값으로 만듭니다.
+    losers = trades["pnl"] <= 0
+    trades.loc[losers, "return_pct"] = -3.35
+
+    stats = stop_clustering(trades)
+    assert stats["한_점에_몰림"] is True
+    assert stats["손실률_중앙값"] == 3.35
+    assert stats["중앙값_근처_비중"] > 90
+
+
+def test_clustering_is_false_when_losses_are_spread_out():
+    """손실이 넓게 퍼져 있으면 실제로 떨어진 것입니다."""
+    from src.analyze import stop_clustering
+
+    rng = np.random.default_rng(21)
+    trades = make_trades(n=200, seed=8)
+    losers = trades["pnl"] <= 0
+    trades.loc[losers, "return_pct"] = -rng.uniform(1, 25, losers.sum())
+
+    assert stop_clustering(trades)["한_점에_몰림"] is False
+
+
+def test_report_admits_what_it_cannot_know():
+    """손절을 넓히면 어떻게 될지는 모른다고 말해야 합니다."""
+    from src.analyze import report
+
+    trades = _mixed_trades()
+    trades.loc[trades["pnl"] <= 0, "return_pct"] = -3.35
+    text = report(trades)
+    assert "여기서" in text and "알 수 없습니다" in text
+    assert "백테스트를 다시 돌려야 합니다" in text
 
 
 def test_loss_depth_shows_where_losses_cluster():
@@ -189,9 +217,9 @@ def test_loss_depth_shows_where_losses_cluster():
     assert 2.5 < depth.loc["중앙", "값"] < 4.0
 
 
-def test_stop_width_table_is_empty_without_same_day_losses():
-    from src.analyze import stop_width_needed
+def test_clustering_is_empty_without_losses():
+    from src.analyze import stop_clustering
 
     trades = make_trades(n=50)
-    trades["hold_days"] = 10
-    assert stop_width_needed(trades).empty
+    trades["pnl"] = 100_000.0
+    assert stop_clustering(trades) == {}

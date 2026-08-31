@@ -178,34 +178,37 @@ def same_day_losses(trades: pd.DataFrame) -> dict:
     }
 
 
-def stop_width_needed(trades: pd.DataFrame, widths=(3, 5, 8, 10, 12, 15)) -> pd.DataFrame:
-    """손절을 얼마로 뒀으면 몇 건이 살아남았을까.
+def stop_clustering(trades: pd.DataFrame, tolerance: float = 0.3) -> dict:
+    """손실이 손절선 한 점에 몰려 있는지 봅니다.
 
-    ⚠️ 이건 어림셈입니다. 손절폭을 넓히면 그 매매의 이후 경로도
-       달라지는데, 여기서는 '진입 당일에 그 폭까지 안 갔을 종목이
-       몇 개인가' 만 셉니다. 실제 결과는 백테스트를 다시 돌려야
-       나옵니다. 방향을 잡는 데까지만 쓰세요.
+    손절로 끝난 매매의 손실률이 거의 같은 값이라면, 주가가 거기까지만
+    떨어진 것이 아니라 손절선이 거기 있어서 전부 잘린 것입니다.
 
-    손절로 끝난 매매의 실제 손실률을 보면, 그 손실률보다 넓은
-    손절을 걸었을 때 그날 살아남았을 매매를 셀 수 있습니다.
+    ⚠️ 여기서 알 수 없는 것이 있습니다. 손절을 넓혔을 때 그 매매들이
+       살아났을지, 더 크게 깨졌을지는 매매 기록만으로는 모릅니다.
+       원본 시세에서 그날 주가가 어디까지 갔는지를 봐야 하는데,
+       기록에는 청산가만 남아 있습니다.
+
+       '손절폭을 N% 로 넓히면 몇 건이 살아난다' 는 계산은 할 수
+       없습니다. 이 함수는 '손절선에 잘렸다' 는 사실까지만 말합니다.
+       그다음은 백테스트를 다시 돌려야 합니다.
     """
-    stopped = trades[
-        (trades["hold_days"] <= 1) & (trades["pnl"] <= 0)
-    ]
-    if stopped.empty:
-        return pd.DataFrame()
+    losers = trades[trades["pnl"] <= 0]
+    if losers.empty:
+        return {}
 
-    losses = stopped["return_pct"].abs()
-    rows = []
-    for width in widths:
-        survived = int((losses < width).sum())
-        rows.append({
-            "손절폭": f"{width}%",
-            "그날_살아남을_건수": survived,
-            "비중": round(survived / len(stopped) * 100, 1),
-            "여전히_잘릴_건수": len(stopped) - survived,
-        })
-    return pd.DataFrame(rows).set_index("손절폭")
+    depth = losers["return_pct"].abs()
+    median = float(depth.median())
+    near = int(((depth - median).abs() <= tolerance).sum())
+
+    return {
+        "손실_건수": len(losers),
+        "손실률_중앙값": round(median, 2),
+        "중앙값_근처_건수": near,
+        "중앙값_근처_비중": round(near / len(losers) * 100, 1),
+        "손실률_최대": round(float(depth.max()), 2),
+        "한_점에_몰림": bool(near / len(losers) >= 0.7),
+    }
 
 
 def loss_depth(trades: pd.DataFrame) -> pd.DataFrame:
@@ -280,9 +283,24 @@ def report(trades: pd.DataFrame, top: int = 10) -> str:
     if not depth.empty:
         lines += _table(depth, "손실 깊이 (손실 매매의 손실률 분포)")
 
-    widths = stop_width_needed(trades)
-    if not widths.empty:
-        lines += _table(widths, "손절폭을 넓혔다면 (진입 당일 기준 어림셈)")
+    cluster = stop_clustering(trades)
+    if cluster:
+        lines += ["── 손실이 손절선에 몰려 있는가 ──"]
+        for k, v in cluster.items():
+            lines.append(f"  {k:<24} {v:>18}")
+        if cluster["한_점에_몰림"]:
+            lines += [
+                "",
+                f"  → 손실의 {cluster['중앙값_근처_비중']}% 가 "
+                f"-{cluster['손실률_중앙값']}% 한 점에 몰려 있습니다.",
+                "     주가가 거기까지만 떨어진 것이 아니라, 손절선이 거기 있어서",
+                "     전부 잘린 것입니다.",
+                "",
+                "     다만 손절을 넓혔을 때 살아났을지 더 깨졌을지는 여기서",
+                "     알 수 없습니다. 기록에는 청산가만 남아 있고 그날 주가가",
+                "     어디까지 갔는지는 없습니다. 백테스트를 다시 돌려야 합니다.",
+            ]
+        lines += [""]
 
     cost = cost_weight(trades)
     lines += ["── 거래비용의 무게 ──"]
