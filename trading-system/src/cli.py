@@ -24,6 +24,7 @@ import pandas as pd
 from . import backtest as bt_module
 from . import market_filter as mf_module
 from . import notify_policy
+from . import portfolio as pf_module
 from . import ranking
 from . import watchlist as wl_module
 from . import report_html
@@ -634,6 +635,102 @@ def _pick_top_signals(frames, cfg, market_ok, args) -> dict[str, set]:
     return {code: set(part.index) for code, part in kept.groupby("ticker")}
 
 
+def cmd_portfolio_kr(args: argparse.Namespace) -> int:
+    """실제로 돈을 굴리듯 검증합니다 — 자본 한도와 보유 종목 수 제한."""
+    cfg = Config.load(args.config)
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+    names = _names_for(codes, path)
+
+    market_ok = None
+    print("=" * 58)
+    print(f"자본 {args.cash:,.0f}원 · 동시 보유 최대 {args.max_positions}종목")
+    if args.market_filter:
+        index = fetch_index(cfg.market_filter.index_code)
+        market_ok = mf_module.tradable_series(index, cfg.market_filter)
+        print(
+            f"✅ 시장 필터 켬 — 전체 {len(market_ok)}일 중 "
+            f"매수 허용 {int(market_ok.sum())}일 "
+            f"({market_ok.mean() * 100:.1f}%)"
+        )
+    else:
+        print("⚠️ 시장 필터 꺼짐 — 하락장에서도 매수합니다 (--market-filter 로 켬)")
+    print("=" * 58)
+
+    frames: dict[str, pd.DataFrame] = {}
+    for code in codes:
+        try:
+            daily = fetch_daily_kr(code, years=args.years)
+        except DataUnavailable:
+            continue
+        except Exception:  # noqa: BLE001
+            continue
+        if len(daily) >= cfg.scanner_b.sma_slow + 5:
+            frames[code] = daily
+    print(f"시세 확보 {len(frames)}종목 (요청 {len(codes)}종목)")
+
+    rows = [
+        bt_module.signal_rows(code, daily, cfg.scanner_b, market_ok)
+        for code, daily in frames.items()
+    ]
+    rows = [r for r in rows if not r.empty]
+    if not rows:
+        print("신호가 하나도 없습니다.")
+        return 0
+
+    allsig = pd.concat(rows)
+    allsig["score"] = [
+        ranking.score(
+            gap_pct=r.gap_pct, turnover=r.turnover, price=r.price,
+            sma_slow=r.sma_slow, today_high=r.today_high, cfg=cfg.ranking,
+        ).total
+        for r in allsig.itertuples()
+    ]
+    print(f"신호 {len(allsig):,}건 — 이 중 자리가 나는 것만 삽니다.")
+
+    result = pf_module.run(
+        allsig, frames, cfg.backtest_kr,
+        start_cash=args.cash, max_positions=args.max_positions, names=names,
+    )
+    st = pf_module.summarize(result)
+
+    out = _output_dir(cfg)
+    tag = f"pos{args.max_positions}" + ("_filtered" if args.market_filter else "")
+    pd.DataFrame([t.__dict__ for t in result.trades]).to_csv(
+        out / f"kr_portfolio_{tag}.csv", index=False
+    )
+    if result.equity is not None:
+        result.equity.to_frame("equity").to_csv(out / f"kr_equity_{tag}.csv")
+
+    print("\n".join([
+        "", "=" * 58,
+        "[포트폴리오 검증] 실제로 굴렸다면",
+        "=" * 58,
+        f"  시작 자본       {st['start_cash']:>15,.0f}원",
+        f"  최종 자산       {st['end_value']:>15,.0f}원",
+        f"  총 수익률       {st['total_return_pct']:>14.2f}%   ({st['years']}년)",
+        f"  연평균(CAGR)    {st['cagr_pct']:>14.2f}%",
+        f"  최대 낙폭       {st['max_drawdown_pct']:>14.2f}%   ← 중간에 얼마나 물렸나",
+        "-" * 58,
+        f"  매매            {st['trades']:>14,}건",
+        f"  승률            {st['win_rate_pct']:>14.2f}%",
+        f"  평균 이익       {st['avg_win_pct']:>14.2f}%",
+        f"  평균 손실       {st['avg_loss_pct']:>14.2f}%",
+        f"  손익비(PF)      {st['profit_factor']:>14}",
+        f"  평균 보유       {st['avg_hold_days']:>14.1f}일",
+        "-" * 58,
+        f"  자리가 없어 넘긴 신호  {st['skipped_no_slot']:,}건",
+        f"  현금이 모자라 넘긴 신호 {st['skipped_no_cash']:,}건",
+        "",
+        "  ※ 신호는 종가로 판정하고 진입은 다음날 시가입니다.",
+        "  ※ 손절과 익절이 같은 날 닿으면 손절로 처리했습니다.",
+        "  ※ 수수료·증권거래세·슬리피지가 모두 반영된 금액입니다.",
+        "=" * 58,
+    ]))
+    print(f"\n결과 저장: {out}/kr_portfolio_{tag}.csv")
+    return 0
+
+
 def cmd_backtest_kr(args: argparse.Namespace) -> int:
     cfg = Config.load(args.config)
     path = _resolve(args.universe or cfg.universe_file_kr)
@@ -836,6 +933,23 @@ def build_parser() -> argparse.ArgumentParser:
     ds.add_argument("--url", default="", help="웹페이지 주소 (메시지에 첨부)")
     ds.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
     ds.set_defaults(func=cmd_daily_summary)
+
+    pk = sub.add_parser(
+        "portfolio-kr",
+        help="[국내] 실제로 돈을 굴리듯 검증 (자본·보유종목 수 제한)",
+    )
+    pk.add_argument("--universe", help="종목코드 목록 파일")
+    pk.add_argument("--years", type=float, default=3.0, help="검증 기간 (년)")
+    pk.add_argument("--cash", type=float, default=10_000_000.0, help="시작 자본 (원)")
+    pk.add_argument(
+        "--max-positions", type=int, default=3,
+        help="동시에 들고 있을 최대 종목 수 (기본 3)",
+    )
+    pk.add_argument(
+        "--market-filter", action="store_true",
+        help="지수 상태가 나쁜 날은 매수하지 않음",
+    )
+    pk.set_defaults(func=cmd_portfolio_kr)
 
     kc = sub.add_parser("backtest-kr", help="[국내] 과거 데이터로 전략 검증")
     kc.add_argument("--universe", help="종목코드 목록 파일")
