@@ -25,6 +25,7 @@ import pandas as pd
 from . import backtest as bt_module
 from . import case as case_module
 from . import dart_kr
+from . import dashboard as dash_module
 from . import journal as jn_module
 from . import value_kr as val_module
 from . import diagnose as dg_module
@@ -1629,6 +1630,93 @@ def cmd_value_kr(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dart_dashboard(args: argparse.Namespace) -> int:
+    """한 회사의 기업분석 화면을 HTML 한 장으로 만듭니다."""
+    try:
+        key = dart_kr.api_key(getattr(args, "api_key", None))
+    except dart_kr.DartNotConfigured as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    code = args.code.strip().upper()
+    try:
+        index = dart_kr.load_corp_index(key, args.cache_dir, refresh=False)
+        corp_code = dart_kr.find_corp_code(index, code)
+        if not corp_code:
+            print(f"'{code}' 에 해당하는 회사를 DART 에서 못 찾았습니다.")
+            return 1
+    except dart_kr.DartError as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    name = dart_kr.corp_name(index, corp_code) or code
+    print(f"{name}({code}) 자료를 모읍니다...")
+
+    snap = dash_module.Snapshot(
+        code=code, name=name, corp_code=corp_code,
+        window_days=args.days, fetched_at=_timestamp_kr(),
+    )
+
+    print("  시세...")
+    try:
+        daily = fetch_daily_kr(code, years=1.2)
+        snap.price = float(daily["close"].iloc[-1])
+        snap.price_date = str(daily.index[-1].date())
+        if len(daily) >= 2:
+            snap.change_pct = (daily["close"].iloc[-1] / daily["close"].iloc[-2] - 1) * 100
+        한해 = daily.tail(250)
+        snap.high_52w = float(한해["high"].max())
+        snap.low_52w = float(한해["low"].min())
+    except (DataUnavailable, IndexError) as exc:
+        print(f"    시세를 못 받았습니다: {exc}")
+
+    print("  시가총액...")
+    try:
+        listing = val_module.listing_with_cap(args.market)
+        hit = listing[listing["code"] == code]
+        if not hit.empty:
+            snap.marcap = float(hit.iloc[0]["marcap"])
+            snap.market = args.market
+    except DataUnavailable as exc:
+        print(f"    시가총액을 못 받았습니다: {exc}")
+
+    print("  재무 추세...")
+    try:
+        snap.trend = dart_kr.financial_trend(key, corp_code, years=args.years)
+        snap.ratios = dart_kr.derived(snap.trend)
+        snap.notes = dart_kr.health_flags(snap.trend)
+    except dart_kr.DartError as exc:
+        print(f"    재무를 못 받았습니다: {exc}")
+
+    print("  현금흐름...")
+    try:
+        snap.cash = dart_kr.cash_flow(key, corp_code, years=args.years)
+    except dart_kr.DartError as exc:
+        print(f"    현금흐름을 못 받았습니다: {exc}")
+
+    print("  공시...")
+    try:
+        today = pd.Timestamp.today().normalize()
+        listing_f = dart_kr.filings(
+            key, corp_code,
+            (today - pd.Timedelta(days=args.days)).strftime("%Y%m%d"),
+            today.strftime("%Y%m%d"),
+        )
+        snap.filing_count = len(listing_f)
+        snap.events = dart_kr.flag_events(listing_f)
+    except dart_kr.DartError as exc:
+        print(f"    공시를 못 받았습니다: {exc}")
+
+    target = _resolve(args.out or f"output/{code}_기업분석.html")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(dash_module.render(snap), encoding="utf-8")
+
+    print(f"\n만들었습니다: {target}")
+    print("브라우저로 여세요:")
+    print(f"  start {target}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.cli",
@@ -1888,6 +1976,19 @@ def build_parser() -> argparse.ArgumentParser:
     dgk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
     dgk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
     dgk.set_defaults(func=cmd_diagnose_kr)
+
+    dd = sub.add_parser(
+        "dart-dashboard",
+        help="[국내] 한 회사의 기업분석 화면을 HTML 한 장으로",
+    )
+    dd.add_argument("--code", required=True, help="종목코드 6자리 또는 회사명")
+    dd.add_argument("--years", type=int, default=5, help="재무를 몇 년치 볼지")
+    dd.add_argument("--days", type=int, default=365, help="공시를 며칠치 볼지")
+    dd.add_argument("--market", default="KOSDAQ", help="시가총액을 찾을 시장")
+    dd.add_argument("--out", help="저장할 HTML 경로")
+    dd.add_argument("--api-key", help="직접 넘길 때만")
+    dd.add_argument("--cache-dir", default="data/cache/dart", help="회사 목록 폴더")
+    dd.set_defaults(func=cmd_dart_dashboard)
 
     dc = sub.add_parser("dart-check", help="[국내] DART 인증키가 동작하는지 확인")
     dc.add_argument("--api-key", help="직접 넘길 때만. 보통은 DART_API_KEY 환경변수를 씁니다")
