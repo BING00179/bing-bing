@@ -26,6 +26,7 @@ from . import backtest as bt_module
 from . import case as case_module
 from . import dart_kr
 from . import journal as jn_module
+from . import value_kr as val_module
 from . import diagnose as dg_module
 from . import market_filter as mf_module
 from . import notify_policy
@@ -1553,6 +1554,81 @@ def cmd_journal_score(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_value_fetch(args: argparse.Namespace) -> int:
+    """DART 에서 전 종목 재무를 받아 저장합니다. 오래 걸리니 한 번만."""
+    try:
+        key = dart_kr.api_key(getattr(args, "api_key", None))
+    except dart_kr.DartNotConfigured as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    print("회사 목록을 확인합니다...")
+    try:
+        index = dart_kr.load_corp_index(key, args.dart_cache, refresh=False)
+    except dart_kr.DartError as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    if args.universe:
+        codes = [r.code for r in read_universe_kr(_resolve(args.universe))]
+    else:
+        codes = list(val_module.listing_with_cap(args.market)["code"])
+    if args.limit:
+        codes = codes[: args.limit]
+
+    print(f"{len(codes):,}종목의 재무를 DART 에서 받습니다.")
+    print("한 종목당 한 번씩 부르므로 20~40분쯤 걸립니다. 한 번만 하면 됩니다.\n")
+
+    fin, 실패 = val_module.latest_financials(key, index, codes,
+                                             years_back=args.years_back)
+    if fin.empty:
+        print("재무를 하나도 받지 못했습니다.")
+        return 1
+
+    target = _resolve(args.out)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fin.to_csv(target, index=False, encoding="utf-8-sig")
+    print(f"\n{len(fin):,}종목 저장: {target}  (실패 {len(실패)}종목)")
+    print("이제 value-kr 로 조건을 바꿔가며 몇 초 만에 볼 수 있습니다.")
+    return 0
+
+
+def cmd_value_kr(args: argparse.Namespace) -> int:
+    """저장해 둔 재무로 저평가 후보를 추립니다. 몇 초면 끝납니다."""
+    path = _resolve(args.fin)
+    if not path.exists():
+        print(f"재무 파일이 없습니다: {path}")
+        print("먼저 한 번 받아야 합니다:")
+        print("  python -m src.cli value-fetch --market KOSDAQ")
+        return 1
+
+    fin = pd.read_csv(path, dtype={"code": str, "rcept_dt": str})
+    print(f"저장된 재무 {len(fin):,}종목 · 시세를 받는 중입니다...")
+    try:
+        listing = val_module.listing_with_cap(args.market)
+    except DataUnavailable as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    rule = val_module.Screen(
+        max_pbr=args.max_pbr, max_per=args.max_per,
+        require_profit=not args.allow_loss,
+        max_debt_ratio=args.max_debt, min_marcap=args.min_marcap * 1e8,
+        min_turnover=args.min_turnover * 1e8,
+    )
+    screened = val_module.screen(val_module.valuation(listing, fin), rule)
+
+    print()
+    print(val_module.report(screened, rule, top=args.top))
+
+    out = _output_dir(Config.load(args.config))
+    val_module.rank(screened[screened["통과"]]).to_csv(
+        out / "kr_value_candidates.csv", index=False, encoding="utf-8-sig"
+    )
+    print(f"\n통과 종목 저장: {out}/kr_value_candidates.csv")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.cli",
@@ -1725,6 +1801,38 @@ def build_parser() -> argparse.ArgumentParser:
     ku.add_argument("--market", default="KOSPI", help="KOSPI / KOSDAQ / KRX")
     ku.add_argument("--out", default="data/universe_kr_all.txt", help="저장할 파일")
     ku.set_defaults(func=cmd_kr_universe)
+
+    vf = sub.add_parser(
+        "value-fetch",
+        help="[국내] DART 에서 전 종목 재무 받아두기 (20~40분, 한 번만)",
+    )
+    vf.add_argument("--market", default="KOSDAQ", help="KOSPI / KOSDAQ")
+    vf.add_argument("--universe", help="종목 목록 파일 (없으면 시장 전체)")
+    vf.add_argument("--years-back", type=int, default=2,
+                    help="최근 몇 개 사업연도까지 뒤져볼지")
+    vf.add_argument("--limit", type=int, default=0, help="앞 N종목만 (시험용)")
+    vf.add_argument("--out", default="data/fin_kr.csv", help="저장할 파일")
+    vf.add_argument("--api-key", help="직접 넘길 때만")
+    vf.add_argument("--dart-cache", default="data/cache/dart", help="회사 목록 폴더")
+    vf.set_defaults(func=cmd_value_fetch)
+
+    vk = sub.add_parser(
+        "value-kr",
+        help="[국내] 저평가 후보 추리기 (받아둔 재무로, 몇 초)",
+    )
+    vk.add_argument("--fin", default="data/fin_kr.csv", help="받아둔 재무 파일")
+    vk.add_argument("--market", default="KOSDAQ", help="KOSPI / KOSDAQ")
+    vk.add_argument("--max-pbr", type=float, default=1.0, help="PBR 상한")
+    vk.add_argument("--max-per", type=float, default=15.0,
+                    help="PER 상한. 0 이면 PER 조건을 끕니다")
+    vk.add_argument("--allow-loss", action="store_true", help="영업적자도 허용")
+    vk.add_argument("--max-debt", type=float, default=200.0, help="부채비율 상한(%%)")
+    vk.add_argument("--min-marcap", type=float, default=300.0,
+                    help="시가총액 하한(억원)")
+    vk.add_argument("--min-turnover", type=float, default=5.0,
+                    help="하루 거래대금 하한(억원)")
+    vk.add_argument("--top", type=int, default=30, help="몇 종목까지 보여줄지")
+    vk.set_defaults(func=cmd_value_kr)
 
     ja = sub.add_parser(
         "journal-add",
