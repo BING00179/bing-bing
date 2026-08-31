@@ -19,6 +19,7 @@ pykrx 는 '특정 날짜의 전 종목' 을 한 번에 줍니다. 종목마다 �
 
 from __future__ import annotations
 
+import time
 from datetime import date, timedelta
 
 import numpy as np
@@ -79,11 +80,23 @@ def snapshot(day: str, market: str = "KOSDAQ") -> pd.DataFrame:
 
 
 def collect(
-    days: list[str], market: str = "KOSDAQ", verbose: bool = True
+    days: list[str],
+    market: str = "KOSDAQ",
+    verbose: bool = True,
+    pause: float = 1.5,
 ) -> dict[str, pd.DataFrame]:
-    """날짜별 단면을 모읍니다. 휴장일은 건너뜁니다."""
+    """날짜별 단면을 모읍니다. 휴장일은 건너뜁니다.
+
+    ⚠️ 조회 사이에 반드시 쉽니다. 쉬지 않고 수십 번 연속 요청하면
+       한국거래소가 '자동화 수단을 통한 비정상 대량 조회' 로 보고
+       IP 를 하루 동안 차단합니다. 실제로 그렇게 막혔던 적이 있습니다.
+       차단되면 FinanceDataReader 도 함께 막힙니다. 종목 목록을
+       같은 서버에서 가져오기 때문입니다.
+    """
     out: dict[str, pd.DataFrame] = {}
-    for day in days:
+    for i, day in enumerate(days):
+        if i:
+            time.sleep(pause)
         frame = snapshot(day, market)
         if frame.empty:
             if verbose:
@@ -128,6 +141,14 @@ def listing_with_size(market: str = "KOSDAQ", top: int = 0) -> pd.DataFrame:
     try:
         frame = fdr.StockListing(market.strip().upper())
     except Exception as exc:  # noqa: BLE001
+        text = str(exc)
+        if "krx" in text.lower():
+            raise DataUnavailable(
+                f"{market} 종목 목록을 받지 못했습니다.\n"
+                "   한국거래소가 이 IP 의 접속을 제한했을 수 있습니다.\n"
+                "   짧은 시간에 너무 많이 조회하면 하루 동안 막힙니다.\n"
+                "   내일 다시 시도하거나, 다른 네트워크에서 실행해 보세요."
+            ) from exc
         raise DataUnavailable(f"{market} 종목 목록 조회 실패: {exc}") from exc
     if frame is None or frame.empty:
         raise DataUnavailable(f"{market} 종목 목록이 비어 있습니다.")
@@ -151,14 +172,23 @@ def listing_with_size(market: str = "KOSDAQ", top: int = 0) -> pd.DataFrame:
 
 
 def collect_fdr(
-    codes: list[str], years: float = 5.0, verbose: bool = True
+    codes: list[str],
+    years: float = 5.0,
+    verbose: bool = True,
+    pause: float = 0.3,
 ) -> dict[str, pd.DataFrame]:
-    """종목별 일봉을 받습니다. 종목당 1~2초 걸립니다."""
+    """종목별 일봉을 받습니다. 종목당 1~2초 걸립니다.
+
+    ⚠️ 여기도 조회 사이에 쉽니다. 수백 종목을 쉬지 않고 긁으면
+       차단당합니다. 느려 보여도 이게 안전한 속도입니다.
+    """
     fdr = _fdr()
     start = (date.today() - timedelta(days=int(365.25 * (years + 1)))).isoformat()
 
     frames: dict[str, pd.DataFrame] = {}
     for i, code in enumerate(codes, 1):
+        if i > 1:
+            time.sleep(pause)
         try:
             frame = fdr.DataReader(code, start)
         except Exception:  # noqa: BLE001 - 상장폐지 등
