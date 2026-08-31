@@ -26,6 +26,7 @@ from . import backtest as bt_module
 from . import market_filter as mf_module
 from . import notify_policy
 from . import analyze
+from .cache import PriceCache
 from . import walkforward as wf_module
 from . import factor_data, factors
 from . import portfolio as pf_module
@@ -639,6 +640,59 @@ def _pick_top_signals(frames, cfg, market_ok, args) -> dict[str, set]:
     return {code: set(part.index) for code, part in kept.groupby("ticker")}
 
 
+def _frames_for(
+    codes: list[str],
+    years: float,
+    min_rows: int,
+    cache_dir: Path | None,
+    refresh: bool = False,
+) -> dict[str, pd.DataFrame]:
+    """시세를 확보합니다. 저장된 것이 있으면 그것부터 씁니다.
+
+    검증 시간의 대부분은 계산이 아니라 시세를 기다리는 것입니다.
+    한 번 받아두면 두 번째부터는 몇 초에 끝납니다.
+    """
+    cache = PriceCache(cache_dir) if cache_dir else None
+
+    if cache and not refresh:
+        info = cache.info()
+        if info:
+            print(f"  {info.as_line()}")
+
+    frames: dict[str, pd.DataFrame] = {}
+    fetched = reused = 0
+
+    for code in codes:
+        daily = None
+        if cache and not refresh:
+            daily = cache.get(code)
+            if daily is not None:
+                reused += 1
+
+        if daily is None:
+            try:
+                daily = fetch_daily_kr(code, years=years)
+            except DataUnavailable:
+                continue
+            except Exception:  # noqa: BLE001
+                continue
+            fetched += 1
+            if cache:
+                cache.put(code, daily)
+            if fetched % 100 == 0:
+                print(f"  받는 중 {fetched:,}종목...")
+
+        if len(daily) >= min_rows:
+            frames[code] = daily
+
+    if cache and fetched:
+        cache.save_meta(len(cache.stored_codes()), years)
+
+    print(f"  시세 확보 {len(frames):,}종목 "
+          f"(새로 받음 {fetched:,} · 저장분 사용 {reused:,})")
+    return frames
+
+
 def cmd_walkforward_kr(args: argparse.Namespace) -> int:
     """손절 설정을 학습 구간에서 고르고 검증 구간에서 시험합니다."""
     cfg = Config.load(args.config)
@@ -655,20 +709,15 @@ def cmd_walkforward_kr(args: argparse.Namespace) -> int:
           f"학습 {args.train_ratio:.0%} / 검증 {1 - args.train_ratio:.0%}")
     print("=" * 84)
 
-    frames: dict[str, pd.DataFrame] = {}
-    for code in codes:
-        try:
-            daily = fetch_daily_kr(code, years=args.years)
-        except DataUnavailable:
-            continue
-        except Exception:  # noqa: BLE001
-            continue
-        if len(daily) >= cfg.scanner_b.sma_slow + 60:
-            frames[code] = daily
+    frames = _frames_for(
+        codes, args.years, cfg.scanner_b.sma_slow + 60,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
     if len(frames) < 30:
         print("시세를 받은 종목이 너무 적습니다.")
         return 1
-    print(f"시세 확보 {len(frames):,}종목\n")
+    print()
 
     all_days = pd.DatetimeIndex(sorted(set().union(*(f.index for f in frames.values()))))
     splits = wf_module.make_splits(all_days, train_ratio=args.train_ratio)
@@ -709,6 +758,35 @@ def cmd_walkforward_kr(args: argparse.Namespace) -> int:
         for r in results
     ]).to_csv(out / "kr_walkforward.csv", index=False)
     print(f"\n결과 저장: {out}/kr_walkforward.csv")
+    return 0
+
+
+def cmd_cache(args: argparse.Namespace) -> int:
+    """저장된 시세 상태를 보거나 지웁니다."""
+    cache = PriceCache(_resolve(args.cache_dir))
+
+    if args.clear:
+        removed = cache.clear()
+        print(f"{removed:,}개 파일을 지웠습니다: {cache.directory}")
+        return 0
+
+    info = cache.info()
+    codes = cache.stored_codes()
+    print(f"폴더: {cache.directory}")
+    if not codes:
+        print("저장된 시세가 없습니다. 백테스트를 한 번 돌리면 쌓입니다.")
+        return 0
+
+    print(f"{info.as_line()}" if info else f"파일 {len(codes):,}개")
+    total = sum(
+        path.stat().st_size
+        for path in (cache.path_for(c) for c in codes)
+        if path.exists()
+    )
+    print(f"파일 {len(codes):,}개 · {total / 1024 / 1024:.1f} MB")
+    print(f"예시: {', '.join(codes[:8])}{' ...' if len(codes) > 8 else ''}")
+    print()
+    print("지우려면 --clear 를 붙이세요. 다음 실행에서 새로 받습니다.")
     return 0
 
 
@@ -876,17 +954,11 @@ def cmd_portfolio_kr(args: argparse.Namespace) -> int:
         print("⚠️ 시장 필터 꺼짐 — 하락장에서도 매수합니다 (--market-filter 로 켬)")
     print("=" * 58)
 
-    frames: dict[str, pd.DataFrame] = {}
-    for code in codes:
-        try:
-            daily = fetch_daily_kr(code, years=args.years)
-        except DataUnavailable:
-            continue
-        except Exception:  # noqa: BLE001
-            continue
-        if len(daily) >= cfg.scanner_b.sma_slow + 5:
-            frames[code] = daily
-    print(f"시세 확보 {len(frames)}종목 (요청 {len(codes)}종목)")
+    frames = _frames_for(
+        codes, args.years, cfg.scanner_b.sma_slow + 5,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
 
     rows = [
         bt_module.signal_rows(code, daily, cfg.scanner_b, market_ok)
@@ -982,17 +1054,11 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
     # 시세를 한 번만 받아 재사용합니다. 점수 상위만 고르려면 전 종목의
     # 신호를 먼저 모아야 해서 두 번 훑어야 하는데, 두 번 받으면
     # 시간이 두 배로 걸립니다.
-    frames: dict[str, pd.DataFrame] = {}
-    for code in codes:
-        try:
-            daily = fetch_daily_kr(code, years=args.years)
-        except DataUnavailable as exc:
-            print(f"  ! {code}: {exc}")
-            continue
-        if len(daily) < cfg.scanner_b.sma_slow + 5:
-            print(f"  ! {code}: 일봉 {len(daily)}개로는 200일선 검증이 어렵습니다.")
-            continue
-        frames[code] = daily
+    frames = _frames_for(
+        codes, args.years, cfg.scanner_b.sma_slow + 5,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
 
     picked = _pick_top_signals(frames, cfg, market_ok, args) if args.top_n else None
 
@@ -1164,7 +1230,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="앞쪽 비율을 학습에 사용 (기본 0.6 = 앞 60퍼센트)",
     )
     wf.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
+    wf.add_argument(
+        "--cache-dir", default="data/cache",
+        help="시세 저장 폴더. 두 번째 실행부터 몇 초로 끝납니다",
+    )
+    wf.add_argument(
+        "--refresh", action="store_true",
+        help="저장된 시세를 무시하고 새로 받기",
+    )
     wf.set_defaults(func=cmd_walkforward_kr)
+
+    ca = sub.add_parser("cache", help="저장된 시세 상태 보기 / 지우기")
+    ca.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    ca.add_argument("--clear", action="store_true", help="저장된 시세를 전부 지우기")
+    ca.set_defaults(func=cmd_cache)
 
     an = sub.add_parser(
         "analyze",
@@ -1217,6 +1296,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--market-filter", action="store_true",
         help="지수 상태가 나쁜 날은 매수하지 않음",
     )
+    pk.add_argument(
+        "--cache-dir", default="data/cache",
+        help="시세 저장 폴더. 두 번째 실행부터 훨씬 빠릅니다",
+    )
+    pk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
     pk.set_defaults(func=cmd_portfolio_kr)
 
     kc = sub.add_parser("backtest-kr", help="[국내] 과거 데이터로 전략 검증")
@@ -1234,6 +1318,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--min-score", type=float, default=0.0,
         help="이 점수 미만은 매수하지 않음",
     )
+    kc.add_argument(
+        "--cache-dir", default="data/cache",
+        help="시세 저장 폴더. 두 번째 실행부터 훨씬 빠릅니다",
+    )
+    kc.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
     kc.set_defaults(func=cmd_backtest_kr)
 
     ku = sub.add_parser("kr-universe", help="[국내] 전 종목 목록 뽑기")
