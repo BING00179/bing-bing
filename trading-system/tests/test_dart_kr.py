@@ -300,3 +300,60 @@ def test_큰_금액은_조_억으로_줄여_쓴다():
     assert dart_kr._money(3e14) == "300.00조"
     assert dart_kr._money(-1e8) == "-1억"
     assert dart_kr._money(float("nan")) == "—"
+
+
+# ────────────────────── 끊겼을 때 다시 걸기 ──────────────────────
+# 1,800종목을 20분 넘게 부르는 동안 연결이 한 번쯤 끊기는 것은 정상입니다.
+# 그때마다 전체가 죽으면 그 20분이 통째로 날아갑니다.
+
+def test_한_번_끊겨도_다시_걸어_성공한다(monkeypatch):
+    부른횟수 = {"n": 0}
+
+    class 응답:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"status":"000","list":[]}'
+
+    def 가짜열기(*a, **k):
+        부른횟수["n"] += 1
+        if 부른횟수["n"] == 1:
+            raise dart_kr.urllib.error.URLError("SSL: UNEXPECTED_EOF_WHILE_READING")
+        return 응답()
+
+    monkeypatch.setattr(dart_kr.urllib.request, "urlopen", 가짜열기)
+    monkeypatch.setattr(dart_kr.time, "sleep", lambda *_: None)
+
+    assert dart_kr._get("list.json", "키")["status"] == "000"
+    assert 부른횟수["n"] == 2                      # 한 번 실패, 한 번 성공
+
+
+def test_계속_끊기면_무엇이_문제인지_말하고_포기한다(monkeypatch):
+    def 항상실패(*a, **k):
+        raise dart_kr.urllib.error.URLError("연결 실패")
+
+    monkeypatch.setattr(dart_kr.urllib.request, "urlopen", 항상실패)
+    monkeypatch.setattr(dart_kr.time, "sleep", lambda *_: None)
+
+    with pytest.raises(dart_kr.DartUnreachable) as caught:
+        dart_kr._get("list.json", "키")
+    assert "3번 시도" in str(caught.value)
+
+
+def test_시간초과도_다시_걸어본다(monkeypatch):
+    부른횟수 = {"n": 0}
+
+    class 응답:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"status":"000","list":[]}'
+
+    def 가짜열기(*a, **k):
+        부른횟수["n"] += 1
+        if 부른횟수["n"] < 3:
+            raise TimeoutError("시간 초과")
+        return 응답()
+
+    monkeypatch.setattr(dart_kr.urllib.request, "urlopen", 가짜열기)
+    monkeypatch.setattr(dart_kr.time, "sleep", lambda *_: None)
+    assert dart_kr._get("list.json", "키")["status"] == "000"
+    assert 부른횟수["n"] == 3

@@ -1577,19 +1577,59 @@ def cmd_value_fetch(args: argparse.Namespace) -> int:
     if args.limit:
         codes = codes[: args.limit]
 
-    print(f"{len(codes):,}종목의 재무를 DART 에서 받습니다.")
-    print("한 종목당 한 번씩 부르므로 20~40분쯤 걸립니다. 한 번만 하면 됩니다.\n")
-
-    fin, 실패 = val_module.latest_financials(key, index, codes,
-                                             years_back=args.years_back)
-    if fin.empty:
-        print("재무를 하나도 받지 못했습니다.")
-        return 1
-
     target = _resolve(args.out)
     target.parent.mkdir(parents=True, exist_ok=True)
-    fin.to_csv(target, index=False, encoding="utf-8-sig")
-    print(f"\n{len(fin):,}종목 저장: {target}  (실패 {len(실패)}종목)")
+
+    # 이미 받아 둔 것이 있으면 건너뜁니다. 20~40분짜리 작업이 중간에
+    # 끊겼을 때, 다시 돌리면 끊긴 데부터 이어갑니다.
+    기존 = pd.DataFrame()
+    if target.exists() and not args.restart:
+        try:
+            기존 = pd.read_csv(target, dtype={"code": str, "rcept_dt": str})
+        except Exception:                      # 파일이 깨졌으면 새로 받습니다
+            기존 = pd.DataFrame()
+    if not 기존.empty:
+        받은것 = set(기존["code"])
+        남은것 = [c for c in codes if c not in 받은것]
+        print(f"이미 받아 둔 {len(받은것):,}종목은 건너뜁니다. "
+              f"({len(남은것):,}종목 남음)")
+        print("처음부터 다시 받으려면 --restart 를 붙이세요.")
+        codes = 남은것
+
+    if not codes:
+        print(f"받을 것이 없습니다. 이미 {len(기존):,}종목이 저장돼 있습니다: {target}")
+        return 0
+
+    print(f"\n{len(codes):,}종목의 재무를 DART 에서 받습니다.")
+    print("한 종목당 한 번씩 부르므로 20~40분쯤 걸립니다.")
+    print("중간에 끊겨도 받은 데까지는 저장되니, 다시 돌리면 이어집니다.\n")
+
+    def _save(부분: pd.DataFrame) -> None:
+        """중간중간 저장합니다. 끊겨도 여기까지는 남습니다."""
+        묶음 = pd.concat([기존, 부분], ignore_index=True) if not 기존.empty else 부분
+        if not 묶음.empty:
+            묶음.drop_duplicates(subset="code", keep="last").to_csv(
+                target, index=False, encoding="utf-8-sig"
+            )
+
+    try:
+        fin, 실패 = val_module.latest_financials(
+            key, index, codes, years_back=args.years_back, on_partial=_save,
+        )
+    except KeyboardInterrupt:
+        print("\n멈췄습니다. 받은 데까지는 저장돼 있습니다.")
+        print(f"다시 돌리면 이어서 받습니다: {target}")
+        return 1
+
+    _save(fin)
+    저장됨 = pd.read_csv(target, dtype={"code": str}) if target.exists() else fin
+    print(f"\n{len(저장됨):,}종목 저장: {target}  (이번에 실패 {len(실패)}종목)")
+
+    안읽힌것 = [c for c in val_module.NEEDED
+                if c in 저장됨.columns and 저장됨[c].notna().mean() < 0.8]
+    if 안읽힌것:
+        print(f"⚠️ 절반 넘게 비어 있는 항목: {', '.join(안읽힌것)}")
+        print("   조건 문제가 아니라 자료 문제입니다. value-kr 이 자세히 알려줍니다.")
     print("이제 value-kr 로 조건을 바꿔가며 몇 초 만에 볼 수 있습니다.")
     return 0
 
@@ -1900,6 +1940,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="최근 몇 개 사업연도까지 뒤져볼지")
     vf.add_argument("--limit", type=int, default=0, help="앞 N종목만 (시험용)")
     vf.add_argument("--out", default="data/fin_kr.csv", help="저장할 파일")
+    vf.add_argument("--restart", action="store_true",
+                    help="이미 받아 둔 것을 무시하고 처음부터 다시 받기")
     vf.add_argument("--api-key", help="직접 넘길 때만")
     vf.add_argument("--dart-cache", default="data/cache/dart", help="회사 목록 폴더")
     vf.set_defaults(func=cmd_value_fetch)

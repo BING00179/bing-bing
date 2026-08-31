@@ -243,3 +243,48 @@ def test_계정명이_조금_달라도_같은_뜻으로_읽는다():
 
 def test_모르는_계정은_읽지_않는다():
     assert v._canonical("이연법인세자산") is None
+
+
+# ────────────────────── 20~40분짜리 작업이 살아남는가 ──────────────────────
+
+def test_한_종목이_끊겨도_나머지는_지킨다(monkeypatch):
+    """종목 하나 때문에 1,800종목이 통째로 날아가면 안 됩니다."""
+    from src import dart_kr
+
+    index = pd.DataFrame([{"corp_code": f"C{i}", "corp_name": f"회사{i}",
+                           "stock_code": f"00000{i}"} for i in range(3)])
+
+    def 가짜재무(key, corp, year, report="11011"):
+        if corp == "C1":
+            raise dart_kr.DartUnreachable("DART 에 3번 시도했지만 닿지 못했습니다")
+        return pd.DataFrame([{"account_nm": "매출액", "fs_div": "CFS",
+                              "thstrm_amount": "1000", "rcept_no": "20260315000001"}])
+
+    monkeypatch.setattr(dart_kr, "finstate", 가짜재무)
+    fin, 실패 = v.latest_financials("키", index, ["000000", "000001", "000002"],
+                                    progress=0)
+    assert list(fin["code"]) == ["000000", "000002"]     # 가운데만 빠짐
+    assert 실패 == ["000001"]
+
+
+def test_중간_저장을_불러준다(monkeypatch):
+    """끊겨도 받은 데까지는 파일에 남아야 이어받을 수 있습니다."""
+    from src import dart_kr
+
+    index = pd.DataFrame([{"corp_code": f"C{i}", "corp_name": f"회사{i}",
+                           "stock_code": f"00000{i}"} for i in range(3)])
+    monkeypatch.setattr(dart_kr, "finstate", lambda *a, **k: pd.DataFrame(
+        [{"account_nm": "매출액", "fs_div": "CFS", "thstrm_amount": "1000",
+          "rcept_no": "20260315000001"}]))
+
+    저장된것 = []
+    v.latest_financials("키", index, ["000000", "000001", "000002"],
+                        progress=2, on_partial=저장된것.append)
+    assert 저장된것                                   # 중간에 한 번은 불렀어야 함
+    assert len(저장된것[-1]) >= 2
+
+
+def test_계정이_하나도_안_맞아도_표는_모양을_지킨다():
+    frame = v._to_frame([{"code": "A", "bsns_year": 2025, "rcept_dt": "20260315"}])
+    assert list(frame.columns) == list(v.FIN_COLUMNS)
+    assert pd.isna(frame.iloc[0]["매출액"])
