@@ -36,6 +36,7 @@ import io
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -48,6 +49,8 @@ import pandas as pd
 API_BASE = "https://opendart.fss.or.kr/api"
 TIMEOUT = 30
 PAUSE = 0.15                      # 호출 간 간격. 일일 20,000건 제한이 있습니다.
+RETRIES = 3                       # 연결이 끊겼을 때 다시 걸어보는 횟수
+BACKOFF = 1.0                     # 재시도 간격의 기준(초). 1 → 2 → 4
 CACHE_DIR = Path("data/cache/dart")
 
 # 사업보고서 / 반기 / 1분기 / 3분기
@@ -102,12 +105,36 @@ def api_key(explicit: str | None = None) -> str:
     return key
 
 
+class DartUnreachable(RuntimeError):
+    """여러 번 시도해도 DART 에 닿지 못했을 때."""
+
+
+def _fetch(url: str, timeout: int = TIMEOUT, tries: int = RETRIES) -> bytes:
+    """끊기면 다시 겁니다.
+
+    1,800종목을 20분 넘게 부르는 동안 연결이 한 번쯤 끊기는 것은
+    정상입니다(SSL: UNEXPECTED_EOF, 타임아웃 등). 그때마다 전체가
+    죽으면 그 20분이 통째로 날아갑니다. 잠깐 쉬었다 다시 겁니다.
+    """
+    마지막 = None
+    for 시도 in range(tries):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as resp:
+                return resp.read()
+        except (urllib.error.URLError, OSError, TimeoutError) as exc:
+            마지막 = exc
+            if 시도 < tries - 1:
+                time.sleep(BACKOFF * (2 ** 시도))     # 1초 → 2초 → 4초
+    raise DartUnreachable(
+        f"DART 에 {tries}번 시도했지만 닿지 못했습니다: {마지막}"
+    ) from 마지막
+
+
 def _get(path: str, key: str, **params: str) -> dict:
     """DART REST 호출 한 번. 상태 코드를 사람 말로 바꿔 던집니다."""
     query = urllib.parse.urlencode({"crtfc_key": key, **params})
     url = f"{API_BASE}/{path}?{query}"
-    with urllib.request.urlopen(url, timeout=TIMEOUT) as resp:
-        raw = resp.read()
+    raw = _fetch(url)
     time.sleep(PAUSE)
     try:
         payload = json.loads(raw.decode("utf-8"))
@@ -132,8 +159,7 @@ def download_corp_index(key: str, cache_dir: Path | str = CACHE_DIR) -> pd.DataF
     """회사 고유번호 전체 목록을 내려받아 저장합니다."""
     query = urllib.parse.urlencode({"crtfc_key": key})
     url = f"{API_BASE}/corpCode.xml?{query}"
-    with urllib.request.urlopen(url, timeout=TIMEOUT * 3) as resp:
-        raw = resp.read()
+    raw = _fetch(url, timeout=TIMEOUT * 3)
 
     if raw[:2] != b"PK":                      # zip 이 아니면 오류 XML 입니다
         text = raw[:500].decode("utf-8", "replace")

@@ -113,9 +113,20 @@ def listing_with_cap(market: str = "KOSDAQ") -> pd.DataFrame:
     return out.dropna(subset=["marcap"]).reset_index(drop=True)
 
 
+def _to_frame(rows: list[dict]) -> pd.DataFrame:
+    """모은 줄들을 표로. 없는 항목은 빈칸으로 둡니다."""
+    if not rows:
+        return pd.DataFrame(columns=list(FIN_COLUMNS))
+    frame = pd.DataFrame(rows)
+    for column in NEEDED:
+        if column not in frame.columns:
+            frame[column] = np.nan
+    return frame[list(FIN_COLUMNS)]
+
+
 def latest_financials(key: str, index: pd.DataFrame, codes: list[str],
-                      years_back: int = 2,
-                      progress: int = 100) -> tuple[pd.DataFrame, list[str]]:
+                      years_back: int = 2, progress: int = 100,
+                      on_partial=None) -> tuple[pd.DataFrame, list[str]]:
     """종목별로 가장 최근 사업보고서의 주요계정을 모읍니다.
 
     돌려주는 표에는 rcept_dt(공시 접수일) 가 같이 들어갑니다. 지금
@@ -135,15 +146,25 @@ def latest_financials(key: str, index: pd.DataFrame, codes: list[str],
             continue
 
         찾음 = None
-        for year in range(올해 - 1, 올해 - 1 - years_back, -1):
-            try:
-                raw = dart_kr.finstate(key, corp, year)
-            except dart_kr.DartError:
+        try:
+            for year in range(올해 - 1, 올해 - 1 - years_back, -1):
+                try:
+                    raw = dart_kr.finstate(key, corp, year)
+                except dart_kr.DartError:
+                    break
+                if raw.empty:
+                    continue
+                찾음 = (year, raw)
                 break
-            if raw.empty:
-                continue
-            찾음 = (year, raw)
-            break
+        except dart_kr.DartUnreachable as exc:
+            # 한 종목 때문에 1,800종목이 통째로 날아가면 안 됩니다.
+            # 이미 모은 것은 지키고, 이 종목만 실패로 넘깁니다.
+            실패.append(code)
+            if len(실패) <= 5:
+                print(f"  {code} 건너뜀 — {exc}")
+            if on_partial is not None:
+                on_partial(_to_frame(rows))
+            continue
 
         if 찾음 is None:
             실패.append(code)
@@ -167,14 +188,10 @@ def latest_financials(key: str, index: pd.DataFrame, codes: list[str],
 
         if progress and i % progress == 0:
             print(f"  {i}/{len(codes)}... (실패 {len(실패)})")
+            if on_partial is not None:     # 중간에 끊겨도 여기까지는 남습니다
+                on_partial(_to_frame(rows))
 
-    if not rows:
-        return pd.DataFrame(columns=list(FIN_COLUMNS)), 실패
-    frame = pd.DataFrame(rows)
-    for column in NEEDED:
-        if column not in frame.columns:
-            frame[column] = np.nan
-    return frame[list(FIN_COLUMNS)], 실패
+    return _to_frame(rows), 실패
 
 
 def valuation(listing: pd.DataFrame, fin: pd.DataFrame) -> pd.DataFrame:
