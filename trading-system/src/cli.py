@@ -23,6 +23,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import backtest as bt_module
+from . import breakout_kr as bo_module
 from . import case as case_module
 from . import dart_kr
 from . import dashboard as dash_module
@@ -1361,13 +1362,23 @@ def cmd_diagnose_kr(args: argparse.Namespace) -> int:
     print("\n같은 날 아무 종목이나 샀을 때의 평균을 먼저 구합니다 (비교 기준)...")
     market = dg_module.market_forward(frames)
 
-    print("신호를 모으는 중...")
+    print(f"신호를 모으는 중... (조건: {args.setup})")
     parts = []
-    for code, daily in frames.items():
-        rows = bt_module.signal_rows(code, daily, cfg.scanner_b, market_ok)
-        if rows.empty:
-            continue
-        parts.append(dg_module.signal_forward(code, daily, rows.index))
+    if args.setup == "breakout":
+        setup = bo_module.Setup()
+        for code, daily in frames.items():
+            dates = bo_module.signal_dates(daily, setup)
+            if market_ok is not None and len(dates):
+                허용 = market_ok.reindex(dates).fillna(False).astype(bool)
+                dates = dates[허용.to_numpy()]
+            if len(dates):
+                parts.append(dg_module.signal_forward(code, daily, dates))
+    else:
+        for code, daily in frames.items():
+            rows = bt_module.signal_rows(code, daily, cfg.scanner_b, market_ok)
+            if rows.empty:
+                continue
+            parts.append(dg_module.signal_forward(code, daily, rows.index))
 
     if not parts:
         print("신호가 하나도 없습니다.")
@@ -1757,6 +1768,46 @@ def cmd_dart_dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def _breakout_setup(args: argparse.Namespace) -> "bo_module.Setup":
+    return bo_module.Setup(
+        base_days=args.base_days, surge_days=args.surge_days,
+        max_base_range_pct=args.max_range, min_volume_mult=args.min_volume_mult,
+        max_runup_pct=args.max_runup, min_turnover=args.min_turnover * 1e8,
+        breakout_lookback=args.base_days,
+    )
+
+
+def cmd_breakout_kr(args: argparse.Namespace) -> int:
+    """조용하다 거래량이 터지며 깨어나는 종목을 찾습니다."""
+    cfg = Config.load(args.config)
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+    names = _names_for(codes, path)
+    setup = _breakout_setup(args)
+
+    print(f"대상 {len(codes):,}종목 · 최근 {args.years}년 시세를 확인합니다...")
+    frames = _frames_for(
+        codes, args.years, setup.base_days + setup.surge_days + 10,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
+    if not frames:
+        print("시세를 하나도 받지 못했습니다.")
+        return 1
+
+    hits = bo_module.scan_today(frames, setup, names=names)
+    print()
+    print(bo_module.report(hits, setup, top=args.top))
+
+    if hits:
+        out = _output_dir(cfg)
+        pd.DataFrame([h.__dict__ for h in hits]).to_csv(
+            out / "kr_breakout.csv", index=False, encoding="utf-8-sig"
+        )
+        print(f"\n저장: {out}/kr_breakout.csv")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.cli",
@@ -1930,6 +1981,29 @@ def build_parser() -> argparse.ArgumentParser:
     ku.add_argument("--out", default="data/universe_kr_all.txt", help="저장할 파일")
     ku.set_defaults(func=cmd_kr_universe)
 
+    bk = sub.add_parser(
+        "breakout-kr",
+        help="[국내] 조용하다 거래량 터지며 깨어나는 종목 찾기",
+    )
+    bk.add_argument("--universe", help="종목 목록 파일")
+    bk.add_argument("--years", type=float, default=2.0, help="시세 조회 기간(년)")
+    bk.add_argument("--base-days", type=int, default=60,
+                    help="'조용했나' 를 보는 기간(거래일)")
+    bk.add_argument("--surge-days", type=int, default=5,
+                    help="거래량이 터진 걸 보는 기간(거래일)")
+    bk.add_argument("--max-range", type=float, default=45.0,
+                    help="박스 폭 상한(퍼센트). 좁을수록 조용했다는 뜻")
+    bk.add_argument("--min-volume-mult", type=float, default=3.0,
+                    help="평소 거래대금의 몇 배 이상이어야 하는지")
+    bk.add_argument("--max-runup", type=float, default=40.0,
+                    help="이미 이만큼 넘게 올랐으면 제외(퍼센트)")
+    bk.add_argument("--min-turnover", type=float, default=5.0,
+                    help="하루 거래대금 하한(억원)")
+    bk.add_argument("--top", type=int, default=20, help="몇 종목까지 보여줄지")
+    bk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    bk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    bk.set_defaults(func=cmd_breakout_kr)
+
     vf = sub.add_parser(
         "value-fetch",
         help="[국내] DART 에서 전 종목 재무 받아두기 (20~40분, 한 번만)",
@@ -2014,6 +2088,9 @@ def build_parser() -> argparse.ArgumentParser:
     dgk.add_argument("--universe", help="종목코드 목록 파일")
     dgk.add_argument("--years", type=float, default=5.0, help="조회 기간 (년)")
     dgk.add_argument("--horizon", type=int, default=5, help="갭별 성적을 볼 보유일수")
+    dgk.add_argument("--setup", default="trendjoin", choices=["trendjoin", "breakout"],
+                     help="어떤 조건을 진단할지. trendjoin=기존 추세추종, "
+                          "breakout=조용하다 깨어나는 종목")
     dgk.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
     dgk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
     dgk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")

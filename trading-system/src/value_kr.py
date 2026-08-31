@@ -214,7 +214,37 @@ def valuation(listing: pd.DataFrame, fin: pd.DataFrame) -> pd.DataFrame:
     merged["PSR"] = _ratio(merged["marcap"], merged["매출액"])
     merged["영업이익률%"] = _ratio(merged["영업이익"], merged["매출액"]) * 100.0
     merged["부채비율%"] = _ratio(merged["부채총계"], merged["자본총계"]) * 100.0
+
+    # PER 이 2~3배로 극단적으로 낮으면 십중팔구 일회성 이익입니다.
+    # 부동산을 팔았거나 자회사를 처분했거나. 그 해만 순이익이 뛰고
+    # 다음 해엔 원래대로 돌아갑니다. 본업 밖에서 온 몫을 재 둡니다.
+    본업밖 = merged["당기순이익"] - merged["영업이익"]
+    merged["본업밖이익비중%"] = (
+        본업밖 / merged["당기순이익"].abs()
+    ).replace([np.inf, -np.inf], np.nan) * 100.0
+
+    # 영업이익만으로 다시 계산한 PER. 일회성을 걷어내면 얼마인가.
+    merged["영업PER"] = _ratio(merged["marcap"], merged["영업이익"])
     return merged
+
+
+def one_off_warning(row: pd.Series) -> str:
+    """일회성 이익이 의심되는지, 왜 그런지 한 줄로."""
+    영업, 순이익 = row.get("영업이익"), row.get("당기순이익")
+    if pd.isna(영업) or pd.isna(순이익):
+        return ""
+    if 순이익 <= 0:
+        return ""
+    if 영업 <= 0:
+        return "영업적자인데 순이익은 흑자 — 이익이 전부 본업 밖에서 왔습니다"
+    if 순이익 > 영업 * 1.5:
+        비중 = (순이익 - 영업) / 순이익 * 100.0
+        영업per = row.get("영업PER")
+        꼬리 = ("" if pd.isna(영업per)
+                else f" 영업이익만으로 보면 PER {영업per:.1f}배입니다.")
+        return (f"순이익의 {비중:.0f}%가 본업 밖에서 왔습니다 — "
+                f"일회성일 수 있습니다.{꼬리}")
+    return ""
 
 
 # ─────────────────────────── 거르기 ───────────────────────────
@@ -287,6 +317,8 @@ def screen(frame: pd.DataFrame, rule: Screen) -> pd.DataFrame:
 
     out["탈락사유"] = 사유
     out["통과"] = out["탈락사유"] == ""
+    # 탈락시키지는 않습니다. 사람이 보고 판단할 일입니다.
+    out["일회성경고"] = [one_off_warning(row) for _, row in out.iterrows()]
     return out
 
 
@@ -389,7 +421,9 @@ def report(screened: pd.DataFrame, rule: Screen, top: int = 30) -> str:
         lines.append("   순위  종목명            코드      현재가"
                      "     PBR     PER   영업이익률  부채비율")
         lines.append("   " + "-" * 78)
+        경고들 = []
         for i, (_, row) in enumerate(통과.head(top).iterrows(), 1):
+            경고 = str(row.get("일회성경고", "") or "")
             lines.append(
                 f"   {i:>3}  {str(row.get('name', ''))[:14]:<14}"
                 f"  {row['code']}  {_num(row.get('close'), ',.0f'):>9}"
@@ -397,7 +431,20 @@ def report(screened: pd.DataFrame, rule: Screen, top: int = 30) -> str:
                 f"  {_num(row.get('PER'), '.1f'):>6}"
                 f"   {_num(row.get('영업이익률%'), '.1f'):>7}%"
                 f"   {_num(row.get('부채비율%'), '.0f'):>6}%"
+                + ("  ⚠️" if 경고 else "")
             )
+            if 경고:
+                경고들.append(f"   ⚠️ {str(row.get('name', ''))[:14]}"
+                             f"({row['code']}) — {경고}")
+
+        if 경고들:
+            lines.append("")
+            lines.append("[사실] ⚠️ 표시된 종목 — 이익이 본업에서 온 것이 아닙니다")
+            lines.extend(경고들)
+            lines.append("")
+            lines.append("   PER 이 2~3배로 극단적으로 낮으면 대개 부동산·자회사 처분 같은")
+            lines.append("   일회성 이익입니다. 그 해만 그렇고 다음 해엔 돌아갑니다.")
+            lines.append("   탈락시키지 않았습니다 — 사람이 보고 판단할 일입니다.")
 
     세기 = reject_counts(screened)
     if 세기:
