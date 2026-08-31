@@ -1,0 +1,23 @@
+[
+ {
+  "when": "2026-08-31 10:05 KST",
+  "date": "2026-08-31",
+  "market": {
+   "index_name": "코스피",
+   "close": 6788.88,
+   "sma_slow": 5996.21,
+   "above_sma_slow": true,
+   "rsi": 50.3,
+   "drawdown_pct": 25.52,
+   "volatility_pct": 80.03,
+   "verdict": "위험",
+   "reasons": [
+    "고점대비 -25.5%",
+    "변동성 80.0%"
+   ],
+   "tradable": false
+  },
+  "signals": [],
+  "count": 0
+ }
+]
