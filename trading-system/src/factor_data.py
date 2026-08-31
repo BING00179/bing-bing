@@ -28,11 +28,21 @@ from .data import DataUnavailable
 
 
 def _pykrx():
+    """pykrx 를 불러옵니다. 실패하면 DataUnavailable.
+
+    pykrx 는 불러오는 순간 KRX 에 로그인을 시도합니다. 계정이 없거나
+    KRX 가 응답 형식을 바꾸면 여기서 예외가 터지는데, 그게 프로그램
+    전체를 죽이면 안 됩니다. 다른 데이터 출처로 넘어갈 수 있어야 합니다.
+    """
     try:
         from pykrx import stock  # noqa: PLC0415
     except ImportError as exc:  # pragma: no cover
         raise DataUnavailable(
             "pykrx 가 설치돼 있지 않습니다. `pip install pykrx` 로 설치해 주세요."
+        ) from exc
+    except Exception as exc:  # noqa: BLE001 - 로그인 실패 등 무엇이든
+        raise DataUnavailable(
+            f"pykrx 를 쓸 수 없습니다 (KRX 로그인 실패 등): {exc}"
         ) from exc
     return stock
 
@@ -83,6 +93,142 @@ def collect(
         if verbose:
             print(f"  {day}  {len(frame):,}종목")
     return out
+
+
+# ─────────────────────────────────────────────────────────────
+# FinanceDataReader 경로 — 로그인이 필요 없습니다.
+#
+# pykrx 는 KRX 계정을 요구하고 로그인이 자주 깨집니다. FDR 은
+# 백테스트에서 이미 코스닥 1700여 종목을 문제없이 받아온 도구라
+# 이쪽을 기본으로 씁니다.
+#
+# 대신 PER·PBR·배당은 받을 수 없습니다. 가격과 거래량으로 계산되는
+# 네 가지(소형주·모멘텀·저변동성·거래대금)만 검정합니다.
+# ─────────────────────────────────────────────────────────────
+
+
+def _fdr():
+    try:
+        import FinanceDataReader  # noqa: PLC0415
+    except ImportError as exc:  # pragma: no cover
+        raise DataUnavailable(
+            "FinanceDataReader 가 없습니다. `pip install finance-datareader`"
+        ) from exc
+    return FinanceDataReader
+
+
+def listing_with_size(market: str = "KOSDAQ", top: int = 0) -> pd.DataFrame:
+    """종목 목록 + 시가총액. top 을 주면 시총 상위 N개만.
+
+    전 종목을 다 받으면 시간이 오래 걸립니다. 거래가 거의 없는
+    종목은 실제로 사고팔 수 없으므로, 시총 상위만 보는 것이
+    현실적이기도 합니다.
+    """
+    fdr = _fdr()
+    try:
+        frame = fdr.StockListing(market.strip().upper())
+    except Exception as exc:  # noqa: BLE001
+        raise DataUnavailable(f"{market} 종목 목록 조회 실패: {exc}") from exc
+    if frame is None or frame.empty:
+        raise DataUnavailable(f"{market} 종목 목록이 비어 있습니다.")
+
+    lower = {str(c).strip().lower(): c for c in frame.columns}
+    code_col = lower.get("code") or lower.get("symbol")
+    name_col = lower.get("name")
+    cap_col = lower.get("marcap") or lower.get("marketcap")
+    if code_col is None:
+        raise DataUnavailable(f"종목코드 컬럼을 찾지 못했습니다: {list(frame.columns)}")
+
+    out = pd.DataFrame({"code": frame[code_col].astype(str).str.zfill(6)})
+    out["name"] = frame[name_col].astype(str) if name_col else ""
+    out["marcap"] = (
+        pd.to_numeric(frame[cap_col], errors="coerce") if cap_col else float("nan")
+    )
+    out = out.dropna(subset=["code"]).drop_duplicates("code")
+    if top and "marcap" in out:
+        out = out.nlargest(top, "marcap")
+    return out.reset_index(drop=True)
+
+
+def collect_fdr(
+    codes: list[str], years: float = 5.0, verbose: bool = True
+) -> dict[str, pd.DataFrame]:
+    """종목별 일봉을 받습니다. 종목당 1~2초 걸립니다."""
+    fdr = _fdr()
+    start = (date.today() - timedelta(days=int(365.25 * (years + 1)))).isoformat()
+
+    frames: dict[str, pd.DataFrame] = {}
+    for i, code in enumerate(codes, 1):
+        try:
+            frame = fdr.DataReader(code, start)
+        except Exception:  # noqa: BLE001 - 상장폐지 등
+            continue
+        if frame is None or frame.empty:
+            continue
+        frame = frame.rename(columns={c: str(c).strip().lower() for c in frame.columns})
+        if "close" not in frame.columns:
+            continue
+        frames[code] = frame
+        if verbose and i % 100 == 0:
+            print(f"  {i:,}/{len(codes):,}종목  (확보 {len(frames):,})")
+
+    if verbose:
+        print(f"  시세 확보 {len(frames):,}종목")
+    return frames
+
+
+def build_from_fdr(
+    frames: dict[str, pd.DataFrame],
+    momentum_months: int = 6,
+    volatility_months: int = 6,
+    listing: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    """일봉 모음에서 월말 기준 (가격표, 요인표들) 을 만듭니다."""
+    if len(frames) < 30:
+        raise DataUnavailable(f"종목이 {len(frames)}개뿐이라 검정할 수 없습니다.")
+
+    closes, turnovers = {}, {}
+    for code, frame in frames.items():
+        monthly = frame["close"].resample("ME").last()
+        closes[code] = monthly
+        if "volume" in frame.columns:
+            value = frame["close"] * frame["volume"]
+            turnovers[code] = value.resample("ME").mean()
+
+    prices = pd.DataFrame(closes).sort_index().dropna(how="all")
+    turnover = pd.DataFrame(turnovers).reindex(prices.index) if turnovers else pd.DataFrame()
+
+    momentum = prices.pct_change(momentum_months) * 100.0
+    monthly_ret = prices.pct_change()
+    volatility = (
+        monthly_ret.rolling(volatility_months, min_periods=volatility_months).std() * 100.0
+    )
+    factors = {
+        f"모멘텀{momentum_months}개월": momentum,
+        f"저변동성{volatility_months}개월": volatility,
+    }
+
+    # 과거 시가총액을 복원합니다.
+    #
+    #   상장주식수 = 현재 시가총액 ÷ 현재 주가
+    #   과거 시가총액 = 그때 주가 × 상장주식수
+    #
+    # 주식수는 지금 값만 알 수 있어서, 유상증자나 액면분할이 있었던
+    # 종목은 어긋납니다. 주가를 그대로 쓰는 것보다는 훨씬 낫습니다
+    # (주가가 낮다고 작은 회사가 아니기 때문입니다).
+    if listing is not None and not listing.empty and "marcap" in listing.columns:
+        caps = listing.set_index("code")["marcap"].dropna()
+        last_price = prices.ffill().iloc[-1]
+        common = caps.index.intersection(last_price.index)
+        shares = (caps.loc[common] / last_price.loc[common]).replace(
+            [np.inf, -np.inf], np.nan
+        ).dropna()
+        if len(shares) >= 30:
+            factors["소형주(시가총액)"] = prices[shares.index] * shares
+
+    if not turnover.empty:
+        factors["거래대금"] = turnover
+    return prices, factors
 
 
 def _pick(frame: pd.DataFrame, *names: str) -> pd.Series | None:
@@ -152,6 +298,7 @@ def build_matrices(
 # 요인마다 '어느 쪽이 유리하다고 가정하는가'.
 # 알려진 통념일 뿐이며, 검정 결과가 반대로 나올 수도 있습니다.
 DIRECTION = {
+    "소형주(시가총액)": False,      # 시가총액이 작을수록 유리하다는 가정
     "저PER(밸류)": False,          # 낮을수록 유리하다는 가정
     "저PBR(밸류)": False,
     "소형주": False,               # 시가총액이 작을수록

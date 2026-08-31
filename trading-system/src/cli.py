@@ -645,18 +645,37 @@ def cmd_factors_kr(args: argparse.Namespace) -> int:
     print("상위 그룹과 하위 그룹의 이후 수익률을 비교합니다.")
     print("차이가 없으면 그 기준은 쓸모가 없다는 뜻입니다.\n")
 
-    days = factor_data.month_ends(args.years)
-    print(f"리밸런싱일 {len(days)}회 — 전 종목 단면을 받아옵니다.")
-    snapshots = factor_data.collect(days, market=args.market)
-    if len(snapshots) < 3:
-        print("\n받아온 회차가 너무 적어 검정할 수 없습니다.")
-        return 1
-
-    prices, matrices = factor_data.build_matrices(
-        snapshots,
-        momentum_months=args.momentum_months,
-        volatility_months=args.volatility_months,
-    )
+    if args.source == "krx":
+        days = factor_data.month_ends(args.years)
+        print(f"리밸런싱일 {len(days)}회 — KRX 에서 전 종목 단면을 받아옵니다.")
+        try:
+            snapshots = factor_data.collect(days, market=args.market)
+        except DataUnavailable as exc:
+            print(f"\nKRX 를 쓸 수 없습니다: {exc}")
+            print("--source fdr 로 다시 시도해 보세요 (로그인 불필요).")
+            return 1
+        if len(snapshots) < 3:
+            print("\n받아온 회차가 너무 적어 검정할 수 없습니다.")
+            return 1
+        prices, matrices = factor_data.build_matrices(
+            snapshots,
+            momentum_months=args.momentum_months,
+            volatility_months=args.volatility_months,
+        )
+    else:
+        print(f"{args.market} 종목 목록을 받아옵니다...")
+        listing = factor_data.listing_with_size(args.market, top=args.top)
+        print(f"대상 {len(listing):,}종목 — 시세를 받아옵니다 (종목당 1~2초).")
+        frames = factor_data.collect_fdr(listing["code"].tolist(), years=args.years)
+        if len(frames) < 30:
+            print("\n시세를 받은 종목이 너무 적어 검정할 수 없습니다.")
+            return 1
+        prices, matrices = factor_data.build_from_fdr(
+            frames,
+            momentum_months=args.momentum_months,
+            volatility_months=args.volatility_months,
+            listing=listing,
+        )
     print(f"\n요인 {len(matrices)}개 · 종목 {prices.shape[1]:,}개 · 회차 {len(prices)}회\n")
 
     if args.debug:
@@ -1025,6 +1044,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="[국내] 알려진 요인들이 실제로 통했는지 검정 (밸류·모멘텀·소형주 등)",
     )
     fk.add_argument("--market", default="KOSDAQ", help="KOSPI / KOSDAQ (기본 KOSDAQ)")
+    fk.add_argument(
+        "--source", choices=["fdr", "krx"], default="fdr",
+        help="fdr=로그인 불필요(기본) / krx=PER·PBR 까지 받지만 KRX 계정 필요",
+    )
+    fk.add_argument(
+        "--top", type=int, default=500,
+        help="시가총액 상위 몇 종목만 볼지 (0=전체, 기본 500)",
+    )
     fk.add_argument("--years", type=float, default=5.0, help="검정 기간 (년, 기본 5)")
     fk.add_argument("--quantiles", type=int, default=5, help="몇 개 그룹으로 나눌지")
     fk.add_argument("--min-names", type=int, default=30, help="회차당 최소 종목 수")
