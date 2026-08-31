@@ -597,6 +597,27 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
     codes = read_universe_kr(path)
     names = _names_for(codes, path)
 
+    # 시장 필터를 켜면 지수 상태가 나쁜 날의 신호는 버립니다.
+    # 켜졌는지 여부를 시작할 때 크게 보여줍니다. 1~2시간 돌린 뒤에야
+    # 옵션이 빠진 걸 알게 되면 그 시간이 통째로 날아갑니다.
+    market_ok = None
+    print("=" * 58)
+    if args.market_filter:
+        index = fetch_index(cfg.market_filter.index_code)
+        market_ok = mf_module.tradable_series(index, cfg.market_filter)
+        allowed, total_days = int(market_ok.sum()), len(market_ok)
+        print(
+            f"✅ 시장 필터 켬 — {cfg.market_filter.index_name} 기준\n"
+            f"   전체 {total_days}일 중 매수 허용 {allowed}일 "
+            f"({allowed / total_days * 100:.1f}%)"
+        )
+    else:
+        print(
+            "⚠️ 시장 필터 꺼짐 — 하락장에서도 매수한 것으로 계산됩니다.\n"
+            "   켜려면 명령 끝에 --market-filter 를 붙이세요."
+        )
+    print("=" * 58)
+
     all_trades: list[bt_module.Trade] = []
     per_code: list[dict] = []
 
@@ -610,7 +631,7 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
             print(f"  ! {code}: 일봉 {len(daily)}개로는 200일선 검증이 어렵습니다.")
             continue
 
-        trades = bt_module.run(code, daily, cfg.backtest_kr, cfg.scanner_b)
+        trades = bt_module.run(code, daily, cfg.backtest_kr, cfg.scanner_b, market_ok)
         all_trades.extend(trades)
         stats = bt_module.summarize(trades)
         stats["code"] = code
@@ -652,6 +673,7 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
         "-" * 58,
         f"  조건: 손절 {bt.stop_loss_pct}% / 익절 {bt.take_profit_pct}%"
         f" / 최대보유 {bt.max_hold_days}일",
+        f"  시장 필터: {'켬' if args.market_filter else '끔'}",
         f"  투입금: 1회 {bt.capital_per_trade:,.0f}원",
         f"  비용: 수수료 {bt.commission_pct}% x2 / 증권거래세 {bt.sell_tax_pct}%"
         f" / 슬리피지 {bt.slippage_pct}% x2",
@@ -662,7 +684,8 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
         "     수수료로 config.json 의 backtest_kr 을 맞춰 주세요.",
         "=" * 58,
     ]))
-    print(f"\n결과 저장: {out}/kr_backtest_trades.csv")
+    suffix = "_filtered" if args.market_filter else ""
+    print(f"\n결과 저장: {out}/kr_backtest_trades{suffix}.csv")
     return 0
 
 
