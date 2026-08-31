@@ -1014,7 +1014,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pk.add_argument("--universe", help="종목코드 목록 파일")
     pk.add_argument("--years", type=float, default=3.0, help="검증 기간 (년)")
-    pk.add_argument("--cash", type=float, default=10_000_000.0, help="시작 자본 (원)")
+    pk.add_argument(
+        "--cash", type=float, default=5_000_000.0,
+        help="시작 자본 (원, 기본 500만). 종목당 배분액이 주가보다 작으면 못 삽니다",
+    )
     pk.add_argument(
         "--max-positions", type=int, default=3,
         help="동시에 들고 있을 최대 종목 수 (기본 3)",
