@@ -53,6 +53,7 @@ def run(
     bt: BacktestConfig,
     sb: ScannerBConfig,
     market_ok: pd.Series | None = None,
+    allowed_dates: set | None = None,
 ) -> list[Trade]:
     """한 종목의 일봉 전체에 대해 매매를 시뮬레이션합니다.
 
@@ -64,6 +65,12 @@ def run(
     if market_ok is not None:
         allowed = market_ok.reindex(daily.index).astype("boolean").fillna(False).astype(bool)
         sig["signal"] = sig["signal"] & allowed
+    if allowed_dates is not None:
+        # 점수 상위만 골랐을 때, 그날 이 종목이 뽑혔는지
+        picked = pd.Series(
+            [d in allowed_dates for d in daily.index], index=daily.index, dtype=bool
+        )
+        sig["signal"] = sig["signal"] & picked
     trades: list[Trade] = []
 
     ma_break = None
@@ -175,6 +182,48 @@ def run(
             " capital_per_trade 의 통화 단위를 확인하세요."
         )
     return trades
+
+
+def signal_rows(
+    ticker: str,
+    daily: pd.DataFrame,
+    sb: ScannerBConfig,
+    market_ok: pd.Series | None = None,
+) -> pd.DataFrame:
+    """신호가 난 날짜와, 그날의 점수 재료를 돌려줍니다.
+
+    점수를 매기려면 여러 종목의 같은 날 신호를 한자리에 모아 비교해야
+    합니다. 종목별로 따로 도는 백테스트만으로는 '그날 상위 3종목' 을
+    가릴 수 없어서, 신호를 먼저 모으는 단계가 필요합니다.
+
+    ⚠️ 각 값은 그날 종가까지만으로 계산됩니다. 미래를 보지 않습니다.
+    """
+    sig = signals_from_daily(daily, sb)
+    if market_ok is not None:
+        allowed = market_ok.reindex(daily.index).astype("boolean").fillna(False).astype(bool)
+        sig["signal"] = sig["signal"] & allowed
+
+    hit = sig.index[sig["signal"].to_numpy()]
+    if len(hit) == 0:
+        return pd.DataFrame(
+            columns=["ticker", "gap_pct", "turnover", "price", "sma_slow", "today_high"]
+        )
+
+    close = daily["close"]
+    prev_close = close.shift(1)
+    gap = (daily["open"] - prev_close) / prev_close * 100.0
+    ma_slow = sma(close, sb.sma_slow)
+
+    return pd.DataFrame(
+        {
+            "ticker": ticker,
+            "gap_pct": gap.loc[hit].fillna(0.0),
+            "turnover": (close * daily["volume"]).loc[hit],
+            "price": close.loc[hit],
+            "sma_slow": ma_slow.loc[hit],
+            "today_high": daily["high"].loc[hit],
+        }
+    )
 
 
 def summarize(trades: list[Trade]) -> dict:

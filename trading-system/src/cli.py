@@ -24,6 +24,7 @@ import pandas as pd
 from . import backtest as bt_module
 from . import market_filter as mf_module
 from . import notify_policy
+from . import ranking
 from . import watchlist as wl_module
 from . import report_html
 from . import scanner_a, scanner_b, scanner_kr
@@ -591,6 +592,48 @@ def cmd_market(args: argparse.Namespace) -> int:
     return 0
 
 
+def _pick_top_signals(frames, cfg, market_ok, args) -> dict[str, set]:
+    """같은 날 신호가 여럿이면 점수 상위 N종목만 남깁니다.
+
+    실제로 쓸 때 하루에 3종목만 산다면, 검증도 그렇게 해야 합니다.
+    전 종목의 신호를 한자리에 모아 날짜별로 순위를 매깁니다.
+    """
+    rows = [
+        bt_module.signal_rows(code, daily, cfg.scanner_b, market_ok)
+        for code, daily in frames.items()
+    ]
+    rows = [r for r in rows if not r.empty]
+    if not rows:
+        print("신호가 하나도 없어 점수를 매길 것이 없습니다.")
+        return {}
+
+    allsig = pd.concat(rows)
+    allsig["score"] = [
+        ranking.score(
+            gap_pct=r.gap_pct, turnover=r.turnover, price=r.price,
+            sma_slow=r.sma_slow, today_high=r.today_high, cfg=cfg.ranking,
+        ).total
+        for r in allsig.itertuples()
+    ]
+
+    before = len(allsig)
+    kept = (
+        allsig[allsig["score"] >= args.min_score]
+        .groupby(level=0, group_keys=False)
+        .apply(lambda g: g.nlargest(args.top_n, "score"))
+    )
+    print(
+        f"점수 상위 {args.top_n}종목만 — 신호 {before:,}건 중 "
+        f"{len(kept):,}건 선택 ({len(kept) / before * 100:.1f}%)"
+    )
+    if len(kept):
+        print(
+            f"  선택된 신호 점수: 최저 {kept['score'].min():.1f} · "
+            f"중앙 {kept['score'].median():.1f} · 최고 {kept['score'].max():.1f}"
+        )
+    return {code: set(part.index) for code, part in kept.groupby("ticker")}
+
+
 def cmd_backtest_kr(args: argparse.Namespace) -> int:
     cfg = Config.load(args.config)
     path = _resolve(args.universe or cfg.universe_file_kr)
@@ -616,11 +659,14 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
             "⚠️ 시장 필터 꺼짐 — 하락장에서도 매수한 것으로 계산됩니다.\n"
             "   켜려면 명령 끝에 --market-filter 를 붙이세요."
         )
+    if args.top_n:
+        print(f"✅ 점수 상위 켬 — 하루 최대 {args.top_n}종목, 최소 {args.min_score}점")
     print("=" * 58)
 
-    all_trades: list[bt_module.Trade] = []
-    per_code: list[dict] = []
-
+    # 시세를 한 번만 받아 재사용합니다. 점수 상위만 고르려면 전 종목의
+    # 신호를 먼저 모아야 해서 두 번 훑어야 하는데, 두 번 받으면
+    # 시간이 두 배로 걸립니다.
+    frames: dict[str, pd.DataFrame] = {}
     for code in codes:
         try:
             daily = fetch_daily_kr(code, years=args.years)
@@ -630,8 +676,18 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
         if len(daily) < cfg.scanner_b.sma_slow + 5:
             print(f"  ! {code}: 일봉 {len(daily)}개로는 200일선 검증이 어렵습니다.")
             continue
+        frames[code] = daily
 
-        trades = bt_module.run(code, daily, cfg.backtest_kr, cfg.scanner_b, market_ok)
+    picked = _pick_top_signals(frames, cfg, market_ok, args) if args.top_n else None
+
+    all_trades: list[bt_module.Trade] = []
+    per_code: list[dict] = []
+
+    for code, daily in frames.items():
+        allowed = picked.get(code, set()) if picked is not None else None
+        trades = bt_module.run(
+            code, daily, cfg.backtest_kr, cfg.scanner_b, market_ok, allowed
+        )
         all_trades.extend(trades)
         stats = bt_module.summarize(trades)
         stats["code"] = code
@@ -651,9 +707,15 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
             "   config.json 의 backtest_kr.capital_per_trade 를 확인하세요."
         )
 
+    # 조건마다 결과 파일을 구분해 나중에 나란히 비교할 수 있게 합니다.
+    suffix = ("_filtered" if args.market_filter else "") + (
+        f"_top{args.top_n}" if args.top_n else ""
+    )
     out = _output_dir(cfg)
-    bt_module.trades_to_frame(all_trades).to_csv(out / (f"kr_backtest_trades{'_filtered' if args.market_filter else ''}.csv"), index=False)
-    pd.DataFrame(per_code).to_csv(out / (f"kr_backtest_by_code{'_filtered' if args.market_filter else ''}.csv"), index=False)
+    bt_module.trades_to_frame(all_trades).to_csv(
+        out / f"kr_backtest_trades{suffix}.csv", index=False
+    )
+    pd.DataFrame(per_code).to_csv(out / f"kr_backtest_by_code{suffix}.csv", index=False)
 
     bt = cfg.backtest_kr
     print("\n".join([
@@ -674,6 +736,7 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
         f"  조건: 손절 {bt.stop_loss_pct}% / 익절 {bt.take_profit_pct}%"
         f" / 최대보유 {bt.max_hold_days}일",
         f"  시장 필터: {'켬' if args.market_filter else '끔'}",
+        f"  점수 상위: {f'하루 {args.top_n}종목 (최소 {args.min_score}점)' if args.top_n else '전체'}",
         f"  투입금: 1회 {bt.capital_per_trade:,.0f}원",
         f"  비용: 수수료 {bt.commission_pct}% x2 / 증권거래세 {bt.sell_tax_pct}%"
         f" / 슬리피지 {bt.slippage_pct}% x2",
@@ -684,7 +747,6 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
         "     수수료로 config.json 의 backtest_kr 을 맞춰 주세요.",
         "=" * 58,
     ]))
-    suffix = "_filtered" if args.market_filter else ""
     print(f"\n결과 저장: {out}/kr_backtest_trades{suffix}.csv")
     return 0
 
@@ -781,6 +843,14 @@ def build_parser() -> argparse.ArgumentParser:
     kc.add_argument(
         "--market-filter", action="store_true",
         help="지수 상태가 나쁜 날의 신호는 버리고 검증",
+    )
+    kc.add_argument(
+        "--top-n", type=int, default=0,
+        help="같은 날 신호가 여럿이면 점수 상위 N종목만 매수 (0=전체)",
+    )
+    kc.add_argument(
+        "--min-score", type=float, default=0.0,
+        help="이 점수 미만은 매수하지 않음",
     )
     kc.set_defaults(func=cmd_backtest_kr)
 

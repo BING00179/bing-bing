@@ -103,3 +103,84 @@ def test_no_trades_are_taken_during_the_blocked_period(fake_market):
     assert entries.max() < pd.Timestamp("2025-06-01"), (
         "폭락 구간에서 진입이 발생했습니다"
     )
+
+
+@pytest.fixture
+def many_stocks(monkeypatch, tmp_path):
+    """여러 종목이 같은 날 신호를 내는 상황. 점수 순위를 확인합니다."""
+    days = 500
+    dates = pd.bdate_range("2023-01-02", periods=days)
+    index = pd.DataFrame({"close": np.linspace(2000, 3400, days)}, index=dates)
+
+    rng = np.random.default_rng(3)
+    frames = {}
+    for i in range(12):
+        close = (10_000 + i * 5_000) * np.exp(np.cumsum(rng.normal(0.0012, 0.018, days)))
+        opens = np.concatenate([[close[0]], close[:-1]])
+        frames[f"{i:06d}"] = pd.DataFrame(
+            {
+                "open": opens,
+                "high": np.maximum(close * 1.004, opens),
+                "low": np.minimum(close * 0.99, opens),
+                "close": close,
+                "volume": np.full(days, 100_000.0 * (i + 1)),
+            },
+            index=dates,
+        )
+
+    universe = tmp_path / "many.txt"
+    universe.write_text("\n".join(frames), encoding="utf-8")
+
+    monkeypatch.setattr(cli, "fetch_index", lambda code: index)
+    monkeypatch.setattr(cli, "fetch_daily_kr", lambda code, years=3.0: frames[code])
+    monkeypatch.setattr(cli, "_output_dir", lambda cfg: tmp_path)
+    return universe
+
+
+def _run_top(universe, top_n: int) -> pd.DataFrame:
+    argv = ["backtest-kr", "--universe", str(universe)]
+    suffix = ""
+    if top_n:
+        argv += ["--top-n", str(top_n)]
+        suffix = f"_top{top_n}"
+    assert cli.main(argv) == 0
+    return pd.read_csv(universe.parent / f"kr_backtest_trades{suffix}.csv")
+
+
+def test_top_n_reduces_trades(many_stocks):
+    """하루 상위 N종목만 사면 매매가 줄어야 합니다."""
+    everything = _run_top(many_stocks, 0)
+    top2 = _run_top(many_stocks, 2)
+
+    assert len(everything) > 0, "제한 없이는 매매가 있어야 합니다"
+    assert len(top2) < len(everything), (
+        f"상위 2종목 제한인데 매매가 줄지 않았습니다 "
+        f"(전체 {len(everything)}건, 상위2 {len(top2)}건)"
+    )
+
+
+def test_top_n_never_exceeds_the_limit_on_any_day(many_stocks):
+    """같은 날 진입이 N종목을 넘으면 안 됩니다."""
+    top2 = _run_top(many_stocks, 2)
+    if top2.empty:
+        pytest.skip("이 데이터에서는 매매가 없습니다")
+    per_day = top2.groupby("entry_date")["ticker"].nunique()
+    assert per_day.max() <= 2, f"하루 최대 {per_day.max()}종목이 진입했습니다"
+
+
+def test_top_n_state_is_announced(many_stocks, capsys):
+    _run_top(many_stocks, 3)
+    out = capsys.readouterr().out
+    assert "점수 상위 켬" in out
+    assert "점수 상위 3종목만" in out
+    assert "점수 상위: 하루 3종목" in out
+
+
+def test_min_score_can_drop_everything(many_stocks, capsys):
+    """도달 불가능한 점수를 걸면 매매가 없어야 합니다."""
+    assert cli.main([
+        "backtest-kr", "--universe", str(many_stocks),
+        "--top-n", "3", "--min-score", "999",
+    ]) == 0
+    frame = pd.read_csv(many_stocks.parent / "kr_backtest_trades_top3.csv")
+    assert frame.empty
