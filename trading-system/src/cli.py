@@ -23,6 +23,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import backtest as bt_module
+from . import case as case_module
 from . import dart_kr
 from . import diagnose as dg_module
 from . import market_filter as mf_module
@@ -1383,6 +1384,53 @@ def cmd_diagnose_kr(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_case_kr(args: argparse.Namespace) -> int:
+    """종목 하나를 통째로 뜯어봅니다 — 그때 우리 시스템은 뭐라고 했나."""
+    cfg = Config.load(args.config)
+    code = args.code.strip().upper()
+
+    print(f"{code} 시세를 받는 중입니다...")
+    try:
+        daily = fetch_daily_kr(code, years=args.years)
+    except DataUnavailable as exc:
+        print(f"실패: {exc}")
+        return 1
+    if len(daily) < cfg.scanner_b.sma_slow + 5:
+        print(f"일봉이 {len(daily)}행뿐입니다. 200일선을 못 그립니다.")
+        return 1
+
+    market_ok = None
+    if args.market_filter:
+        index = fetch_index(cfg.market_filter.index_code)
+        market_ok = mf_module.tradable_series(index, cfg.market_filter)
+        print(f"시장 필터 켬 — 매수 허용 {market_ok.mean() * 100:.1f}%")
+
+    close = daily["close"]
+    runup = case_module.biggest_runup(close)
+    years_table = case_module.yearly(daily)
+
+    rows = bt_module.signal_rows(code, daily, cfg.scanner_b, market_ok)
+    timing_info = case_module.timing(
+        pd.DatetimeIndex(rows.index) if not rows.empty else pd.DatetimeIndex([]),
+        close, runup,
+    )
+    trades = bt_module.run(code, daily, cfg.backtest_kr, cfg.scanner_b, market_ok)
+
+    name = args.name or code
+    print()
+    print(case_module.report(code, name, daily, runup, years_table, timing_info, trades))
+
+    if args.out:
+        target = _resolve(args.out)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            case_module.report(code, name, daily, runup, years_table, timing_info, trades)
+            + "\n", encoding="utf-8",
+        )
+        print(f"\n저장: {target}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.cli",
@@ -1555,6 +1603,17 @@ def build_parser() -> argparse.ArgumentParser:
     ku.add_argument("--market", default="KOSPI", help="KOSPI / KOSDAQ / KRX")
     ku.add_argument("--out", default="data/universe_kr_all.txt", help="저장할 파일")
     ku.set_defaults(func=cmd_kr_universe)
+
+    ck = sub.add_parser(
+        "case-kr",
+        help="[국내] 종목 하나를 통째로 뜯어보기 (그때 우리 신호는 뭐라고 했나)",
+    )
+    ck.add_argument("--code", required=True, help="종목코드 6자리")
+    ck.add_argument("--name", help="화면에 보일 이름 (없으면 코드)")
+    ck.add_argument("--years", type=float, default=10.0, help="조회 기간 (년)")
+    ck.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
+    ck.add_argument("--out", help="결과를 파일로 저장")
+    ck.set_defaults(func=cmd_case_kr)
 
     dgk = sub.add_parser(
         "diagnose-kr",
