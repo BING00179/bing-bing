@@ -1416,17 +1416,27 @@ def cmd_case_kr(args: argparse.Namespace) -> int:
     )
     trades = bt_module.run(code, daily, cfg.backtest_kr, cfg.scanner_b, market_ok)
 
+    # 그 상승을 우리 보유 규칙으로 견딜 수 있었는지.
+    drops = case_module.pullback_summary(case_module.pullbacks(daily, runup))
+    holds = [
+        h for h in (
+            case_module.hold_with_trailing(daily, runup, w)
+            for w in (7.0, 15.0, 25.0, 40.0)
+        ) if h is not None
+    ]
+
     name = args.name or code
+    text = case_module.report(
+        code, name, daily, runup, years_table, timing_info, trades,
+        max_trades=10_000 if args.all else 15, drops=drops, holds=holds,
+    )
     print()
-    print(case_module.report(code, name, daily, runup, years_table, timing_info, trades))
+    print(text)
 
     if args.out:
         target = _resolve(args.out)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(
-            case_module.report(code, name, daily, runup, years_table, timing_info, trades)
-            + "\n", encoding="utf-8",
-        )
+        target.write_text(text + "\n", encoding="utf-8")
         print(f"\n저장: {target}")
     return 0
 
@@ -1612,6 +1622,7 @@ def build_parser() -> argparse.ArgumentParser:
     ck.add_argument("--name", help="화면에 보일 이름 (없으면 코드)")
     ck.add_argument("--years", type=float, default=10.0, help="조회 기간 (년)")
     ck.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
+    ck.add_argument("--all", action="store_true", help="매매를 전부 보여주기")
     ck.add_argument("--out", help="결과를 파일로 저장")
     ck.set_defaults(func=cmd_case_kr)
 
