@@ -659,6 +659,30 @@ def cmd_factors_kr(args: argparse.Namespace) -> int:
     )
     print(f"\n요인 {len(matrices)}개 · 종목 {prices.shape[1]:,}개 · 회차 {len(prices)}회\n")
 
+    if args.debug:
+        # 수익률이 이상할 때 원본 가격을 직접 봅니다. 계산이 틀린 것인지
+        # 데이터가 이상한 것인지는 숫자를 봐야 알 수 있습니다.
+        print("── 가격 원본 확인 ──")
+        sample = prices.iloc[:6, :4]
+        print(sample.to_string(float_format=lambda v: f"{v:,.0f}"))
+        print()
+        first = prices.iloc[:6]
+        step = first.pct_change() * 100.0
+        print("회차별 전 종목 평균 등락률 (앞 6회)")
+        for day, row in step.iterrows():
+            valid = row.dropna()
+            if valid.empty:
+                continue
+            print(f"  {day:%Y-%m-%d}  평균 {valid.mean():>+7.2f}%  "
+                  f"중앙 {valid.median():>+7.2f}%  종목 {len(valid):,}")
+        print()
+        counts = prices.notna().sum(axis=1)
+        print("회차별 가격이 있는 종목 수")
+        print("  " + " · ".join(
+            f"{d:%y-%m}:{c:,}" for d, c in list(counts.items())[:10]
+        ))
+        print("── 확인 끝 ──\n")
+
     results = []
     for name, matrix in matrices.items():
         try:
@@ -1006,6 +1030,10 @@ def build_parser() -> argparse.ArgumentParser:
     fk.add_argument("--min-names", type=int, default=30, help="회차당 최소 종목 수")
     fk.add_argument("--momentum-months", type=int, default=6, help="모멘텀 기간 (개월)")
     fk.add_argument("--volatility-months", type=int, default=6, help="변동성 기간 (개월)")
+    fk.add_argument(
+        "--debug", action="store_true",
+        help="가격 원본과 회차별 등락률을 출력 (수익률이 이상할 때)",
+    )
     fk.set_defaults(func=cmd_factors_kr)
 
     pk = sub.add_parser(

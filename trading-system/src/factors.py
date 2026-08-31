@@ -37,6 +37,19 @@ class FactorResult:
     quantile_returns: pd.DataFrame  # 행=리밸런싱일, 열=Q1..Q5, 값=기간수익률(%)
     spread: pd.Series               # Q1 - Q5 (%)
     coverage: pd.Series             # 회차별 종목 수
+    market: pd.Series               # 회차별 전 종목 평균 수익률 (건전성 확인용)
+
+    @property
+    def looks_broken(self) -> bool:
+        """전 종목 평균이 상식 밖이면 데이터를 의심해야 합니다.
+
+        월 단위 리밸런싱에서 전 종목 평균이 매달 -20% 라면 몇 년 뒤
+        시장 전체가 0 이 됩니다. 그런 값이 나오면 요인 결과가 아니라
+        가격 데이터부터 확인해야 합니다.
+        """
+        if self.market.empty:
+            return False
+        return bool(abs(self.market.mean()) > 20.0)
 
     @property
     def mean_by_quantile(self) -> pd.Series:
@@ -96,6 +109,12 @@ class FactorResult:
             f"  t값              {self.t_stat:>7.2f}   (|t|>2 면 우연으로 보기 어려움)",
             f"  계단 모양        {'예' if self.monotonic else '아니오'}",
         ]
+        if not self.market.empty:
+            lines.append(f"  전 종목 평균     {self.market.mean():>+7.2f}%  (회차당)")
+        if self.looks_broken:
+            lines.append(
+                "  ⚠️ 전 종목 평균이 상식 밖입니다. 가격 데이터를 먼저 확인하세요."
+            )
         return "\n".join(lines)
 
 
@@ -161,6 +180,12 @@ def evaluate(
     if not rows:
         raise ValueError(f"{name}: 검정할 수 있는 회차가 없습니다.")
 
+    # 전 종목 평균. 요인과 무관하게 시장 전체가 어떻게 움직였나.
+    market = pd.Series(
+        [float(f.mean()) for f in forwards if not f.empty],
+        index=pd.DatetimeIndex([d for d, f in zip(dates[:-1], forwards) if not f.empty]),
+    )
+
     table = pd.DataFrame(rows, index=pd.DatetimeIndex(used_dates))[labels]
     return FactorResult(
         name=name,
@@ -169,6 +194,7 @@ def evaluate(
         quantile_returns=table,
         spread=table[labels[0]] - table[labels[-1]],
         coverage=pd.Series(coverage, index=pd.DatetimeIndex(used_dates)),
+        market=market,
     )
 
 
@@ -191,8 +217,17 @@ def compare(results: list[FactorResult]) -> str:
             f"{mark} {r.name:<20}{r.mean_spread:>+9.2f}%{r.t_stat:>8.2f}"
             f"{r.hit_rate:>7.1f}%{'예' if r.monotonic else '아니오':>6}{r.periods:>6}"
         )
+    broken = [r for r in ordered if r.looks_broken]
+    lines.append("-" * 74)
+    if broken:
+        lines += [
+            f"  ⚠️ 전 종목 평균 수익률이 회차당 {broken[0].market.mean():+.1f}% 로 나옵니다.",
+            "     월 단위 리밸런싱에서 나올 수 없는 값입니다. 위 스프레드는",
+            "     그룹 간 차이라 어느 정도 살아 있지만, 절대 수익률은 믿지 마세요.",
+            "     가격 데이터를 먼저 점검해야 합니다.",
+            "-" * 74,
+        ]
     lines += [
-        "-" * 74,
         "  ★ = t값 2 이상이고 계단 모양. 그나마 볼 만한 후보입니다.",
         "",
         "  ※ 거래비용·유동성·체결이 빠진 계산입니다. '방향이 있는가' 만 봅니다.",

@@ -105,3 +105,24 @@ def test_report_marks_only_strong_candidates():
     weak_line = [l for l in text.splitlines() if "약한요인" in l][0]
     assert strong_line.startswith("★")
     assert not weak_line.startswith("★")
+
+
+def test_market_average_is_recorded():
+    """전 종목 평균 수익률을 함께 남겨 데이터 이상을 잡습니다."""
+    factor, prices = make_data(seed=11, signal_strength=0.03)
+    r = evaluate("테스트", factor, prices, higher_is_better=True)
+    assert not r.market.empty
+    assert not r.looks_broken, "정상 데이터인데 이상으로 판정했습니다"
+
+
+def test_absurd_returns_are_flagged():
+    """전 종목이 매달 -40% 면 데이터를 의심해야 합니다."""
+    factor, prices = make_data(seed=12)
+    # 매 회차 -40% 가 되도록 가격을 깎습니다.
+    for i in range(1, len(prices)):
+        prices.iloc[i] = prices.iloc[i - 1] * 0.6
+
+    r = evaluate("망가진데이터", factor, prices, higher_is_better=True)
+    assert r.looks_broken, "상식 밖 수익률을 잡아내지 못했습니다"
+    assert "가격 데이터를 먼저 확인" in r.as_report()
+    assert "믿지 마세요" in compare([r])
