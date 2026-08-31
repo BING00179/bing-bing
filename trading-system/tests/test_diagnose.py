@@ -176,3 +176,52 @@ def test_보고서는_초과수익_해석_기준을_먼저_적어둔다():
 def test_표본이_없으면_없다고_말한다():
     text = dg.report([], pd.DataFrame(), pd.DataFrame(), 5)
     assert "표본이 부족" in text
+
+
+# ────────────────────── 진입 규칙 (갭) ──────────────────────
+# 갭은 '신호 조건' 이 될 수 없습니다. 신호는 그날 종가에 나는데
+# 갭은 다음날 아침 시가라야 알 수 있습니다. 진입 규칙으로만 씁니다.
+
+def test_갭이_큰_건을_빼고_본다():
+    frame = pd.DataFrame({
+        "gap_pct": [-1.0, 1.0, 4.0, 8.0, 20.0],
+        "fwd5": [1.0, 2.0, 3.0, -5.0, -9.0],
+    })
+    남은것 = dg.filter_by_gap(frame, 5.0)
+    assert list(남은것["gap_pct"]) == [-1.0, 1.0, 4.0]
+
+
+def test_갭이_빈칸이면_0으로_보고_남긴다():
+    frame = pd.DataFrame({"gap_pct": [np.nan, 30.0], "fwd5": [1.0, 2.0]})
+    assert len(dg.filter_by_gap(frame, 5.0)) == 1
+
+
+def test_갭_열이_없으면_그대로_돌려준다():
+    frame = pd.DataFrame({"fwd5": [1.0, 2.0]})
+    assert len(dg.filter_by_gap(frame, 5.0)) == 2
+
+
+def test_원본을_건드리지_않는다():
+    frame = pd.DataFrame({"gap_pct": [1.0, 20.0], "fwd5": [1.0, 2.0]})
+    dg.filter_by_gap(frame, 5.0)
+    assert len(frame) == 2
+
+
+def test_갭_규칙_비교표는_전후를_나란히_보여준다():
+    전체 = [_edge(0.5, 1.5)]
+    걸러낸것 = [_edge(1.2, 2.4)]
+    표 = dg.compare_gap_rule(전체, 걸러낸것, 5.0)
+    assert "갭 5% 이하" in 표
+    assert "+1.20%" in 표 and "+0.50%" in 표
+
+
+def test_표본이_모자라면_판정하지_않는다고_말한다():
+    assert "판정할 수 없습니다" in dg.compare_gap_rule([_edge(0.5, 1.5)], [], 5.0)
+
+
+def test_보고서는_갭_규칙이_검증이_아니라_탐색임을_밝힌다():
+    text = dg.report([_edge(0.5, 3.0)], pd.DataFrame(), pd.DataFrame(), 500,
+                     gap_rule=(5.0, [_edge(1.2, 2.4)]))
+    assert "'검증' 이 아니라 '탐색'" in text
+    assert "새 자료로만 됩니다" in text
+    assert "그대로 돈을 넣으면 안 됩니다" in text

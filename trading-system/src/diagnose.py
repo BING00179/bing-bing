@@ -171,6 +171,21 @@ def edge(signals: pd.DataFrame, market: pd.DataFrame,
     return results
 
 
+def filter_by_gap(signals: pd.DataFrame, max_gap_pct: float) -> pd.DataFrame:
+    """진입일 아침 갭이 큰 건은 빼고 봅니다.
+
+    ⚠️ 이건 '신호 조건' 이 아니라 '진입 규칙' 입니다. 신호는 그날 종가에
+    나는데 갭은 다음날 아침 시가라야 알 수 있습니다. 오늘 밤에 내일 갭을
+    알고 거르면 미래를 보는 것입니다.
+
+    실제로는 이렇게 씁니다 — 신호는 오늘 나고, 내일 아침 시가를 보고
+    갭이 크면 그날은 사지 않는다. 그건 실거래에서 그대로 할 수 있습니다.
+    """
+    if signals.empty or "gap_pct" not in signals:
+        return signals
+    return signals[signals["gap_pct"].fillna(0.0) <= max_gap_pct].copy()
+
+
 GAP_BINS = (-np.inf, 0.0, 2.0, 5.0, 10.0, np.inf)
 GAP_LABELS = ("갭 없음/하락", "0~2%", "2~5%", "5~10%", "10%+")
 
@@ -213,8 +228,29 @@ def stop_reach(signals: pd.DataFrame, widths: tuple[float, ...] = (3, 5, 8, 10, 
     })
 
 
+def compare_gap_rule(edges: list[EdgeResult], filtered: list[EdgeResult],
+                     max_gap_pct: float) -> str:
+    """갭 규칙을 적용했을 때와 안 했을 때를 나란히."""
+    if not filtered:
+        return ("   갭 규칙을 적용하면 표본이 30건 미만으로 줄어 판정할 수 없습니다.")
+
+    앞 = {e.horizon: e for e in edges}
+    lines = [f"   기간    초과(전체)   초과(갭 {max_gap_pct:.0f}% 이하)"
+             "    t(전체)   t(규칙적용)    건수"]
+    lines.append("   " + "-" * 68)
+    for e in filtered:
+        원래 = 앞.get(e.horizon)
+        전초과 = "—" if 원래 is None else f"{원래.excess:>+6.2f}%"
+        전t = "—" if 원래 is None else f"{원래.t_stat:>6.2f}"
+        lines.append(
+            f"   {e.horizon:>2}일   {전초과:>9}   {e.excess:>+13.2f}%"
+            f"   {전t:>8}   {e.t_stat:>9.2f}   {e.count:>7,}"
+        )
+    return "\n".join(lines)
+
+
 def report(edges: list[EdgeResult], gaps: pd.DataFrame, stops: pd.DataFrame,
-           signal_count: int) -> str:
+           signal_count: int, gap_rule: tuple[float, list[EdgeResult]] | None = None) -> str:
     """사실과 해석을 갈라 적습니다."""
     lines = ["=" * 78,
              "[신호 진단] 손절·익절·비용을 전부 끄고, 신호만 봅니다",
@@ -249,6 +285,17 @@ def report(edges: list[EdgeResult], gaps: pd.DataFrame, stops: pd.DataFrame,
         lines.append("[사실] 손절폭별 '진입 첫날에 닿았을' 비율")
         lines.append("")
         lines.append("   " + stops.to_string(index=False).replace("\n", "\n   "))
+        lines.append("")
+
+    if gap_rule is not None:
+        한도, 걸러낸것 = gap_rule
+        lines.append(f"[사실] 진입 규칙 시험 — 다음날 아침 갭이 {한도:.0f}% 넘으면 사지 않기")
+        lines.append("")
+        lines.append(compare_gap_rule(edges, 걸러낸것, 한도))
+        lines.append("")
+        lines.append("   ⚠️ 이건 '검증' 이 아니라 '탐색' 입니다. 같은 자료를 보고 규칙을")
+        lines.append("      고쳤으므로, 좋아 보이는 것이 당연합니다. 진짜 확인은 앞으로의")
+        lines.append("      새 자료로만 됩니다. 좋게 나와도 그대로 돈을 넣으면 안 됩니다.")
         lines.append("")
 
     lines.append("[해석] 판단은 아래 기준으로만 하십시오.")

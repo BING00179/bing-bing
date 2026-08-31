@@ -1389,8 +1389,15 @@ def cmd_diagnose_kr(args: argparse.Namespace) -> int:
     gaps = dg_module.by_gap(signals, horizon=args.horizon)
     stops = dg_module.stop_reach(signals)
 
+    gap_rule = None
+    if args.max_gap is not None:
+        걸러낸신호 = dg_module.filter_by_gap(signals, args.max_gap)
+        print(f"진입 규칙 시험 — 다음날 아침 갭 {args.max_gap:.0f}% 이하만: "
+              f"{len(signals):,}건 → {len(걸러낸신호):,}건")
+        gap_rule = (args.max_gap, dg_module.edge(걸러낸신호, market))
+
     print()
-    print(dg_module.report(edges, gaps, stops, len(signals)))
+    print(dg_module.report(edges, gaps, stops, len(signals), gap_rule=gap_rule))
 
     out = _output_dir(cfg)
     signals.to_csv(out / "kr_signal_forward.csv", index=False, encoding="utf-8-sig")
@@ -2091,6 +2098,11 @@ def build_parser() -> argparse.ArgumentParser:
     dgk.add_argument("--setup", default="trendjoin", choices=["trendjoin", "breakout"],
                      help="어떤 조건을 진단할지. trendjoin=기존 추세추종, "
                           "breakout=조용하다 깨어나는 종목")
+    dgk.add_argument(
+        "--max-gap", type=float,
+        help="진입 규칙 시험 — 다음날 아침 갭이 이 값(퍼센트)을 넘으면 사지 않았다면. "
+             "신호 조건이 아니라 진입 규칙입니다",
+    )
     dgk.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
     dgk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
     dgk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
