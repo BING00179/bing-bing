@@ -113,3 +113,85 @@ def test_load_rejects_a_file_without_the_needed_columns(tmp_path):
 def test_load_missing_file(tmp_path):
     with pytest.raises(FileNotFoundError):
         load(tmp_path / "nope.csv")
+
+
+# ── 진입 당일 손절 원인 분석 ──
+
+
+def _mixed_trades():
+    """1일 손절 다수 + 오래 버틴 이익 소수. 실제 결과와 비슷한 모양."""
+    rng = np.random.default_rng(5)
+    same_day = pd.DataFrame({
+        "ticker": [f"{i:06d}" for i in range(300)],
+        "entry_date": pd.to_datetime("2023-01-02") + pd.to_timedelta(range(300), "D"),
+        "pnl": -np.abs(rng.normal(300_000, 50_000, 300)),
+        "return_pct": -np.abs(rng.normal(3.1, 0.4, 300)),
+        "exit_reason": "stop",
+        "hold_days": 1,
+    })
+    rest = pd.DataFrame({
+        "ticker": [f"{i:06d}" for i in range(100)],
+        "entry_date": pd.to_datetime("2023-01-02") + pd.to_timedelta(range(100), "D"),
+        "pnl": rng.normal(400_000, 150_000, 100),
+        "return_pct": rng.normal(9.0, 3.0, 100),
+        "exit_reason": "target",
+        "hold_days": rng.integers(5, 20, 100),
+    })
+    trades = pd.concat([same_day, rest], ignore_index=True)
+    trades["exit_date"] = trades["entry_date"] + pd.to_timedelta(trades["hold_days"], "D")
+    return trades
+
+
+def test_same_day_losses_are_separated_from_the_rest():
+    from src.analyze import same_day_losses
+
+    stats = same_day_losses(_mixed_trades())
+    assert stats["1일_건수"] == 300
+    assert stats["1일_승률"] == 0.0
+    assert stats["1일_손익"] < 0
+    assert stats["나머지_손익"] > 0, "나머지는 이익이어야 합니다"
+
+
+def test_report_points_out_that_the_signal_may_be_fine():
+    """1일 매매를 빼면 이익인 경우, 손절이 문제라고 짚어야 합니다."""
+    from src.analyze import report
+
+    text = report(_mixed_trades())
+    assert "1일 매매를 빼면 나머지는 이익입니다" in text
+    assert "손절선이 너무 가까웠을 수 있습니다" in text
+
+
+def test_no_such_hint_when_the_rest_also_loses():
+    """나머지도 손해면 손절 탓으로 돌리면 안 됩니다."""
+    from src.analyze import report
+
+    trades = _mixed_trades()
+    trades.loc[trades["hold_days"] > 1, ["pnl", "return_pct"]] = [-500_000, -5.0]
+    assert "손절선이 너무 가까웠을 수 있습니다" not in report(trades)
+
+
+def test_stop_width_table_counts_survivors():
+    from src.analyze import stop_width_needed
+
+    table = stop_width_needed(_mixed_trades(), widths=(3, 5, 10))
+    assert "5%" in table.index
+    # 손실이 평균 3.1% 이므로 5% 손절이면 대부분 살아남습니다.
+    assert table.loc["5%", "비중"] > 90
+    assert table.loc["3%", "비중"] < table.loc["10%", "비중"]
+
+
+def test_loss_depth_shows_where_losses_cluster():
+    from src.analyze import loss_depth
+
+    depth = loss_depth(_mixed_trades())
+    assert depth.loc["건수", "값"] >= 300
+    # 손절선 근처(3%대)에 몰려 있어야 합니다.
+    assert 2.5 < depth.loc["중앙", "값"] < 4.0
+
+
+def test_stop_width_table_is_empty_without_same_day_losses():
+    from src.analyze import stop_width_needed
+
+    trades = make_trades(n=50)
+    trades["hold_days"] = 10
+    assert stop_width_needed(trades).empty
