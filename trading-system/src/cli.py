@@ -24,6 +24,7 @@ import pandas as pd
 
 from . import backtest as bt_module
 from . import dart_kr
+from . import diagnose as dg_module
 from . import market_filter as mf_module
 from . import notify_policy
 from . import analyze
@@ -1327,6 +1328,61 @@ def cmd_dart_events(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_diagnose_kr(args: argparse.Namespace) -> int:
+    """신호에 우위가 있는지만 봅니다 — 손절도 익절도 비용도 끄고."""
+    cfg = Config.load(args.config)
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+
+    market_ok = None
+    print("=" * 78)
+    if args.market_filter:
+        index = fetch_index(cfg.market_filter.index_code)
+        market_ok = mf_module.tradable_series(index, cfg.market_filter)
+        print(f"✅ 시장 필터 켬 — 매수 허용 {market_ok.mean() * 100:.1f}%")
+    else:
+        print("⚠️ 시장 필터 꺼짐")
+    print(f"대상 {len(codes):,}종목 · 최근 {args.years}년")
+    print("=" * 78)
+
+    frames = _frames_for(
+        codes, args.years, cfg.scanner_b.sma_slow + 30,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
+    if len(frames) < 30:
+        print("시세를 받은 종목이 너무 적습니다.")
+        return 1
+
+    print("\n같은 날 아무 종목이나 샀을 때의 평균을 먼저 구합니다 (비교 기준)...")
+    market = dg_module.market_forward(frames)
+
+    print("신호를 모으는 중...")
+    parts = []
+    for code, daily in frames.items():
+        rows = bt_module.signal_rows(code, daily, cfg.scanner_b, market_ok)
+        if rows.empty:
+            continue
+        parts.append(dg_module.signal_forward(code, daily, rows.index))
+
+    if not parts:
+        print("신호가 하나도 없습니다.")
+        return 0
+    signals = pd.concat(parts, ignore_index=True)
+
+    edges = dg_module.edge(signals, market)
+    gaps = dg_module.by_gap(signals, horizon=args.horizon)
+    stops = dg_module.stop_reach(signals)
+
+    print()
+    print(dg_module.report(edges, gaps, stops, len(signals)))
+
+    out = _output_dir(cfg)
+    signals.to_csv(out / "kr_signal_forward.csv", index=False, encoding="utf-8-sig")
+    print(f"\n신호별 원자료 저장: {out}/kr_signal_forward.csv")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.cli",
@@ -1499,6 +1555,18 @@ def build_parser() -> argparse.ArgumentParser:
     ku.add_argument("--market", default="KOSPI", help="KOSPI / KOSDAQ / KRX")
     ku.add_argument("--out", default="data/universe_kr_all.txt", help="저장할 파일")
     ku.set_defaults(func=cmd_kr_universe)
+
+    dgk = sub.add_parser(
+        "diagnose-kr",
+        help="[국내] 신호에 우위가 있는지 진단 (손절·익절·비용 전부 끔)",
+    )
+    dgk.add_argument("--universe", help="종목코드 목록 파일")
+    dgk.add_argument("--years", type=float, default=5.0, help="조회 기간 (년)")
+    dgk.add_argument("--horizon", type=int, default=5, help="갭별 성적을 볼 보유일수")
+    dgk.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
+    dgk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    dgk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    dgk.set_defaults(func=cmd_diagnose_kr)
 
     dc = sub.add_parser("dart-check", help="[국내] DART 인증키가 동작하는지 확인")
     dc.add_argument("--api-key", help="직접 넘길 때만. 보통은 DART_API_KEY 환경변수를 씁니다")
