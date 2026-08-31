@@ -25,6 +25,7 @@ import pandas as pd
 from . import backtest as bt_module
 from . import case as case_module
 from . import dart_kr
+from . import journal as jn_module
 from . import diagnose as dg_module
 from . import market_filter as mf_module
 from . import notify_policy
@@ -1441,6 +1442,117 @@ def cmd_case_kr(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_journal_add(args: argparse.Namespace) -> int:
+    """판단을 기록만 합니다. 매수는 하지 않습니다."""
+    code = args.code.strip().upper()
+    price = args.price
+
+    # 시세를 받기 전에 먼저 막습니다. 30초 기다린 뒤 "이유가 없다" 는
+    # 소리를 듣는 것만큼 김빠지는 일이 없습니다.
+    if not args.why.strip():
+        print("기록하지 않았습니다: '왜' 를 비워 둘 수 없습니다. "
+              "이유가 없으면 나중에 채점해도 무엇이 통했는지 알 수 없습니다.")
+        return 1
+
+    if price is None:                       # 안 주면 오늘 종가를 받아옵니다
+        try:
+            daily = fetch_daily_kr(code, years=0.5)
+            price = float(daily["close"].iloc[-1])
+            print(f"{code} 최근 종가 {price:,.0f}원 을 기록합니다.")
+        except (DataUnavailable, IndexError) as exc:
+            print(f"시세를 못 받았습니다: {exc}")
+            print("--price 로 직접 넣어 주세요.")
+            return 1
+
+    entry = jn_module.Entry(
+        recorded_at=args.date or datetime.now().strftime("%Y-%m-%d"),
+        code=code,
+        name=args.name or code,
+        price=float(price),
+        conviction=args.conviction,
+        horizon_days=args.horizon,
+        why=args.why,
+        note=args.note or "",
+    )
+    try:
+        target = jn_module.append(entry, _resolve(args.file))
+    except ValueError as exc:
+        print(f"기록하지 않았습니다: {exc}")
+        return 1
+
+    print(f"기록했습니다 → {target}")
+    print(f"   {entry.recorded_at}  {entry.name}({entry.code})  {entry.price:,.0f}원"
+          f"  확신 {entry.conviction}  {entry.horizon_days}일 뒤 채점")
+    print(f"   이유: {entry.why}")
+    print("\n※ 매수는 하지 않았습니다. 기록만 했습니다.")
+    return 0
+
+
+def cmd_journal_list(args: argparse.Namespace) -> int:
+    frame = jn_module.load(_resolve(args.file))
+    if frame.empty:
+        print("아직 기록이 없습니다.")
+        return 0
+
+    today = pd.Timestamp.today().normalize()
+    recorded = pd.to_datetime(frame["recorded_at"], errors="coerce")
+    남은날 = frame["horizon_days"] - (today - recorded).dt.days
+
+    print(f"기록 {len(frame)}건\n")
+    print("   기록일       종목                기록가    확신   채점까지")
+    print("   " + "-" * 62)
+    for (_, row), 남음 in zip(frame.iterrows(), 남은날):
+        상태 = "채점 가능" if 남음 <= 0 else f"{int(남음):>3}일 남음"
+        print(f"   {row['recorded_at']}  {str(row['name'])[:12]:<12}({row['code']})"
+              f"  {row['price']:>9,.0f}   {row['conviction']}   {상태}")
+    return 0
+
+
+def cmd_journal_score(args: argparse.Namespace) -> int:
+    """기간이 찬 기록을 채점합니다 — 코스닥 지수와 견주어서."""
+    frame = jn_module.load(_resolve(args.file))
+    if frame.empty:
+        print(jn_module.report([], jn_module.summarize([]), pending=0))
+        return 0
+
+    ready = frame if args.now else jn_module.due(frame)
+    pending = len(frame) - len(ready)
+
+    if ready.empty:
+        print(jn_module.report([], jn_module.summarize([]), pending=pending))
+        return 0
+
+    print(f"코스닥 지수를 받는 중입니다...")
+    try:
+        index = fetch_index(args.index, years=args.years)
+    except DataUnavailable as exc:
+        print(f"지수를 못 받았습니다: {exc}")
+        return 1
+
+    scored = []
+    for _, row in ready.iterrows():
+        try:
+            daily = fetch_daily_kr(str(row["code"]), years=args.years)
+        except DataUnavailable as exc:
+            print(f"  {row['code']} 조회 실패: {exc}")
+            continue
+        result = jn_module.score_one(row, daily, index)
+        if result is not None:
+            scored.append(result)
+
+    verdict = jn_module.summarize(scored)
+    print()
+    print(jn_module.report(scored, verdict, pending=pending))
+
+    if scored:
+        out = _output_dir(cfg := Config.load(args.config))
+        pd.DataFrame([s.__dict__ for s in scored]).to_csv(
+            out / "journal_scored.csv", index=False, encoding="utf-8-sig"
+        )
+        print(f"\n채점 결과 저장: {out}/journal_scored.csv")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.cli",
@@ -1613,6 +1725,37 @@ def build_parser() -> argparse.ArgumentParser:
     ku.add_argument("--market", default="KOSPI", help="KOSPI / KOSDAQ / KRX")
     ku.add_argument("--out", default="data/universe_kr_all.txt", help="저장할 파일")
     ku.set_defaults(func=cmd_kr_universe)
+
+    ja = sub.add_parser(
+        "journal-add",
+        help="[국내] 판단을 기록만 하기 (매수 안 함)",
+    )
+    ja.add_argument("--code", required=True, help="종목코드 6자리")
+    ja.add_argument("--name", help="종목명")
+    ja.add_argument("--why", required=True, help="왜 오를 거라 보는가 — 반드시 적습니다")
+    ja.add_argument("--conviction", default="중", choices=["상", "중", "하"],
+                    help="확신도")
+    ja.add_argument("--horizon", type=int, default=90, help="며칠 뒤에 채점할지")
+    ja.add_argument("--price", type=float, help="기록가. 없으면 최근 종가를 받아옵니다")
+    ja.add_argument("--date", help="기록일 YYYY-MM-DD. 없으면 오늘")
+    ja.add_argument("--note", help="덧붙일 말")
+    ja.add_argument("--file", default="data/journal.csv", help="기록 파일")
+    ja.set_defaults(func=cmd_journal_add)
+
+    jl = sub.add_parser("journal-list", help="[국내] 기록해 둔 판단 보기")
+    jl.add_argument("--file", default="data/journal.csv", help="기록 파일")
+    jl.set_defaults(func=cmd_journal_list)
+
+    js = sub.add_parser(
+        "journal-score",
+        help="[국내] 기간이 찬 기록을 채점 (코스닥 지수 대비)",
+    )
+    js.add_argument("--file", default="data/journal.csv", help="기록 파일")
+    js.add_argument("--index", default="KQ11", help="비교할 지수. KQ11=코스닥")
+    js.add_argument("--years", type=float, default=2.0, help="시세 조회 기간")
+    js.add_argument("--now", action="store_true",
+                    help="기간이 안 찼어도 지금까지로 채점 (참고용)")
+    js.set_defaults(func=cmd_journal_score)
 
     ck = sub.add_parser(
         "case-kr",
