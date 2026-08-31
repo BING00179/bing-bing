@@ -132,7 +132,9 @@ def position_in_runup(price: float, runup: Runup | None) -> float:
 
 def report(code: str, name: str, daily: pd.DataFrame, runup: Runup | None,
            years: pd.DataFrame, timing_info: SignalTiming,
-           trades: list | None = None) -> str:
+           trades: list | None = None, max_trades: int = 15,
+           drops: pd.DataFrame | None = None,
+           holds: list | None = None) -> str:
     """무슨 일이 있었는지만 늘어놓습니다."""
     close = daily["close"]
     lines = [
@@ -196,15 +198,36 @@ def report(code: str, name: str, daily: pd.DataFrame, runup: Runup | None,
                          f"· 손익 {총손익:+,.0f}원")
             lines.append("")
             lines.append("   진입일        청산일       수익률    보유   청산사유")
-            for t in trades[:15]:
+            for t in trades[:max_trades]:
                 lines.append(
                     f"   {pd.Timestamp(t.entry_date).date()}  "
                     f"{pd.Timestamp(t.exit_date).date()}  "
                     f"{t.return_pct:>7.2f}%  {t.hold_days:>4}일   {t.exit_reason}"
                 )
-            if len(trades) > 15:
-                lines.append(f"   ... 외 {len(trades) - 15}건")
+            if len(trades) > max_trades:
+                lines.append(f"   ... 외 {len(trades) - max_trades}건 (--all 로 전부 보기)")
     lines.append("")
+
+    if drops is not None and not drops.empty:
+        lines.append("[사실] 그 상승 구간 안에서의 되돌림 — 추격손절이 견딜 수 있었나")
+        lines.append("")
+        lines.append("   " + drops.to_string(index=False).replace("\n", "\n   "))
+        lines.append("")
+
+    if holds:
+        lines.append("[사실] 상승 시작일에 사서 추격손절만 걸었다면")
+        lines.append("")
+        lines.append("   추격손절    청산일        보유      먹은 배수   최대상승분의")
+        for h in holds:
+            날 = "—" if h.exit_date is None else str(pd.Timestamp(h.exit_date).date())
+            잡은 = "—" if np.isnan(h.captured_pct) else f"{h.captured_pct:>6.1f}%"
+            lines.append(
+                f"   {h.trail_pct:>6.0f}%   {날:>12}  {h.days_held:>5}일"
+                f"   {h.multiple:>8.2f}배   {잡은}"
+            )
+        lines.append("")
+        lines.append("   '최대상승분의' = 그 구간에서 오를 수 있었던 것 중 몇 %를 먹었나.")
+        lines.append("")
 
     lines.append("[해석] 여기서부터는 사람이 봅니다.")
     lines.append("   · 신호가 0건이면 → 우리 신호로는 이런 종목을 찾을 수 없습니다.")
@@ -217,3 +240,91 @@ def report(code: str, name: str, daily: pd.DataFrame, runup: Runup | None,
     lines.append("      의 힌트이지, '이 방법이 통한다' 는 확인이 아닙니다.")
     lines.append("=" * 78)
     return "\n".join(lines)
+
+# ─────────────────── 그 상승을 우리 규칙으로 끝까지 들고 갈 수 있었나 ───────────────────
+# 큰 상승은 곧게 올라가지 않습니다. 오르다 되돌리고, 또 오릅니다.
+# 추격손절이 그 되돌림보다 좁으면, 종목을 아무리 잘 골라도
+# 첫 되돌림에서 잘려 나갑니다. 종목 선정이 아니라 보유 규칙의 문제입니다.
+
+
+@dataclass
+class HoldTest:
+    trail_pct: float
+    exit_date: pd.Timestamp | None
+    exit_price: float
+    multiple: float               # 상승 시작가 대비 실제로 먹은 배수
+    captured_pct: float           # 최대 상승분의 몇 %를 먹었나
+    days_held: int
+
+
+def pullbacks(daily: pd.DataFrame, runup: Runup | None) -> pd.Series:
+    """상승 구간 안에서, 그때까지의 고점 대비 얼마나 되돌렸나(%)."""
+    if runup is None:
+        return pd.Series(dtype=float)
+    window = daily.loc[runup.start:runup.end]
+    if window.empty:
+        return pd.Series(dtype=float)
+    peak = window["high"].cummax()
+    return (window["low"] / peak - 1.0) * 100.0
+
+
+def pullback_summary(drops: pd.Series,
+                     widths: tuple[float, ...] = (7.0, 10.0, 15.0, 20.0, 30.0)) -> pd.DataFrame:
+    """되돌림이 각 폭을 몇 번 넘었나. 추격손절 폭을 고를 근거."""
+    if drops.empty:
+        return pd.DataFrame()
+    rows = []
+    for w in widths:
+        touched = drops <= -w
+        # 연속으로 걸린 날은 한 번으로 셉니다 (같은 되돌림이므로).
+        starts = int((touched & ~touched.shift(1, fill_value=False)).sum())
+        rows.append({"되돌림 폭%": w, "닿은 횟수": starts,
+                     "닿은 날 수": int(touched.sum())})
+    return pd.DataFrame(rows)
+
+
+def hold_with_trailing(daily: pd.DataFrame, runup: Runup | None,
+                       trail_pct: float, max_hold_days: int | None = None) -> HoldTest | None:
+    """상승 시작일에 사서 추격손절만 걸었다면 언제 나갔을까.
+
+    손절선은 '어제까지의 고점' 으로 계산합니다. 오늘 장중 고가를 쓰면
+    미래를 보는 것이 됩니다 — 백테스트와 같은 규칙입니다.
+    """
+    if runup is None:
+        return None
+    window = daily.loc[runup.start:]
+    if window.empty:
+        return None
+
+    entry = float(window["close"].iloc[0])
+    if entry <= 0:
+        return None
+
+    peak = entry
+    limit = len(window) if max_hold_days is None else min(len(window), max_hold_days)
+    for i in range(limit):
+        low = float(window["low"].iloc[i])
+        stop = peak * (1.0 - trail_pct / 100.0)
+        if i > 0 and low <= stop:
+            return HoldTest(
+                trail_pct=trail_pct,
+                exit_date=window.index[i],
+                exit_price=stop,
+                multiple=stop / entry,
+                captured_pct=(stop / entry - 1.0) / (runup.high / entry - 1.0) * 100.0
+                if runup.high > entry else float("nan"),
+                days_held=i,
+            )
+        peak = max(peak, float(window["high"].iloc[i]))
+
+    last = float(window["close"].iloc[limit - 1])
+    return HoldTest(
+        trail_pct=trail_pct,
+        exit_date=window.index[limit - 1],
+        exit_price=last,
+        multiple=last / entry,
+        captured_pct=(last / entry - 1.0) / (runup.high / entry - 1.0) * 100.0
+        if runup.high > entry else float("nan"),
+        days_held=limit - 1,
+    )
+

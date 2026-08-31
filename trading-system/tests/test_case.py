@@ -137,3 +137,69 @@ def test_신호가_0건이면_그렇게_말한다():
     text = case.report("A", "A", daily, None, pd.DataFrame(),
                        case.timing(pd.DatetimeIndex([]), daily["close"], None))
     assert "한 번도 걸리지 않았습니다" in text
+
+
+# ────────────────────── 되돌림과 보유 규칙 ──────────────────────
+
+def _ohlc(closes, start="2020-01-01"):
+    c = pd.Series([float(v) for v in closes],
+                  index=pd.bdate_range(start, periods=len(closes)))
+    return pd.DataFrame({"open": c, "high": c, "low": c, "close": c})
+
+
+def test_되돌림은_그때까지의_고점_대비로_잰다():
+    daily = _ohlc([100, 120, 90, 150])
+    r = case.Runup(start=daily.index[0], end=daily.index[-1], low=100.0, high=150.0)
+    drops = case.pullbacks(daily, r)
+    assert abs(drops.iloc[2] - (-25.0)) < 1e-9      # 120 고점 대비 90 = -25%
+    assert drops.iloc[3] == 0.0                      # 신고가라 되돌림 없음
+
+
+def test_같은_되돌림이_여러날_이어져도_한_번으로_센다():
+    daily = _ohlc([100, 90, 89, 88, 120])
+    r = case.Runup(start=daily.index[0], end=daily.index[-1], low=88.0, high=120.0)
+    table = case.pullback_summary(case.pullbacks(daily, r), widths=(5.0,))
+    assert int(table.iloc[0]["닿은 횟수"]) == 1
+    assert int(table.iloc[0]["닿은 날 수"]) == 3
+
+
+def test_좁은_추격손절은_큰_상승을_놓친다():
+    """오르다 -20% 되돌리고 다시 오르는 자료. 7% 손절은 못 견딥니다."""
+    daily = _ohlc([100, 130, 104, 200, 400])
+    r = case.Runup(start=daily.index[0], end=daily.index[-1], low=100.0, high=400.0)
+
+    좁게 = case.hold_with_trailing(daily, r, trail_pct=7.0)
+    넓게 = case.hold_with_trailing(daily, r, trail_pct=40.0)
+
+    assert 좁게.exit_date == daily.index[2]          # -20% 되돌림에서 잘림
+    assert 좁게.multiple < 1.3
+    assert 넓게.multiple > 3.0                        # 끝까지 들고 감
+    assert 넓게.captured_pct > 좁게.captured_pct
+
+
+def test_추격손절선은_어제까지의_고점으로_잡는다():
+    """진입 첫날 장중 저가로 바로 잘리면 미래를 본 것입니다."""
+    daily = _ohlc([100, 50, 200])
+    daily.iloc[0, daily.columns.get_loc("low")] = 10.0     # 첫날 급락 흔적
+    r = case.Runup(start=daily.index[0], end=daily.index[-1], low=50.0, high=200.0)
+    h = case.hold_with_trailing(daily, r, trail_pct=7.0)
+    assert h.exit_date != daily.index[0]
+
+
+def test_상승_구간이_없으면_조용히_없다고_한다():
+    daily = _ohlc([100, 110])
+    assert case.hold_with_trailing(daily, None, 7.0) is None
+    assert case.pullbacks(daily, None).empty
+    assert case.pullback_summary(pd.Series(dtype=float)).empty
+
+
+def test_보고서에_되돌림과_보유규칙이_같이_실린다():
+    daily = _ohlc([100, 130, 104, 200, 400])
+    r = case.biggest_runup(daily["close"])
+    drops = case.pullback_summary(case.pullbacks(daily, r))
+    holds = [case.hold_with_trailing(daily, r, w) for w in (7.0, 40.0)]
+    text = case.report("A", "A", daily, r, case.yearly(daily),
+                       case.timing(pd.DatetimeIndex([]), daily["close"], r),
+                       trades=[], drops=drops, holds=holds)
+    assert "되돌림" in text and "추격손절" in text
+    assert "최대상승분의" in text
