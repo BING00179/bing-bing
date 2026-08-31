@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 data/daily/
 data/cache/
+docs_cache/
