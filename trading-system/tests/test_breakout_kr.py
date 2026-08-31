@@ -189,12 +189,17 @@ def test_돌파_첫날에만_요구하면_영영_안_걸린다():
     거래량이 오를 때쯤엔 이미 신고가가 아닙니다. 실제로 이 조건 때문에
     신호가 한 건도 안 났습니다.
     """
-    daily = _quiet_then_wake()
-    daily["volume"] = daily["volume"] * 100
+    # 하루 확 뛰고 그 값에서 옆으로 가는 모양. 신고가는 첫날 하루뿐입니다.
+    closes = [1000.0] * 70 + [1200.0] * 4
+    daily = _bars(closes, [1_000_000] * len(closes))
+
     하루짜리 = bo.broke_out(daily, 60)
     며칠안에 = bo.broke_out_recently(daily, 60, 5)
+
+    assert 하루짜리.sum() == 1                 # 돌파는 첫날 하루뿐
+    assert not bool(하루짜리.iloc[-1])          # 거래량이 오를 때쯤엔 이미 거짓
+    assert bool(며칠안에.iloc[-1])              # '최근 며칠 안에' 로 보면 살아 있음
     assert 며칠안에.sum() > 하루짜리.sum()
-    assert bool(며칠안에.iloc[-1])
 
 
 def test_한_번도_박스를_안_벗어났으면_거짓이다():
