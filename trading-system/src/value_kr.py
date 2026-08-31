@@ -36,6 +36,27 @@ import pandas as pd
 # DART 주요계정에서 쓸 항목
 NEEDED = ("매출액", "영업이익", "당기순이익", "자산총계", "부채총계", "자본총계")
 
+# DART 주요계정의 계정명은 회사마다 조금씩 다릅니다. 같은 뜻으로 묶습니다.
+# 이걸 안 하면 당기순이익이 통째로 안 읽히고, PER 이 전부 빈칸이 됩니다.
+ALIASES = {
+    "매출액": ("매출액", "수익(매출액)", "영업수익", "매출"),
+    "영업이익": ("영업이익", "영업이익(손실)", "영업손실"),
+    "당기순이익": ("당기순이익", "당기순이익(손실)", "당기순손실",
+               "당기순이익(당기순손실)", "분기순이익", "반기순이익"),
+    "자산총계": ("자산총계",),
+    "부채총계": ("부채총계",),
+    "자본총계": ("자본총계",),
+}
+
+
+def _canonical(account_name: str) -> str | None:
+    """공시에 적힌 계정명을 우리가 쓰는 이름으로 옮깁니다."""
+    squeezed = "".join(str(account_name).split())
+    for label, names in ALIASES.items():
+        if any("".join(n.split()) == squeezed for n in names):
+            return label
+    return None
+
 FIN_COLUMNS = ("code", "bsns_year", "rcept_dt", *NEEDED)
 
 
@@ -139,9 +160,9 @@ def latest_financials(key: str, index: pd.DataFrame, codes: list[str],
         row = {"code": code, "bsns_year": year,
                "rcept_dt": str(raw["rcept_no"].iloc[0])[:8] if "rcept_no" in raw else ""}
         for _, item in raw.iterrows():
-            account = str(item.get("account_nm", "")).strip()
-            if account in NEEDED and account not in row:
-                row[account] = dart_kr._to_number(item.get("thstrm_amount"))
+            label = _canonical(item.get("account_nm", ""))
+            if label and label not in row:
+                row[label] = dart_kr._to_number(item.get("thstrm_amount"))
         rows.append(row)
 
         if progress and i % progress == 0:
@@ -196,7 +217,9 @@ REJECT_REASONS = {
     "자본잠식": "자본총계가 0 이하 — 상장폐지 요건에 걸릴 수 있습니다",
     "영업적자": "영업이익이 마이너스 — 싼 데는 이유가 있습니다",
     "PBR높음": "순재산 대비 비쌉니다",
-    "PER높음": "이익 대비 비싸거나 이익이 없습니다",
+    "PER높음": "이익 대비 비쌉니다",
+    "순재산자료없음": "자본총계를 못 읽었습니다 — 조건이 아니라 자료 문제입니다",
+    "이익자료없음": "당기순이익을 못 읽었거나 적자입니다 — PER 을 계산할 수 없습니다",
     "부채과다": "부채비율이 너무 높습니다",
     "너무작음": "시가총액이 작아 흔들림이 큽니다",
     "거래부족": "거래가 적어 사고팔기 어렵습니다",
@@ -227,8 +250,13 @@ def screen(frame: pd.DataFrame, rule: Screen) -> pd.DataFrame:
         "영업적자": 영업.notna() & (영업 < 0) if rule.require_profit
                     else pd.Series(False, index=out.index),
         # 계산이 안 된 것(빈칸)도 탈락입니다. 모르는 것을 통과시키면 안 됩니다.
-        "PBR높음": pbr.isna() | (pbr > rule.max_pbr),
-        "PER높음": (per.isna() | (per > rule.max_per)) if rule.max_per > 0
+        # 다만 '비싸서 떨어진 것' 과 '숫자를 못 읽어서 떨어진 것' 은 갈라 적습니다.
+        # 뭉뚱그리면 자료가 안 들어온 것을 시장이 비싼 것으로 오해합니다.
+        "순재산자료없음": pbr.isna(),
+        "PBR높음": pbr.notna() & (pbr > rule.max_pbr),
+        "이익자료없음": per.isna() if rule.max_per > 0
+                    else pd.Series(False, index=out.index),
+        "PER높음": (per.notna() & (per > rule.max_per)) if rule.max_per > 0
                    else pd.Series(False, index=out.index),
         "부채과다": 부채비율.notna() & (부채비율 > rule.max_debt_ratio),
         "너무작음": 시총.notna() & (시총 < rule.min_marcap),
@@ -282,6 +310,24 @@ def reject_counts(screened: pd.DataFrame) -> dict[str, int]:
     return 세기
 
 
+def completeness(frame: pd.DataFrame) -> pd.DataFrame:
+    """항목별로 숫자가 실제로 들어온 종목 수.
+
+    조건이 빡빡해서 안 나온 것과 자료가 안 들어와서 안 나온 것은
+    완전히 다른 문제입니다. 이 표가 없으면 둘을 구분할 수 없습니다.
+    """
+    if frame.empty:
+        return pd.DataFrame()
+    보고싶은것 = [*NEEDED, "PBR", "PER"]
+    rows = [
+        {"항목": column,
+         "값이 있는 종목": int(frame[column].notna().sum()),
+         "비율%": round(frame[column].notna().mean() * 100, 1)}
+        for column in 보고싶은것 if column in frame.columns
+    ]
+    return pd.DataFrame(rows)
+
+
 def report(screened: pd.DataFrame, rule: Screen, top: int = 30) -> str:
     lines = ["=" * 88,
              "[저평가 후보] 회사가 가진 것·버는 것에 견주어 싼 종목",
@@ -304,8 +350,24 @@ def report(screened: pd.DataFrame, rule: Screen, top: int = 30) -> str:
     lines.append(f"[사실] 전체 {len(screened):,}종목 중 {len(통과):,}종목 통과")
     lines.append("")
 
+    갖춤 = completeness(screened)
+    if not 갖춤.empty:
+        모자란것 = 갖춤[갖춤["비율%"] < 80]
+        if not 모자란것.empty:
+            lines.append("[사실] ⚠️ 자료가 덜 들어온 항목이 있습니다")
+            lines.append("   " + 갖춤.to_string(index=False).replace("\n", "\n   "))
+            lines.append("")
+            lines.append("   비율이 낮은 항목은 조건이 빡빡해서가 아니라 숫자를 못 읽어서")
+            lines.append("   걸린 것입니다. 조건을 풀어도 안 나옵니다.")
+            lines.append("")
+
     if 통과.empty:
-        lines.append("   조건을 통과한 종목이 없습니다. 조건을 조금 풀어보세요.")
+        자료탓 = {"이익자료없음", "순재산자료없음"} & set(reject_counts(screened))
+        if 자료탓:
+            lines.append("   통과한 종목이 없습니다. 다만 원인이 조건이 아니라 자료입니다 —")
+            lines.append(f"   {', '.join(sorted(자료탓))}. 조건을 풀어도 안 나옵니다.")
+        else:
+            lines.append("   조건을 통과한 종목이 없습니다. 조건을 조금 풀어보세요.")
     else:
         lines.append("   순위  종목명            코드      현재가"
                      "     PBR     PER   영업이익률  부채비율")
