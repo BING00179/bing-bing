@@ -24,6 +24,7 @@ import pandas as pd
 from . import backtest as bt_module
 from . import market_filter as mf_module
 from . import notify_policy
+from . import factor_data, factors
 from . import portfolio as pf_module
 from . import ranking
 from . import watchlist as wl_module
@@ -635,6 +636,67 @@ def _pick_top_signals(frames, cfg, market_ok, args) -> dict[str, set]:
     return {code: set(part.index) for code, part in kept.groupby("ticker")}
 
 
+def cmd_factors_kr(args: argparse.Namespace) -> int:
+    """알려진 요인들이 국내장에서 실제로 통했는지 확인합니다."""
+    print("=" * 74)
+    print(f"[요인 검정] {args.market} · 최근 {args.years}년 · 월 단위 리밸런싱")
+    print("=" * 74)
+    print("전략을 만들어 검증하는 게 아니라, 기준 하나로 종목을 줄 세워")
+    print("상위 그룹과 하위 그룹의 이후 수익률을 비교합니다.")
+    print("차이가 없으면 그 기준은 쓸모가 없다는 뜻입니다.\n")
+
+    days = factor_data.month_ends(args.years)
+    print(f"리밸런싱일 {len(days)}회 — 전 종목 단면을 받아옵니다.")
+    snapshots = factor_data.collect(days, market=args.market)
+    if len(snapshots) < 3:
+        print("\n받아온 회차가 너무 적어 검정할 수 없습니다.")
+        return 1
+
+    prices, matrices = factor_data.build_matrices(
+        snapshots,
+        momentum_months=args.momentum_months,
+        volatility_months=args.volatility_months,
+    )
+    print(f"\n요인 {len(matrices)}개 · 종목 {prices.shape[1]:,}개 · 회차 {len(prices)}회\n")
+
+    results = []
+    for name, matrix in matrices.items():
+        try:
+            r = factors.evaluate(
+                name,
+                factor_data.replace_inf(matrix),
+                prices,
+                higher_is_better=factor_data.direction_for(name),
+                quantiles=args.quantiles,
+                min_names=args.min_names,
+            )
+        except ValueError as exc:
+            print(f"  ! {name}: {exc}")
+            continue
+        results.append(r)
+        print(r.as_report())
+        print()
+
+    print(factors.compare(results))
+
+    cfg = Config.load(args.config)
+    out = _output_dir(cfg)
+    pd.DataFrame([
+        {
+            "요인": r.name,
+            "스프레드": r.mean_spread,
+            "t값": r.t_stat,
+            "Q1승률": r.hit_rate,
+            "계단": r.monotonic,
+            "회차": r.periods,
+            **{q: v for q, v in r.mean_by_quantile.items()},
+        }
+        for r in results
+    ]).to_csv(out / f"kr_factors_{args.market}.csv", index=False)
+    print(f"\n결과 저장: {out}/kr_factors_{args.market}.csv")
+    return 0
+
+
 def cmd_portfolio_kr(args: argparse.Namespace) -> int:
     """실제로 돈을 굴리듯 검증합니다 — 자본 한도와 보유 종목 수 제한."""
     cfg = Config.load(args.config)
@@ -933,6 +995,18 @@ def build_parser() -> argparse.ArgumentParser:
     ds.add_argument("--url", default="", help="웹페이지 주소 (메시지에 첨부)")
     ds.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
     ds.set_defaults(func=cmd_daily_summary)
+
+    fk = sub.add_parser(
+        "factors-kr",
+        help="[국내] 알려진 요인들이 실제로 통했는지 검정 (밸류·모멘텀·소형주 등)",
+    )
+    fk.add_argument("--market", default="KOSDAQ", help="KOSPI / KOSDAQ (기본 KOSDAQ)")
+    fk.add_argument("--years", type=float, default=5.0, help="검정 기간 (년, 기본 5)")
+    fk.add_argument("--quantiles", type=int, default=5, help="몇 개 그룹으로 나눌지")
+    fk.add_argument("--min-names", type=int, default=30, help="회차당 최소 종목 수")
+    fk.add_argument("--momentum-months", type=int, default=6, help="모멘텀 기간 (개월)")
+    fk.add_argument("--volatility-months", type=int, default=6, help="변동성 기간 (개월)")
+    fk.set_defaults(func=cmd_factors_kr)
 
     pk = sub.add_parser(
         "portfolio-kr",
