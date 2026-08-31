@@ -23,6 +23,7 @@ from pathlib import Path
 import pandas as pd
 
 from . import backtest as bt_module
+from . import dart_kr
 from . import market_filter as mf_module
 from . import notify_policy
 from . import analyze
@@ -1160,6 +1161,123 @@ def cmd_test_telegram(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_dart_check(args: argparse.Namespace) -> int:
+    """인증키가 실제로 동작하는지 먼저 확인합니다."""
+    try:
+        key = dart_kr.api_key(getattr(args, "api_key", None))
+    except dart_kr.DartNotConfigured as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    print("DART 에 연결해 회사 목록을 받는 중입니다. 처음이면 30초쯤 걸립니다...")
+    result = dart_kr.check(key, cache_dir=args.cache_dir)
+    print(("✅ " if result.ok else "❌ ") + result.message)
+    return 0 if result.ok else 1
+
+
+def cmd_dart_company(args: argparse.Namespace) -> int:
+    """한 회사를 공시로 훑습니다."""
+    try:
+        key = dart_kr.api_key(getattr(args, "api_key", None))
+    except dart_kr.DartNotConfigured as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    try:
+        index = dart_kr.load_corp_index(key, args.cache_dir, refresh=args.refresh)
+        item = dart_kr.brief(key, args.code, index, years=args.years, days=args.days)
+    except dart_kr.DartError as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    print(dart_kr.report(item))
+
+    if args.out:
+        target = _resolve(args.out)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(dart_kr.report(item) + "\n", encoding="utf-8")
+        print(f"\n저장: {target}")
+    return 0
+
+
+def cmd_dart_events(args: argparse.Namespace) -> int:
+    """여러 종목의 최근 공시에서 눈여겨볼 건만 모아 봅니다."""
+    try:
+        key = dart_kr.api_key(getattr(args, "api_key", None))
+    except dart_kr.DartNotConfigured as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    if args.universe:
+        codes = [r.code for r in read_universe_kr(args.universe)]
+    else:
+        codes = [c.strip() for c in (args.codes or "").split(",") if c.strip()]
+    if not codes:
+        print("종목이 없습니다. --codes 또는 --universe 를 주세요.")
+        return 1
+    if args.limit:
+        codes = codes[: args.limit]
+
+    try:
+        index = dart_kr.load_corp_index(key, args.cache_dir, refresh=args.refresh)
+    except dart_kr.DartError as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    today = pd.Timestamp.today().normalize()
+    start = (today - pd.Timedelta(days=args.days)).strftime("%Y%m%d")
+    end = today.strftime("%Y%m%d")
+
+    print(f"{len(codes)}종목의 최근 {args.days}일 공시를 확인합니다...")
+    found, missing, failed = [], 0, 0
+    for i, code in enumerate(codes, 1):
+        corp_code = dart_kr.find_corp_code(index, code)
+        if not corp_code:
+            missing += 1
+            continue
+        try:
+            flagged = dart_kr.flag_events(
+                dart_kr.filings(key, corp_code, start, end)
+            )
+        except dart_kr.DartError as exc:
+            failed += 1
+            if failed <= 3:
+                print(f"  {code} 조회 실패: {exc}")
+            continue
+        for _, row in flagged.iterrows():
+            found.append({"code": code,
+                          "name": dart_kr.corp_name(index, corp_code),
+                          **row.to_dict()})
+        if i % 50 == 0:
+            print(f"  {i}/{len(codes)}...")
+
+    if not found:
+        print(f"\n규칙에 걸린 공시가 없습니다. (조회 실패 {failed}건, 미등록 {missing}건)")
+        return 0
+
+    frame = pd.DataFrame(found)
+    order = {"높음": 0, "보통": 1}
+    frame["_rank"] = frame["severity"].map(order).fillna(9)
+    frame = (frame.sort_values(["_rank", "rcept_dt"], ascending=[True, False])
+                  .drop(columns="_rank"))
+
+    print(f"\n[사실] 최근 {args.days}일, {len(frame)}건이 규칙에 걸렸습니다.")
+    print(f"       (조회 실패 {failed}건, DART 미등록 {missing}건)\n")
+    for _, row in frame.iterrows():
+        mark = "🔴" if row["severity"] == "높음" else "🟡"
+        print(f"{mark} {row['rcept_dt']}  {row['name']}({row['code']})"
+              f"  [{row['label']}] {row['report_nm']}")
+
+    print("\n[해석] 이 목록은 '확인해 볼 거리' 입니다. 매수·매도 신호가 아닙니다.")
+
+    if args.out:
+        target = _resolve(args.out)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(target, index=False, encoding="utf-8-sig")
+        print(f"저장: {target}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.cli",
@@ -1329,6 +1447,38 @@ def build_parser() -> argparse.ArgumentParser:
     ku.add_argument("--market", default="KOSPI", help="KOSPI / KOSDAQ / KRX")
     ku.add_argument("--out", default="data/universe_kr_all.txt", help="저장할 파일")
     ku.set_defaults(func=cmd_kr_universe)
+
+    dc = sub.add_parser("dart-check", help="[국내] DART 인증키가 동작하는지 확인")
+    dc.add_argument("--api-key", help="직접 넘길 때만. 보통은 DART_API_KEY 환경변수를 씁니다")
+    dc.add_argument("--cache-dir", default="data/cache/dart", help="회사 목록 저장 폴더")
+    dc.set_defaults(func=cmd_dart_check)
+
+    dco = sub.add_parser(
+        "dart-company",
+        help="[국내] 한 회사를 공시로 훑기 (재무 추세 + 눈여겨볼 공시)",
+    )
+    dco.add_argument("--code", required=True, help="종목코드 6자리 또는 회사명")
+    dco.add_argument("--years", type=int, default=5, help="재무 추세를 몇 년치 볼지")
+    dco.add_argument("--days", type=int, default=365, help="공시를 며칠치 볼지")
+    dco.add_argument("--api-key", help="직접 넘길 때만")
+    dco.add_argument("--cache-dir", default="data/cache/dart", help="회사 목록 저장 폴더")
+    dco.add_argument("--refresh", action="store_true", help="회사 목록을 새로 받기")
+    dco.add_argument("--out", help="결과를 파일로 저장")
+    dco.set_defaults(func=cmd_dart_company)
+
+    de = sub.add_parser(
+        "dart-events",
+        help="[국내] 여러 종목의 최근 공시에서 눈여겨볼 건만 모으기",
+    )
+    de.add_argument("--codes", help="쉼표로 구분한 종목코드")
+    de.add_argument("--universe", help="종목 목록 파일")
+    de.add_argument("--days", type=int, default=90, help="며칠치 공시를 볼지")
+    de.add_argument("--limit", type=int, default=0, help="앞 N종목만 (0=전체)")
+    de.add_argument("--api-key", help="직접 넘길 때만")
+    de.add_argument("--cache-dir", default="data/cache/dart", help="회사 목록 저장 폴더")
+    de.add_argument("--refresh", action="store_true", help="회사 목록을 새로 받기")
+    de.add_argument("--out", help="결과를 CSV 로 저장")
+    de.set_defaults(func=cmd_dart_events)
 
     t = sub.add_parser("test-telegram", help="텔레그램 연결 확인")
     t.add_argument("--dry-run", action="store_true", help="실제로 보내지 않고 출력만")
