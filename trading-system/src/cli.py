@@ -694,6 +694,52 @@ def _frames_for(
     return frames
 
 
+def _apply_cost_overrides(cfg: Config, args: argparse.Namespace) -> None:
+    """비용 가정을 명령줄에서 덮어씁니다.
+
+    슬리피지 0.15% 는 실측이 아니라 제가 정한 가정값입니다. 코스닥 소형주를
+    시초가에 사는 전략이라 실제로는 더 나쁠 수 있습니다. 가정을 바꿔가며
+    "이래도 버티나" 를 볼 수 있어야, 결과 하나만 보고 믿는 일을 막습니다.
+
+    바꾼 값은 반드시 화면에 찍습니다 — 무엇으로 돌린 결과인지 모르면
+    그 결과는 쓸모가 없습니다.
+    """
+    base = cfg.backtest_kr
+    changes: dict[str, float] = {}
+    for name, label in (("slippage", "편도 슬리피지"),
+                        ("commission", "편도 수수료"),
+                        ("sell_tax", "증권거래세")):
+        value = getattr(args, name, None)
+        if value is None:
+            continue
+        field_name = {"slippage": "slippage_pct", "commission": "commission_pct",
+                      "sell_tax": "sell_tax_pct"}[name]
+        changes[field_name] = float(value)
+        print(f"⚙️  {label} {getattr(base, field_name)}% → {value}% 로 바꿔서 돌립니다")
+
+    if changes:
+        cfg.backtest_kr = replace(base, **changes)
+
+    after = cfg.backtest_kr
+    round_trip = (after.slippage_pct * 2 + after.commission_pct * 2 + after.sell_tax_pct)
+    print(f"   왕복 총비용 {round_trip:.3f}% — 한 번 매매할 때마다 이만큼은 먼저 빠집니다")
+
+
+def _add_cost_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--slippage", type=float,
+        help="편도 슬리피지(퍼센트)를 바꿔서 돌립니다. 기본 0.15",
+    )
+    parser.add_argument(
+        "--commission", type=float,
+        help="편도 수수료율(퍼센트)을 바꿔서 돌립니다. 기본 0.015",
+    )
+    parser.add_argument(
+        "--sell-tax", type=float, dest="sell_tax",
+        help="증권거래세(퍼센트)를 바꿔서 돌립니다. 기본 0.18",
+    )
+
+
 def cmd_walkforward_kr(args: argparse.Namespace) -> int:
     """손절 설정을 학습 구간에서 고르고 검증 구간에서 시험합니다."""
     cfg = Config.load(args.config)
@@ -702,6 +748,7 @@ def cmd_walkforward_kr(args: argparse.Namespace) -> int:
 
     market_ok = None
     print("=" * 84)
+    _apply_cost_overrides(cfg, args)
     if args.market_filter:
         index = fetch_index(cfg.market_filter.index_code)
         market_ok = mf_module.tradable_series(index, cfg.market_filter)
@@ -943,6 +990,7 @@ def cmd_portfolio_kr(args: argparse.Namespace) -> int:
     market_ok = None
     print("=" * 58)
     print(f"자본 {args.cash:,.0f}원 · 동시 보유 최대 {args.max_positions}종목")
+    _apply_cost_overrides(cfg, args)
     if args.market_filter:
         index = fetch_index(cfg.market_filter.index_code)
         market_ok = mf_module.tradable_series(index, cfg.market_filter)
@@ -1034,6 +1082,7 @@ def cmd_backtest_kr(args: argparse.Namespace) -> int:
     # 옵션이 빠진 걸 알게 되면 그 시간이 통째로 날아갑니다.
     market_ok = None
     print("=" * 58)
+    _apply_cost_overrides(cfg, args)
     if args.market_filter:
         index = fetch_index(cfg.market_filter.index_code)
         market_ok = mf_module.tradable_series(index, cfg.market_filter)
@@ -1356,6 +1405,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--refresh", action="store_true",
         help="저장된 시세를 무시하고 새로 받기",
     )
+    _add_cost_args(wf)
     wf.set_defaults(func=cmd_walkforward_kr)
 
     ca = sub.add_parser("cache", help="저장된 시세 상태 보기 / 지우기")
@@ -1419,6 +1469,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="시세 저장 폴더. 두 번째 실행부터 훨씬 빠릅니다",
     )
     pk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    _add_cost_args(pk)
     pk.set_defaults(func=cmd_portfolio_kr)
 
     kc = sub.add_parser("backtest-kr", help="[국내] 과거 데이터로 전략 검증")
@@ -1441,6 +1492,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="시세 저장 폴더. 두 번째 실행부터 훨씬 빠릅니다",
     )
     kc.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    _add_cost_args(kc)
     kc.set_defaults(func=cmd_backtest_kr)
 
     ku = sub.add_parser("kr-universe", help="[국내] 전 종목 목록 뽑기")
