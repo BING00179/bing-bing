@@ -77,10 +77,14 @@ def test_조건에_다_맞으면_통과한다():
 
 
 def test_계산이_안_된_PBR은_통과시키지_않는다():
-    """자본잠식 회사가 '빈칸이니까 조건 통과' 로 올라오면 안 됩니다."""
+    """자본잠식 회사가 '빈칸이니까 조건 통과' 로 올라오면 안 됩니다.
+
+    (사유 이름은 'PBR높음' 이 아니라 '순재산자료없음' 입니다 —
+     비싸서 떨어진 것과 계산이 안 돼서 떨어진 것을 갈라 적기 때문입니다.)
+    """
     out = _screen(fin=_fin(자본총계=[-1e10]))
     assert not bool(out.iloc[0]["통과"])
-    assert "PBR높음" in out.iloc[0]["탈락사유"]
+    assert "순재산자료없음" in out.iloc[0]["탈락사유"]
     assert "자본잠식" in out.iloc[0]["탈락사유"]
 
 
@@ -174,3 +178,68 @@ def test_통과가_없으면_조건을_풀라고_한다():
 
 def test_빈_표여도_터지지_않는다():
     assert "재무를 붙일 수 있는 종목이 없습니다" in v.report(pd.DataFrame(), v.Screen())
+
+
+# ────────────── 자료가 없어서 떨어진 것과 비싸서 떨어진 것 ──────────────
+# 둘을 뭉뚱그리면, 숫자가 안 들어온 것을 시장이 비싼 것으로 오해합니다.
+# 실제로 코스닥 99종목이 전부 'PER높음' 으로 떨어진 적이 있습니다.
+
+def test_이익을_못_읽으면_비싸다고_하지_않는다():
+    out = _screen(fin=_fin(당기순이익=[np.nan]))
+    사유 = out.iloc[0]["탈락사유"]
+    assert "이익자료없음" in 사유
+    assert "PER높음" not in 사유
+
+
+def test_진짜_비싸면_비싸다고_한다():
+    out = _screen(listing=_listing(marcap=[1e13]))   # PER 500배
+    사유 = out.iloc[0]["탈락사유"]
+    assert "PER높음" in 사유
+    assert "이익자료없음" not in 사유
+
+
+def test_자본을_못_읽으면_PBR도_갈라_적는다():
+    out = _screen(fin=_fin(자본총계=[np.nan]))
+    사유 = out.iloc[0]["탈락사유"]
+    assert "순재산자료없음" in 사유
+    assert "PBR높음" not in 사유
+
+
+def test_항목별로_숫자가_들어온_비율을_센다():
+    val = v.valuation(_listing(code=["A", "B"], name=["가", "나"],
+                               close=[1.0, 2.0], marcap=[1e11, 1e11],
+                               turnover=[1e9, 1e9]),
+                      _fin(code=["A", "B"], bsns_year=[2025, 2025],
+                           rcept_dt=["20260315"] * 2,
+                           매출액=[1e11, 2e11], 영업이익=[1e10, 2e10],
+                           당기순이익=[1e10, np.nan],
+                           자산총계=[2e11, 3e11], 부채총계=[5e10, 6e10],
+                           자본총계=[1.5e11, 2e11]))
+    표 = v.completeness(val)
+    이익 = 표[표["항목"] == "당기순이익"].iloc[0]
+    assert 이익["값이 있는 종목"] == 1 and 이익["비율%"] == 50.0
+
+
+def test_자료가_모자라면_보고서가_경고한다():
+    out = _screen(fin=_fin(당기순이익=[np.nan]))
+    text = v.report(out, v.Screen())
+    assert "자료가 덜 들어온 항목" in text
+    assert "조건을 풀어도 안 나옵니다" in text
+
+
+def test_자료탓일_때는_조건을_풀라고_하지_않는다():
+    text = v.report(_screen(fin=_fin(당기순이익=[np.nan])), v.Screen())
+    assert "조건을 조금 풀어보세요" not in text
+
+
+# ────────────── 계정명 변형 ──────────────
+
+def test_계정명이_조금_달라도_같은_뜻으로_읽는다():
+    assert v._canonical("당기순이익(손실)") == "당기순이익"
+    assert v._canonical("수익(매출액)") == "매출액"
+    assert v._canonical("영업이익(손실)") == "영업이익"
+    assert v._canonical("자본 총계") == "자본총계"      # 띄어쓰기 무시
+
+
+def test_모르는_계정은_읽지_않는다():
+    assert v._canonical("이연법인세자산") is None
