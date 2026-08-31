@@ -24,6 +24,7 @@ import pandas as pd
 from . import backtest as bt_module
 from . import market_filter as mf_module
 from . import notify_policy
+from . import analyze
 from . import factor_data, factors
 from . import portfolio as pf_module
 from . import ranking
@@ -636,6 +637,44 @@ def _pick_top_signals(frames, cfg, market_ok, args) -> dict[str, set]:
     return {code: set(part.index) for code, part in kept.groupby("ticker")}
 
 
+def cmd_analyze(args: argparse.Namespace) -> int:
+    """이미 나온 백테스트 결과를 뜯어봅니다. 새 데이터가 필요 없습니다."""
+    cfg = Config.load(args.config)
+    out = _output_dir(cfg)
+
+    path = _resolve(args.file) if args.file else None
+    if path is None:
+        candidates = sorted(out.glob("kr_backtest_trades*.csv")) + sorted(
+            out.glob("kr_portfolio_*.csv")
+        )
+        if not candidates:
+            print(f"매매 기록을 찾지 못했습니다. {out} 안에 CSV 가 있어야 합니다.")
+            print("먼저 backtest-kr 또는 portfolio-kr 을 돌려 주세요.")
+            return 1
+        path = candidates[-1]
+        print(f"파일: {path.name}\n")
+
+    try:
+        trades = analyze.load(path)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"오류: {exc}")
+        return 1
+
+    if trades.empty:
+        print("매매 기록이 비어 있습니다.")
+        return 1
+
+    print(analyze.report(trades, top=args.top))
+
+    if args.by_period:
+        print()
+        print("── 분기별 성적 ──")
+        print(analyze.by_period(trades).to_string(
+            float_format=lambda v: f"{v:,.2f}"
+        ))
+    return 0
+
+
 def cmd_factors_kr(args: argparse.Namespace) -> int:
     """알려진 요인들이 국내장에서 실제로 통했는지 확인합니다."""
     print("=" * 74)
@@ -1038,6 +1077,15 @@ def build_parser() -> argparse.ArgumentParser:
     ds.add_argument("--url", default="", help="웹페이지 주소 (메시지에 첨부)")
     ds.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
     ds.set_defaults(func=cmd_daily_summary)
+
+    an = sub.add_parser(
+        "analyze",
+        help="이미 나온 백테스트 결과 분석 (새 데이터 불필요)",
+    )
+    an.add_argument("--file", help="매매 기록 CSV (없으면 가장 최근 것)")
+    an.add_argument("--top", type=int, default=10, help="쏠림을 볼 종목 수")
+    an.add_argument("--by-period", action="store_true", help="분기별 성적도 표시")
+    an.set_defaults(func=cmd_analyze)
 
     fk = sub.add_parser(
         "factors-kr",
