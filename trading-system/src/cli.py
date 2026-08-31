@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import replace
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,7 @@ from . import backtest as bt_module
 from . import market_filter as mf_module
 from . import notify_policy
 from . import analyze
+from . import walkforward as wf_module
 from . import factor_data, factors
 from . import portfolio as pf_module
 from . import ranking
@@ -637,6 +639,79 @@ def _pick_top_signals(frames, cfg, market_ok, args) -> dict[str, set]:
     return {code: set(part.index) for code, part in kept.groupby("ticker")}
 
 
+def cmd_walkforward_kr(args: argparse.Namespace) -> int:
+    """손절 설정을 학습 구간에서 고르고 검증 구간에서 시험합니다."""
+    cfg = Config.load(args.config)
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+
+    market_ok = None
+    print("=" * 84)
+    if args.market_filter:
+        index = fetch_index(cfg.market_filter.index_code)
+        market_ok = mf_module.tradable_series(index, cfg.market_filter)
+        print(f"시장 필터 켬 — 매수 허용 {market_ok.mean() * 100:.1f}%")
+    print(f"대상 {len(codes):,}종목 · 최근 {args.years}년 · "
+          f"학습 {args.train_ratio:.0%} / 검증 {1 - args.train_ratio:.0%}")
+    print("=" * 84)
+
+    frames: dict[str, pd.DataFrame] = {}
+    for code in codes:
+        try:
+            daily = fetch_daily_kr(code, years=args.years)
+        except DataUnavailable:
+            continue
+        except Exception:  # noqa: BLE001
+            continue
+        if len(daily) >= cfg.scanner_b.sma_slow + 60:
+            frames[code] = daily
+    if len(frames) < 30:
+        print("시세를 받은 종목이 너무 적습니다.")
+        return 1
+    print(f"시세 확보 {len(frames):,}종목\n")
+
+    all_days = pd.DatetimeIndex(sorted(set().union(*(f.index for f in frames.values()))))
+    splits = wf_module.make_splits(all_days, train_ratio=args.train_ratio)
+
+    # 비교할 손절 설정들. 학습 구간 성적으로 고르고 검증 구간에서 시험합니다.
+    base = cfg.backtest_kr
+    settings: list[tuple[str, object]] = [
+        ("고정 3% (지금)", replace(base, atr_stop_mult=0.0, stop_loss_pct=3.0)),
+        ("고정 5%", replace(base, atr_stop_mult=0.0, stop_loss_pct=5.0)),
+        ("고정 8%", replace(base, atr_stop_mult=0.0, stop_loss_pct=8.0)),
+        ("변동성 ATR×1.5", replace(base, atr_stop_mult=1.5)),
+        ("변동성 ATR×2", replace(base, atr_stop_mult=2.0)),
+        ("변동성 ATR×3", replace(base, atr_stop_mult=3.0)),
+    ]
+
+    results = []
+    for name, setting in settings:
+        print(f"  {name} 검증 중...")
+        results.append(
+            wf_module.evaluate_setting(
+                name, frames, setting, cfg.scanner_b, splits, market_ok
+            )
+        )
+
+    print()
+    print(wf_module.report(results, splits))
+
+    out = _output_dir(cfg)
+    pd.DataFrame([
+        {
+            "설정": r.setting,
+            "학습PF": r.train["profit_factor"], "검증PF": r.test["profit_factor"],
+            "변화율": round(r.decay, 1),
+            "학습매매": r.train_trades, "검증매매": r.test_trades,
+            "학습승률": r.train["win_rate_pct"], "검증승률": r.test["win_rate_pct"],
+            "통과": r.survives,
+        }
+        for r in results
+    ]).to_csv(out / "kr_walkforward.csv", index=False)
+    print(f"\n결과 저장: {out}/kr_walkforward.csv")
+    return 0
+
+
 def cmd_analyze(args: argparse.Namespace) -> int:
     """이미 나온 백테스트 결과를 뜯어봅니다. 새 데이터가 필요 없습니다."""
     cfg = Config.load(args.config)
@@ -1077,6 +1152,19 @@ def build_parser() -> argparse.ArgumentParser:
     ds.add_argument("--url", default="", help="웹페이지 주소 (메시지에 첨부)")
     ds.add_argument("--no-telegram", action="store_true", help="알림 보내지 않기")
     ds.set_defaults(func=cmd_daily_summary)
+
+    wf = sub.add_parser(
+        "walkforward-kr",
+        help="[국내] 손절 설정을 앞 구간에서 고르고 뒤 구간에서 시험 (과최적화 검사)",
+    )
+    wf.add_argument("--universe", help="종목코드 목록 파일")
+    wf.add_argument("--years", type=float, default=5.0, help="전체 기간 (년)")
+    wf.add_argument(
+        "--train-ratio", type=float, default=0.6,
+        help="앞쪽 비율을 학습에 사용 (기본 0.6 = 앞 60퍼센트)",
+    )
+    wf.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
+    wf.set_defaults(func=cmd_walkforward_kr)
 
     an = sub.add_parser(
         "analyze",

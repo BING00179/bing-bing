@@ -100,3 +100,44 @@ def gap_pct(today_open: float, prev_close: float) -> float:
     if prev_close <= 0:
         raise ValueError(f"전일 종가가 0 이하입니다: {prev_close}")
     return (today_open - prev_close) / prev_close * 100.0
+
+
+def true_range(daily: pd.DataFrame) -> pd.Series:
+    """하루에 실제로 얼마나 움직였나 (True Range).
+
+    고가-저가만 보면 갭을 놓칩니다. 전날 종가에서 훌쩍 뛰어 시작한
+    날은 고가-저가가 좁아도 실제 움직임은 큽니다. 셋 중 큰 값을 씁니다.
+
+        오늘 고가 - 오늘 저가
+        |오늘 고가 - 어제 종가|
+        |오늘 저가 - 어제 종가|
+    """
+    prev_close = daily["close"].shift(1)
+    spans = pd.concat(
+        [
+            daily["high"] - daily["low"],
+            (daily["high"] - prev_close).abs(),
+            (daily["low"] - prev_close).abs(),
+        ],
+        axis=1,
+    )
+    return spans.max(axis=1)
+
+
+def atr(daily: pd.DataFrame, window: int = 14) -> pd.Series:
+    """평균 실제 변동폭 (Average True Range).
+
+    이 종목이 보통 하루에 얼마나 움직이는지를 나타냅니다.
+    손절폭을 이 값에 맞추면, 종목마다 다른 변동성에 대응할 수 있습니다.
+
+    손절이 이 값보다 좁으면 신호가 맞든 틀리든 그냥 출렁임에 걸립니다.
+    실제로 그래서 매매의 46%가 진입 당일 손절로 끝났습니다.
+    """
+    if window < 1:
+        raise ValueError(f"window 는 1 이상이어야 합니다: {window}")
+    return true_range(daily).rolling(window, min_periods=window).mean()
+
+
+def atr_pct(daily: pd.DataFrame, window: int = 14) -> pd.Series:
+    """ATR 을 주가 대비 백분율로. 종목 간 비교가 가능해집니다."""
+    return atr(daily, window) / daily["close"] * 100.0

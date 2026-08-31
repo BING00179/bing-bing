@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from .config import BacktestConfig, ScannerBConfig
-from .indicators import sma
+from .indicators import atr_pct, sma
 from .strategy import signals_from_daily
 
 
@@ -77,6 +77,15 @@ def run(
     if bt.exit_on_ma_break > 0:
         ma_break = sma(daily["close"], bt.exit_on_ma_break).to_numpy(dtype=float)
 
+    # 손절폭을 종목의 변동성에 맞춥니다(켜져 있을 때만).
+    # 고정 % 손절은 종목마다 다른 하루 변동폭을 무시합니다.
+    if bt.atr_stop_mult > 0:
+        band = (atr_pct(daily, bt.atr_window) * bt.atr_stop_mult).to_numpy(dtype=float)
+        band = np.where(np.isnan(band), bt.stop_loss_pct, band)
+        band = np.clip(band, bt.stop_loss_pct, bt.atr_stop_cap_pct)
+    else:
+        band = np.full(len(daily), bt.stop_loss_pct, dtype=float)
+
     opens = daily["open"].to_numpy(dtype=float)
     highs = daily["high"].to_numpy(dtype=float)
     lows = daily["low"].to_numpy(dtype=float)
@@ -107,7 +116,10 @@ def run(
             i += 1
             continue
 
-        initial_stop = entry_price * (1.0 - bt.stop_loss_pct / 100.0)
+        # 신호일(진입 전날)까지의 변동성으로 손절폭을 정합니다.
+        # 진입일 값을 쓰면 미래를 보는 것이 됩니다.
+        stop_pct = float(band[i])
+        initial_stop = entry_price * (1.0 - stop_pct / 100.0)
         use_target = bt.take_profit_pct > 0
         use_trailing = bt.trailing_stop_pct > 0
         target_price = (
