@@ -201,24 +201,79 @@ def _pct(value: float) -> str:
     return "—" if value is None or pd.isna(value) else f"{value:+.2f}%"
 
 
+SHAPE_MEANING = {
+    "바로 상승": "고르자마자 올랐습니다",
+    "횡보 후 상승": "한동안 제자리였다가 나중에 올랐습니다",
+    "손실 후 반등": "먼저 빠졌다가 되돌아왔습니다",
+    "고점 후 반락": "올랐다가 도로 내려왔습니다",
+    "선정 직후 하락": "고르자마자 빠져서 못 돌아왔습니다",
+    "그 밖": "뚜렷한 모양이 없었습니다",
+}
+
+SHAPE_LESSON = {
+    "횡보 후 상승": "→ 손절을 좁게 잡으면 이런 건 오르기 전에 잘려나갑니다",
+    "손실 후 반등": "→ 손절 3% 였다면 이건 전부 잘렸습니다",
+    "고점 후 반락": "→ 올랐을 때 파는 규칙이 없어서 되돌려주고 있습니다",
+    "선정 직후 하락": "→ 이미 오른 뒤에 들어가고 있다는 뜻일 수 있습니다",
+}
+
+
+def plain_verdict(mean_excess: float, count: int) -> str:
+    """한 줄로 답합니다. 이번 기간 결과가 어땠나."""
+    if count == 0:
+        return "아직 성적이 나온 게 없습니다."
+    if count < MIN_FOR_TRUST:
+        return (f"아직 {count}건뿐이라 판단할 수 없습니다. "
+                f"{MIN_FOR_TRUST}건은 넘어야 합니다.")
+    if mean_excess > 0:
+        return f"코스닥 평균보다 평균 {mean_excess:.1f}% 더 올랐습니다."
+    return f"코스닥 평균보다 평균 {abs(mean_excess):.1f}% 덜 올랐습니다."
+
+
 def report(scored: pd.DataFrame, period: str, horizon: int,
            recorded: int = 0, waiting: int = 0, basis: str = "") -> str:
-    """텔레그램으로 보낼 만큼 짧게. 사실과 해석을 갈라 적습니다."""
+    """월말 브리핑. 주식을 잘 모르는 사람이 읽어도 알 수 있게 씁니다.
+
+    숫자만 늘어놓으면 아무 뜻이 없습니다. 무슨 뜻인지, 왜 중요한지를
+    같이 적습니다.
+    """
     lines = [f"📋 월말 브리핑 — {period}", ""]
 
-    lines.append(f"[사실] 이번 기간 기록 {recorded}건 · "
-                 f"채점 {len(scored)}건 · 대기 {waiting}건")
-    lines.append(f"       채점 기준: 진입일 시가 → {horizon}거래일 뒤 종가,")
-    lines.append("       코스닥 지수 같은 기간 수익률을 뺀 값(초과수익)")
-    if basis:
-        # 나중에 '그때 어떻게 쟀지?' 를 물을 수 있어야 합니다.
-        lines.append(f"       계산 기준: {basis}")
+    유효 = scored.dropna(subset=["excess"]) if not scored.empty else scored
+    평균 = float(유효["excess"].mean()) if len(유효) else float("nan")
+
+    # ── 먼저 한 줄로 답합니다 ──
+    lines.append("■ 한 줄로 말하면")
+    lines.append(f"   {plain_verdict(평균, len(유효))}")
     lines.append("")
 
-    if scored.empty:
-        lines.append("아직 채점할 것이 없습니다.")
-        lines.append(f"신호가 난 뒤 {horizon}거래일이 지나야 성적이 나옵니다.")
+    lines.append("■ 이번에 뭘 했나")
+    lines.append(f"   골라 적어 둔 종목  {recorded}개")
+    lines.append(f"   성적이 나온 것    {len(유효)}개")
+    lines.append(f"   아직 기다리는 것   {waiting}개")
+    lines.append("")
+    lines.append(f"   ※ 고른 다음날 아침 시가에 샀다고 치고, {horizon}거래일"
+                 f"(약 {horizon // 20}개월) 들고 있었다면 어땠을지를 봅니다.")
+    lines.append("   ※ 실제로 산 것은 아닙니다. 돈은 한 푼도 안 들어갔습니다.")
+    lines.append("")
+
+    if 유효.empty:
+        lines.append("아직 성적을 매길 수 있는 게 없습니다.")
+        lines.append(f"고른 뒤 {horizon}거래일이 지나야 점수가 나옵니다.")
+        lines.append("한 달쯤 기다리셔야 합니다.")
+        if basis:
+            lines.append("")
+            lines.append(f"계산 기준: {basis}")
         return "\n".join(lines)
+
+    # ── 성적 ──
+    lines.append("■ 성적")
+    lines.append("")
+    lines.append("   '초과수익' 이란 — 그 종목이 오른 정도에서 코스닥 지수가")
+    lines.append("   오른 정도를 뺀 값입니다. 코스닥이 10% 올랐는데 종목이")
+    lines.append("   8% 올랐으면, 오르긴 했어도 초과수익은 -2% 입니다.")
+    lines.append("   그냥 지수를 사는 게 나았다는 뜻이니까요.")
+    lines.append("")
 
     있는설정 = [s for s in ("breakout", "value")
               if "setup" in scored and (scored["setup"] == s).any()]
@@ -227,56 +282,78 @@ def report(scored: pd.DataFrame, period: str, horizon: int,
         if 요약 is None:
             continue
         이름 = SETUP_LABEL.get(setup, setup)
-        lines.append(f"■ {이름} — {요약.count}건")
-        lines.append(f"   평균 초과수익 {_pct(요약.mean_excess)}"
-                     f" · 중앙값 {_pct(요약.median_excess)}")
-        lines.append(f"   지수를 이긴 비율 {요약.win_rate:.0f}%")
+        lines.append(f"   〈{이름}〉 {요약.count}개")
+        lines.append(f"     초과수익 평균 {_pct(요약.mean_excess)}"
+                     f" (한가운데 값 {_pct(요약.median_excess)})")
+        lines.append(f"     지수보다 잘한 것이 {요약.win_rate:.0f}%")
         if 요약.best:
-            lines.append(f"   가장 좋았던 것  {요약.best[0]}({요약.best[1]})"
-                         f" {요약.best[2]:+.1f}%")
+            lines.append(f"     제일 잘된 것  {요약.best[0]} {요약.best[2]:+.1f}%")
         if 요약.worst:
-            lines.append(f"   가장 나빴던 것  {요약.worst[0]}({요약.worst[1]})"
-                         f" {요약.worst[2]:+.1f}%")
+            lines.append(f"     제일 못된 것  {요약.worst[0]} {요약.worst[2]:+.1f}%")
         lines.append("")
 
-    # 조건별 — 어떤 모양일 때 실제로 올랐나
-    쪼갠것 = []
-    for column in BUCKETS:
-        조각들 = by_condition(scored, column)
-        if len(조각들) >= 2:
-            쪼갠것.append((column, 조각들))
-
-    if 쪼갠것:
-        lines.append("[사실] 어떤 조건일 때 어땠나")
-        for column, 조각들 in 쪼갠것:
-            lines.append(f"   〈{column}〉")
-            for s in 조각들:
-                lines.append(f"     {s.label:<12} {s.count:>3}건"
-                             f"  평균 {_pct(s.mean_excess):>8}"
-                             f"  이긴비율 {s.win_rate:>3.0f}%")
-        lines.append("")
-
+    # ── 어떻게 움직였나 ──
     모양표 = by_shape(scored)
     if not 모양표.empty:
-        lines.append("[사실] 값이 어떻게 움직였나 — 같은 결과라도 길이 다릅니다")
-        lines.append("   " + 모양표.to_string().replace("\n", "\n   "))
+        lines.append("■ 사고 나서 어떻게 움직였나")
         lines.append("")
-        lines.append("   손실 후 반등·횡보 후 상승이 많으면 → 손절이 좁아서 중간에")
-        lines.append("     잘려나가고 있다는 뜻입니다.")
-        lines.append("   고점 후 반락이 많으면 → 익절 규칙이 없어서 되돌려주고")
-        lines.append("     있다는 뜻입니다.")
-        lines.append("   선정 직후 하락이 많으면 → 진입 시점이 늦다는 뜻입니다.")
+        lines.append("   같은 +5% 라도 곧장 오른 것과 한참 빠졌다 돌아온 것은")
+        lines.append("   전혀 다릅니다. 우리 매도 규칙에 걸리는 게 다르니까요.")
+        lines.append("")
+        for 모양, row in 모양표.iterrows():
+            뜻 = SHAPE_MEANING.get(str(모양), "")
+            lines.append(f"   · {모양} {int(row['건수'])}개 — {뜻}")
+            lines.append(f"     초과수익 평균 {row['평균초과%']:+.1f}%")
+            배움 = SHAPE_LESSON.get(str(모양))
+            if 배움 and int(row["건수"]) >= MIN_FOR_HINT:
+                lines.append(f"     {배움}")
         lines.append("")
 
-    lines.append("[해석] 이 표를 읽는 법")
-    전체 = len(scored.dropna(subset=["excess"]))
-    if 전체 < MIN_FOR_TRUST:
-        lines.append(f"   · 아직 {전체}건입니다. {MIN_FOR_TRUST}건은 넘어야 판정을")
-        lines.append("     시작합니다. 지금 숫자가 좋아도 아무 뜻이 없습니다.")
-    lines.append("   · 조건별 표는 참고만 하십시오. 표본을 여러 조각으로")
-    lines.append("     나누면 그중 하나는 우연히 좋아 보입니다.")
-    lines.append("   · 이 표를 보고 조건을 바꾸면 그날부터 시계가 다시 갑니다.")
-    lines.append("     지금까지 쌓은 것은 바뀐 조건의 증거가 되지 못합니다.")
-    lines.append("   · 아직 돈은 한 푼도 들어가지 않았습니다. 이건 수익 보고서가")
-    lines.append("     아니라 고르는 규칙의 성적표입니다.")
+    # ── 조건별 ──
+    쪼갠것 = [(c, by_condition(scored, c)) for c in BUCKETS]
+    쪼갠것 = [(c, v) for c, v in 쪼갠것 if len(v) >= 2]
+    if 쪼갠것:
+        lines.append("■ 어떤 종목이 잘 됐나")
+        lines.append("")
+        for column, 조각들 in 쪼갠것:
+            설명 = {
+                "거래량배수": "평소보다 거래량이 몇 배로 늘었을 때 골랐나",
+                "박스폭%": "그 전에 얼마나 조용했나 (좁을수록 조용했던 것)",
+                "상승률%": "고를 때 이미 얼마나 올라 있었나",
+                "갭%": "다음날 아침 얼마나 비싸게 시작했나",
+            }.get(column, "")
+            lines.append(f"   〈{column}〉 {설명}")
+            for s in 조각들:
+                lines.append(f"     {s.label:<12} {s.count:>3}개"
+                             f"  초과수익 {_pct(s.mean_excess):>8}"
+                             f"  잘한 비율 {s.win_rate:>3.0f}%")
+            lines.append("")
+
+    # ── 어떻게 읽어야 하나 ──
+    lines.append("■ 이 숫자를 어떻게 봐야 하나")
+    lines.append("")
+    if len(유효) < MIN_FOR_TRUST:
+        lines.append(f"   1. 아직 {len(유효)}개뿐입니다. {MIN_FOR_TRUST}개는 넘어야")
+        lines.append("      운인지 실력인지 구분이 시작됩니다. 지금 숫자가")
+        lines.append("      좋게 나와도 그건 아무 뜻이 없습니다.")
+    else:
+        lines.append(f"   1. {len(유효)}개가 모였습니다. 이제 볼 만합니다.")
+        lines.append("      다만 여기서 사고파는 비용(왕복 0.51%)을 빼야")
+        lines.append("      실제로 남는 돈이 됩니다.")
+    lines.append("")
+    lines.append("   2. 위의 '어떤 종목이 잘 됐나' 표는 참고만 하십시오.")
+    lines.append("      적은 수를 여러 조각으로 나누면 그중 하나는 반드시")
+    lines.append("      좋아 보입니다. 우연히요.")
+    lines.append("")
+    lines.append("   3. 이 표를 보고 고르는 조건을 바꾸면, 지금까지 쌓은")
+    lines.append("      기록은 증거가 되지 못합니다. 처음부터 다시 쌓아야")
+    lines.append("      합니다. 바꾸실 거면 그걸 알고 바꾸셔야 합니다.")
+    lines.append("")
+    lines.append("   4. 다시 말씀드리지만 이건 수익 보고서가 아닙니다.")
+    lines.append("      돈은 아직 한 푼도 안 들어갔습니다. '고르는 규칙이")
+    lines.append("      맞나' 를 보는 성적표입니다.")
+
+    if basis:
+        lines.append("")
+        lines.append(f"계산 기준: {basis}")
     return "\n".join(lines)
