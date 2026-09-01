@@ -136,6 +136,27 @@ jobs:
             echo "마감 시각이 아니므로 기록하지 않습니다. (현재 $HOUR:$MIN KST)"
           fi
 
+      # 월말 브리핑 — 매달 마지막 거래일에 한 번.
+      # 지난 기간에 고른 종목이 실제로 어떻게 됐는지 텔레그램으로 보냅니다.
+      - name: 월말 브리핑
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          HOUR=$(TZ=Asia/Seoul date +%H)
+          MIN=$(TZ=Asia/Seoul date +%M)
+          TODAY=$(TZ=Asia/Seoul date +%d)
+          TOMORROW=$(TZ=Asia/Seoul date -d "+1 day" +%d)
+          # 내일 날짜가 1 이면 오늘이 그 달의 마지막 날입니다.
+          if [ "$HOUR" = "15" ] && [ "$MIN" -ge 20 ] && [ "$MIN" -le 40 ] \
+             && [ "$TOMORROW" = "01" ]; then
+            python -m src.cli value-record --market KOSDAQ || true
+            python -m src.cli monthly-review --days 120 --telegram
+          else
+            echo "월말 마감 시각이 아닙니다. (오늘 $TODAY일, 현재 $HOUR:$MIN KST)"
+          fi
+
       - name: 웹페이지와 기록 저장소에 올리기
         run: |
           if [ -z "$(git status --porcelain stocks/ trading-system/data/livetest.csv)" ]; then

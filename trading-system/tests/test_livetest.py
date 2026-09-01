@@ -220,3 +220,253 @@ def test_통과해도_비용을_따로_보라고_말한다():
     text = lt.report(pd.DataFrame(columns=list(lt.COLUMNS)), scored,
                      lt.summarize(scored))
     assert "거래비용" in text
+
+
+# ────────────────── 지우지 않는 장부 ──────────────────
+# 이 파일의 값어치는 '지우지 않았다' 는 데 있습니다. 성적이 나쁜
+# 기록을 슬쩍 빼면 남는 것은 잘된 것뿐이고, 그건 증거가 아닙니다.
+
+def test_기록이_줄어드는_저장은_거부한다(tmp_path):
+    import pytest
+    path = tmp_path / "j.csv"
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(), _hit(code="000002")], bo.Setup())
+    lt.save(frame, path)
+    with pytest.raises(lt.LedgerShrank):
+        lt.save(frame.iloc[:1], path)
+    assert len(lt.load(path)) == 2          # 원본은 그대로
+
+
+def test_건수가_같아도_바뀌치기는_거부한다(tmp_path):
+    import pytest
+    path = tmp_path / "j.csv"
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    lt.save(frame, path)
+    다른것, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                             [_hit(code="000099")], bo.Setup())
+    with pytest.raises(lt.LedgerShrank) as caught:
+        lt.save(다른것, path)
+    assert "사라집니다" in str(caught.value)
+
+
+def test_덧붙이는_저장은_통과한다(tmp_path):
+    path = tmp_path / "j.csv"
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    lt.save(frame, path)
+    frame, _ = lt.add_signals(frame, [_hit(code="000002")], bo.Setup())
+    lt.save(frame, path)
+    assert len(lt.load(path)) == 2
+
+
+def test_정말_필요하면_열어_줄_수는_있다(tmp_path):
+    path = tmp_path / "j.csv"
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    lt.save(frame, path)
+    lt.save(pd.DataFrame(columns=list(lt.COLUMNS)), path, allow_shrink=True)
+    assert lt.load(path).empty
+
+
+# ────────────────── 저평가 후보도 같은 장부에 ──────────────────
+
+def test_저평가_후보를_적는다():
+    ranked = pd.DataFrame({
+        "code": ["000001", "000002"], "name": ["가", "나"],
+        "close": [1000.0, 2000.0], "turnover": [1e9, 2e9],
+        "저평가점수": [1.5, 2.5],
+    })
+    frame, 수 = lt.add_value_picks(pd.DataFrame(columns=list(lt.COLUMNS)),
+                                  ranked, "pbr1/per15",
+                                  on_date=pd.Timestamp("2026-08-31"))
+    assert 수 == 2
+    assert set(frame["setup"]) == {"value"}
+    assert frame.iloc[0]["rule"] == "pbr1/per15"
+
+
+def test_저평가_후보에는_갭_규칙을_걸지_않는다():
+    """저평가는 몇 달을 보고 사는 것이라 다음날 아침 갭과 무관합니다."""
+    ranked = pd.DataFrame({"code": ["000001"], "name": ["가"],
+                           "close": [1000.0], "turnover": [1e9],
+                           "저평가점수": [1.0]})
+    frame, _ = lt.add_value_picks(pd.DataFrame(columns=list(lt.COLUMNS)),
+                                  ranked, "규칙",
+                                  on_date=pd.Timestamp("2026-01-02"))
+    daily = _bars([1000.0, 1200.0], opens=[1000.0, 1150.0])   # 갭 15%
+    frame, _ = lt.fill_entries(frame, {"000001": daily})
+    assert frame.iloc[0]["bought"] == "예"
+
+
+def test_같은_날_같은_종목은_두_번_안_적는다():
+    ranked = pd.DataFrame({"code": ["000001"], "name": ["가"],
+                           "close": [1000.0], "turnover": [1e9],
+                           "저평가점수": [1.0]})
+    frame, _ = lt.add_value_picks(pd.DataFrame(columns=list(lt.COLUMNS)),
+                                  ranked, "규칙",
+                                  on_date=pd.Timestamp("2026-08-31"))
+    frame, 수 = lt.add_value_picks(frame, ranked, "규칙",
+                                  on_date=pd.Timestamp("2026-08-31"))
+    assert 수 == 0
+
+
+# ────────────── 감사 장부의 규칙 일곱 가지 ──────────────
+# 돈이 움직일 통로입니다. 그냥 넘기면 나중에 더 크게 물어야 합니다.
+
+def test_줄마다_번호와_적은_시각이_붙는다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    row = frame.iloc[0]
+    assert row["row_id"] and row["recorded_at"]
+    assert row["kind"] == lt.KIND_RECORD
+    assert row["status"] == lt.STATUS_OK
+    assert row["version"] == lt.LEDGER_VERSION
+
+
+def test_선정_근거와_출처를_같이_적는다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    row = frame.iloc[0]
+    assert "거래량" in row["basis"]
+    assert row["source"].strip()
+
+
+def test_정정은_덮어쓰지_않고_새_줄로_붙는다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(name="틀린이름")], bo.Setup())
+    원래id = frame.iloc[0]["row_id"]
+    frame, 새id = lt.add_correction(frame, 원래id, "종목명 오기", name="맞는이름")
+
+    assert len(frame) == 2                       # 원본이 그대로 남아 있음
+    원본 = frame[frame["row_id"] == 원래id].iloc[0]
+    assert 원본["status"] == lt.STATUS_FIXED
+    assert 원본["name"] == "틀린이름"              # 원본은 손대지 않음
+
+    정정 = frame[frame["row_id"] == 새id].iloc[0]
+    assert 정정["kind"] == lt.KIND_FIX
+    assert 정정["corrects"] == 원래id
+    assert 정정["name"] == "맞는이름"
+    assert "종목명 오기" in 정정["basis"]
+
+
+def test_정정_사유를_안_적으면_거부한다():
+    import pytest
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    with pytest.raises(ValueError):
+        lt.add_correction(frame, frame.iloc[0]["row_id"], "  ", name="바꿈")
+
+
+def test_없는_줄은_고칠_수_없다():
+    import pytest
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    with pytest.raises(KeyError):
+        lt.add_correction(frame, "없는번호", "사유", name="바꿈")
+
+
+def test_채점은_정정된_원본을_빼고_본다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(close=1000.0)], bo.Setup())
+    frame, _ = lt.add_correction(frame, frame.iloc[0]["row_id"], "오기", name="새이름")
+    daily = _bars([1000.0] + [1100.0] * 25, opens=[1000.0, 1030.0] + [1100.0] * 24)
+    frame, _ = lt.fill_entries(frame, {"000001": daily})
+    결과 = lt.score_rows(frame, {"000001": daily}, _bars([100.0] * 26),
+                        horizon=20, today=pd.Timestamp("2026-12-31"))
+    assert len(결과) == 1                        # 두 줄이 아니라 한 줄만
+    assert 결과[0].name == "새이름"
+
+
+def test_판이_다르면_섞어_채점하지_않는다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(close=1000.0)], bo.Setup())
+    frame.at[0, "version"] = "0"                 # 예전 판인 척
+    daily = _bars([1000.0] + [1100.0] * 25, opens=[1000.0, 1030.0] + [1100.0] * 24)
+    frame, _ = lt.fill_entries(frame, {"000001": daily})
+    index = _bars([100.0] * 26)
+    assert lt.score_rows(frame, {"000001": daily}, index, horizon=20,
+                         today=pd.Timestamp("2026-12-31"), version="1") == []
+    assert len(lt.score_rows(frame, {"000001": daily}, index, horizon=20,
+                             today=pd.Timestamp("2026-12-31"), version="0")) == 1
+
+
+def test_진입_뒤_최고가_최저가를_덧쌓는다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(close=1000.0)], bo.Setup())
+    daily = _bars([1000.0, 900.0, 1300.0, 1100.0],
+                  opens=[1000.0, 1000.0, 1200.0, 1100.0])
+    frame, _ = lt.fill_entries(frame, {"000001": daily})
+    frame, 갱신 = lt.update_tracking(frame, {"000001": daily},
+                                   today=pd.Timestamp("2026-12-31"))
+    assert 갱신 == 1
+    row = frame.iloc[0]
+    assert row["high_since"] > 1300.0 * 0.99
+    assert row["low_since"] < 900.0 * 1.01
+    assert row["high_date"] and row["low_date"] and row["last_checked"]
+
+
+def test_목표와_무효선_도달일을_적는다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(close=1000.0)], bo.Setup())
+    # 진입 시가 1000 → +15% 는 1150, -12% 는 880
+    daily = _bars([1000.0, 850.0, 1200.0], opens=[1000.0, 1000.0, 1150.0])
+    frame, _ = lt.fill_entries(frame, {"000001": daily})
+    frame, _ = lt.update_tracking(frame, {"000001": daily},
+                                 today=pd.Timestamp("2026-12-31"))
+    row = frame.iloc[0]
+    assert str(row["target_hit_date"])           # 목표에 닿음
+    assert str(row["invalid_hit_date"])          # 무효선에도 닿음
+
+
+def test_한_번_닿은_날은_덮어쓰지_않는다():
+    """처음 닿은 날이 사실입니다. 나중에 또 닿았다고 바꾸면 안 됩니다."""
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(close=1000.0)], bo.Setup())
+    daily = _bars([1000.0, 1200.0, 1000.0, 1300.0],
+                  opens=[1000.0, 1000.0, 1000.0, 1000.0])
+    frame, _ = lt.fill_entries(frame, {"000001": daily})
+    frame, _ = lt.update_tracking(frame, {"000001": daily},
+                                 today=pd.Timestamp("2026-12-31"))
+    처음 = frame.iloc[0]["target_hit_date"]
+    frame, _ = lt.update_tracking(frame, {"000001": daily},
+                                 today=pd.Timestamp("2026-12-31"))
+    assert frame.iloc[0]["target_hit_date"] == 처음
+
+
+def test_보고서가_판이_섞인_것을_알려준다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    frame, _ = lt.add_signals(frame, [_hit(code="000002")], bo.Setup())
+    frame.at[0, "version"] = "0"
+    text = lt.report(frame, [], lt.summarize([]))
+    assert "판이 2개 섞여" in text
+
+
+def test_보고서가_정정_기록을_보여준다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    frame, _ = lt.add_correction(frame, frame.iloc[0]["row_id"], "오기", name="새것")
+    text = lt.report(frame, [], lt.summarize([]))
+    assert "정정 기록 1건" in text
+    assert "지우지 않고 남아" in text
+
+
+def test_장부가_작으면_지울_이유가_없다고_말한다(tmp_path):
+    path = tmp_path / "j.csv"
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    lt.save(frame, path)
+    말 = lt.size_note(path)
+    assert "지울 이유가 없습니다" in 말
+
+
+def test_커지면_백업_먼저_받으라는_순서를_알려준다(tmp_path, monkeypatch):
+    path = tmp_path / "j.csv"
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit()], bo.Setup())
+    lt.save(frame, path)
+    monkeypatch.setattr(lt, "BIG_LEDGER_MB", 0.0)   # 이미 큰 것처럼
+    말 = lt.size_note(path)
+    assert "ledger-export" in 말
+    assert "승인" in 말
+    assert "승인 없이 지우는 길은 코드에 두지 않았습니다" in 말
