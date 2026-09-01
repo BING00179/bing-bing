@@ -116,15 +116,36 @@ jobs:
             echo "마감 시각이 아니므로 요약을 보내지 않습니다. (현재 $HOUR:$MIN KST)"
           fi
 
+      # ── 실시간 검증 ──
+      # 오늘 신호를 적어만 둡니다. 매수하지 않습니다.
+      # 여기 쌓이는 것만이 '앞으로의 자료' 라, 조건을 고쳐서 맞출 수
+      # 없는 유일한 증거입니다. 하루 한 번, 장 마감 뒤에만 돌립니다.
+      - name: 실시간 검증 — 오늘 신호 적어 두기
+        continue-on-error: true
+        run: |
+          HOUR=$(TZ=Asia/Seoul date +%H)
+          MIN=$(TZ=Asia/Seoul date +%M)
+          if [ "$HOUR" = "15" ] && [ "$MIN" -ge 20 ] && [ "$MIN" -le 40 ]; then
+            if [ ! -f data/universe_kosdaq.txt ]; then
+              python -m src.cli kr-universe --market KOSDAQ \
+                --out data/universe_kosdaq.txt
+            fi
+            python -m src.cli livetest-record \
+              --universe data/universe_kosdaq.txt
+          else
+            echo "마감 시각이 아니므로 기록하지 않습니다. (현재 $HOUR:$MIN KST)"
+          fi
+
       - name: 웹페이지와 기록 저장소에 올리기
         run: |
-          if [ -z "$(git status --porcelain stocks/)" ]; then
+          if [ -z "$(git status --porcelain stocks/ trading-system/data/livetest.csv)" ]; then
             echo "바뀐 내용이 없어 올리지 않습니다."
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add stocks/          # index.html · history.json · notified.json
+          git add trading-system/data/livetest.csv || true   # 실시간 검증 기록
           git commit -m "스캔 결과 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
           # 다른 커밋이 먼저 올라갔을 수 있으므로 한 번 당겨서 합칩니다.
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
