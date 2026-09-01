@@ -1619,6 +1619,14 @@ def cmd_value_fetch(args: argparse.Namespace) -> int:
             기존 = pd.read_csv(target, dtype={"code": str, "rcept_dt": str})
         except Exception:                      # 파일이 깨졌으면 새로 받습니다
             기존 = pd.DataFrame()
+        # 형식이 바뀌었으면 이어받으면 안 됩니다. 그냥 두면 '다 받았네'
+        # 하고 아무것도 안 하는데, 정작 3년치와 현금흐름은 없습니다.
+        if not 기존.empty and "매출액_y0" not in 기존.columns:
+            print("⚠️ 예전 형식의 재무 파일입니다 "
+                  f"({len(기존):,}종목, 최근 1년치만 있고 현금흐름이 없습니다).")
+            print("   3년치와 현금흐름을 받으려면 처음부터 다시 받아야 합니다.")
+            print("   이어받기를 끄고 새로 받습니다.\n")
+            기존 = pd.DataFrame()
     if not 기존.empty:
         받은것 = set(기존["code"])
         남은것 = [c for c in codes if c not in 받은것]
@@ -1634,6 +1642,15 @@ def cmd_value_fetch(args: argparse.Namespace) -> int:
     print(f"\n{len(codes):,}종목의 재무를 DART 에서 받습니다.")
     print("한 종목당 한 번씩 부르므로 20~40분쯤 걸립니다.")
     print("중간에 끊겨도 받은 데까지는 저장되니, 다시 돌리면 이어집니다.\n")
+
+    if target.exists() and 기존.empty:
+        # 옛 파일을 지우지 않고 옆에 남깁니다. 새로 받다 실패해도
+        # 예전 것으로 돌아갈 수 있어야 합니다.
+        백업 = target.with_name(f"{target.stem}_이전_{datetime.now():%Y%m%d}"
+                              f"{target.suffix}")
+        if not 백업.exists():
+            백업.write_bytes(target.read_bytes())
+            print(f"예전 파일을 남겨 두었습니다: {백업.name}\n")
 
     def _save(부분: pd.DataFrame) -> None:
         """중간중간 저장합니다. 끊겨도 여기까지는 남습니다."""
