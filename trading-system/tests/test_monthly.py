@@ -196,3 +196,71 @@ def test_텔레그램_한_건에_들어간다():
     글 = mo.report(_scored(200), "2026-08", 20, recorded=300, waiting=100,
                   basis="보유 20거래일 · 지수 KQ11")
     assert len(글) < 4000
+
+
+# ────────────────── 다음 달 준비 ──────────────────
+# 지난달을 돌아보는 것만으로는 부족합니다. 다음 달에 무엇을 봐야
+# 하는지까지 있어야 방향을 다시 잡을 수 있습니다.
+
+def _ledger(n=10, target=3, invalid=2):
+    return pd.DataFrame({
+        "entry_date": ["2026-08-03"] * n,
+        "target_hit_date": ["2026-08-20"] * target + [""] * (n - target),
+        "invalid_hit_date": [""] * (n - invalid) + ["2026-08-15"] * invalid,
+    })
+
+
+def test_목표와_무효선_도달_현황을_센다():
+    앞날 = mo.next_month(_ledger(10, target=3, invalid=2), scored_total=12)
+    assert 앞날.target_hit == 3
+    assert 앞날.invalid_hit == 2
+    assert 앞날.still_open == 5          # 둘 다 아직인 것
+
+
+def test_판정까지_몇_개_더_필요한지_알려준다():
+    assert mo.next_month(pd.DataFrame(), scored_total=12).need_more == 18
+    assert mo.next_month(pd.DataFrame(), scored_total=40).need_more == 0
+
+
+def test_장부가_비어도_터지지_않는다():
+    앞날 = mo.next_month(pd.DataFrame(), scored_total=0)
+    assert 앞날.target_hit == 0 and 앞날.still_open == 0
+
+
+def test_브리핑에_다음_달_볼_것이_들어간다():
+    앞날 = mo.next_month(_ledger(10, 3, 2), scored_total=15)
+    앞날.waiting = 7
+    글 = mo.report(_scored(15), "2026-08", 20, recorded=22, waiting=7,
+                  ahead=앞날, target_pct=20.0, invalid_pct=-12.0)
+    assert "다음 달에 볼 것" in 글
+    assert "아직 성적이 안 나온 것 7개" in 글
+    assert "판정까지" in 글
+
+
+def test_목표_퍼센트는_정한_값을_그대로_쓴다():
+    앞날 = mo.next_month(_ledger(10, 3, 2), scored_total=15)
+    글 = mo.report(_scored(15), "2026-08", 20, ahead=앞날,
+                  target_pct=20.0, invalid_pct=-12.0)
+    assert "20%" in 글 and "-12%" in 글
+
+
+def test_다음_달에도_규칙을_그대로_두라고_말한다():
+    앞날 = mo.next_month(_ledger(), scored_total=15)
+    글 = mo.report(_scored(15), "2026-08", 20, ahead=앞날)
+    assert "규칙은 그대로 둡니다" in 글
+
+
+def test_표본이_찼으면_비용을_따질_때라고_말한다():
+    앞날 = mo.next_month(_ledger(), scored_total=40)
+    글 = mo.report(_scored(40), "2026-08", 20, ahead=앞날)
+    assert "넘겼습니다" in 글
+    assert "비용을 뺀 실제 손익" in 글
+
+
+def test_아직_성적이_없어도_다음_달_안내는_나온다():
+    앞날 = mo.next_month(pd.DataFrame(), scored_total=0)
+    앞날.waiting = 12
+    글 = mo.report(pd.DataFrame(), "2026-08", 20, recorded=12, waiting=12,
+                  ahead=앞날)
+    assert "다음 달에 볼 것" in 글
+    assert "12개의 점수가 나옵니다" in 글

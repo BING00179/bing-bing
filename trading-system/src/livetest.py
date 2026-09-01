@@ -82,7 +82,7 @@ COLUMNS = (
 )
 
 MAX_GAP_PCT = 5.0        # 이 값을 바꾸면 판을 올려야 합니다
-TARGET_PCT = 15.0        # 목표: 진입가 대비 +15%
+TARGET_PCT = 20.0        # 목표: 진입가 대비 +20% (사장님이 정하셨습니다)
 INVALID_PCT = -12.0      # 무효: 진입가 대비 -12%
 
 KIND_RECORD, KIND_FIX = "기록", "정정"
@@ -291,7 +291,7 @@ def active(frame: pd.DataFrame) -> pd.DataFrame:
 
 def add_value_picks(frame: pd.DataFrame, ranked: pd.DataFrame,
                     rule: str, on_date: pd.Timestamp | None = None,
-                    top: int = 20) -> tuple[pd.DataFrame, int]:
+                    top: int = 10) -> tuple[pd.DataFrame, int]:
     """저평가 후보를 그날짜로 적어 둡니다.
 
     저평가 스크리너는 돌릴 때마다 결과 파일을 덮어씁니다. 그러면
