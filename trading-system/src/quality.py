@@ -376,6 +376,10 @@ font-size:13.5px;color:var(--dim)}
 .points li{margin:3px 0}
 .points .good .t{color:var(--good)}
 .points .bad .t{color:var(--warn)}
+.rule{border-left:3px solid var(--mark);padding:2px 0 2px 14px;margin:14px 0}
+.rule .t{font-weight:600;font-size:14.5px}
+.rule p{margin:4px 0;font-size:13.5px;line-height:1.65}
+.rule .src{font-size:12px;color:#9aa0a8}
 .levels{margin-top:14px;border:1px solid var(--line);border-radius:10px;
 padding:12px 16px}
 .levels .t{font-size:13px;font-weight:600;margin-bottom:8px}
@@ -486,6 +490,31 @@ def price_levels(row) -> dict:
         # 회사가 가진 순재산만큼의 값. 여기 아래면 재산보다 싸게 사는 것.
         값["재산값"] = 현재 / float(pbr)
     return 값
+
+
+# ── 샀더니 떨어지는 것을 줄이는 규칙 ──
+# 예측이 아닙니다. 우리가 5년치 코스닥을 돌려서 잰 숫자에서 나온
+# 것입니다. 표본과 함께 적어 두어야, 나중에 '왜 이렇게 하지?' 를
+# 물었을 때 근거를 찾을 수 있습니다.
+BUY_RULES = (
+    ("아침에 갭이 뜨면 그날은 사지 않기",
+     "다음날 아침 5% 넘게 오른 채로 시작한 건은 5일 뒤 평균 -4.2%, "
+     "승률 30% 였습니다. 갭 없이 시작한 건은 평균 -0.08% 였습니다.",
+     "코스닥 5년, 갭 5%↑ 155건 vs 갭 없음 2,194건"),
+    ("손절을 3% 로 잡지 않기",
+     "손절 3% 는 진입 첫날에 46.8% 가 닿습니다. 신호가 맞든 틀리든 "
+     "절반이 먼저 잘려나갑니다. 8% 면 첫날 도달이 6.0% 입니다.",
+     "코스닥 5년, 신호 3,830건의 진입일 저가"),
+    ("한 번에 다 사지 않기",
+     "나눠 사면 하루 흔들림에 전부 잘리지 않고, 평균 단가도 한쪽으로 "
+     "쏠리지 않습니다. 사장님이 우리기술에서 하신 방식입니다.",
+     "측정값이 아니라 위 두 사실에서 따라오는 것"),
+    ("판단이 틀렸을 때 나올 선을 먼저 정하기",
+     f"진입가 대비 {INVALID_PCT:g}% 를 무효선으로 정해 두셨습니다. "
+     "여기 닿으면 '판단이 틀렸다' 로 보고 나옵니다. 사고 나서 정하면 "
+     "늘 조금만 더 기다리게 됩니다.",
+     "사장님이 정하신 값 (2026-09-01)"),
+)
 
 
 def good_points(row) -> list[str]:
@@ -645,6 +674,7 @@ def _pick_card(row, star: bool = False, risks: list | None = None) -> str:
   </div>
   {가격칸}
   {공시칸}
+
   <div class="steps"><div class="t">🔍 그래서 뭘 하면 되나</div>
     <ol>{단계}</ol></div>
   <details><summary>숫자로 보기</summary>
@@ -706,6 +736,13 @@ def render_html(evaluated: pd.DataFrame, top: int = 10,
         for _, r in 나머지.head(60).iterrows()
     )
 
+    규칙칸 = "".join(
+        f'<div class="rule"><div class="t">{i}. {_esc(제목)}</div>'
+        f'<p>{_esc(설명)}</p>'
+        f'<div class="src">근거 — {_esc(근거)}</div></div>'
+        for i, (제목, 설명, 근거) in enumerate(BUY_RULES, 1)
+    )
+
     from datetime import datetime
     return f"""<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
@@ -722,6 +759,11 @@ def render_html(evaluated: pd.DataFrame, top: int = 10,
 <p class="note">기업 {STRICT_BUSINESS}점 이상 · 가격 {STRICT_PRICE}점 이상.
 여기부터 하나씩 열어 보십시오.</p>
 {고른것}
+
+<h2>샀더니 떨어지는 것을 줄이려면</h2>
+<p class="note">예측이 아닙니다. 코스닥 5년치를 돌려서 잰 숫자에서
+나온 규칙입니다. 근거가 되는 표본을 같이 적어 두었습니다.</p>
+{규칙칸}
 
 <h2>그다음 후보</h2>
 <p class="note">합격선은 넘었지만 한쪽이 조금 모자란 것들입니다.</p>
