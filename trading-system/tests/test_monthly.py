@@ -118,19 +118,47 @@ def test_모양_열이_없으면_빈_표다():
 
 # ────────────────────── 보고서 ──────────────────────
 
-def test_보고서는_사실과_해석을_가른다():
+def test_보고서는_먼저_한_줄로_답한다():
+    """숫자를 늘어놓기 전에 결론을 말합니다."""
     글 = mo.report(_scored(40), "2026-08", 20, recorded=50, waiting=10)
-    assert "[사실]" in 글 and "[해석]" in 글
+    assert "한 줄로 말하면" in 글
+    assert "코스닥 평균보다" in 글
+
+
+def test_초과수익이_무슨_말인지_풀어_쓴다():
+    """주식을 잘 모르는 사람이 읽어도 알 수 있어야 합니다."""
+    글 = mo.report(_scored(40), "2026-08", 20)
+    assert "'초과수익' 이란" in 글
+    assert "지수를 사는 게 나았다" in 글
+
+
+def test_모양마다_무슨_뜻인지_붙인다():
+    글 = mo.report(_scored(60), "2026-08", 20)
+    assert "고르자마자 올랐습니다" in 글 or "먼저 빠졌다가 되돌아왔습니다" in 글
+
+
+def test_모양에서_무엇을_고쳐야_하는지_알려준다():
+    글 = mo.report(_scored(80, seed=5), "2026-08", 20)
+    배움 = ["손절 3% 였다면", "오르기 전에 잘려나갑니다",
+          "파는 규칙이 없어서", "이미 오른 뒤에 들어가고"]
+    assert any(b in 글 for b in 배움)
+
+
+def test_쪼갠_표에는_무엇을_보는_것인지_설명을_붙인다():
+    글 = mo.report(_scored(80), "2026-08", 20)
+    assert "거래량이 몇 배로 늘었을 때" in 글 or "얼마나 비싸게 시작했나" in 글
 
 
 def test_보고서는_쪼갠_표를_믿지_말라고_반드시_말한다():
     글 = mo.report(_scored(40), "2026-08", 20)
     assert "참고만" in 글
-    assert "우연히 좋아 보입니다" in 글
+    assert "우연히" in 글
 
 
-def test_보고서는_규칙을_바꾸면_시계가_다시_간다고_말한다():
-    assert "시계가 다시 갑니다" in mo.report(_scored(40), "2026-08", 20)
+def test_보고서는_조건을_바꾸면_기록이_증거가_안_된다고_말한다():
+    글 = mo.report(_scored(40), "2026-08", 20)
+    assert "증거가 되지 못합니다" in 글
+    assert "처음부터 다시 쌓아야" in 글
 
 
 def test_표본이_적으면_판정하지_말라고_말한다():
@@ -138,18 +166,33 @@ def test_표본이_적으면_판정하지_말라고_말한다():
     assert "아무 뜻이 없습니다" in 글
 
 
+def test_충분히_모이면_비용을_빼라고_말한다():
+    글 = mo.report(_scored(40), "2026-08", 20)
+    assert "왕복 0.51%" in 글
+
+
 def test_보고서는_돈이_안_들어갔음을_밝힌다():
     글 = mo.report(_scored(40), "2026-08", 20)
-    assert "돈은 한 푼도 들어가지 않았습니다" in 글
-    assert "수익 보고서가" in 글
+    assert "돈은 아직 한 푼도 안 들어갔습니다" in 글
+    assert "수익 보고서가 아닙니다" in 글
 
 
-def test_채점할_것이_없으면_그렇게_말한다():
+def test_채점할_것이_없으면_얼마나_기다려야_하는지_말한다():
     글 = mo.report(pd.DataFrame(), "2026-08", 20, recorded=5, waiting=5)
-    assert "아직 채점할 것이 없습니다" in 글
+    assert "아직 성적을 매길 수 있는 게 없습니다" in 글
+    assert "한 달쯤 기다리셔야" in 글
 
 
-def test_모양별_해석을_같이_적는다():
-    글 = mo.report(_scored(60), "2026-08", 20)
-    assert "손절이 좁아서" in 글
-    assert "익절 규칙이 없어서" in 글
+def test_계산_기준을_같이_남긴다():
+    """나중에 '그때 어떻게 쟀지?' 를 물을 수 있어야 합니다."""
+    글 = mo.report(_scored(40), "2026-08", 20,
+                  basis="보유 20거래일 · 지수 KQ11 · 판 v1")
+    assert "계산 기준:" in 글
+    assert "판 v1" in 글
+
+
+def test_텔레그램_한_건에_들어간다():
+    """한 건 제한이 4096자입니다. 넘으면 잘려서 갑니다."""
+    글 = mo.report(_scored(200), "2026-08", 20, recorded=300, waiting=100,
+                  basis="보유 20거래일 · 지수 KQ11")
+    assert len(글) < 4000
