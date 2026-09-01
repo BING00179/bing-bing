@@ -57,7 +57,19 @@ def _canonical(account_name: str) -> str | None:
             return label
     return None
 
-FIN_COLUMNS = ("code", "bsns_year", "rcept_dt", *NEEDED)
+# DART 주요계정은 한 번 부르면 당해 + 직전 2개 연도를 함께 줍니다.
+# 그동안 최근 한 해만 챙겼는데, 그러면 '늘고 있나' 를 물을 수 없습니다.
+# 같은 호출에서 그냥 다 받아 둡니다 — 추가 비용이 없습니다.
+YEARS_KEPT = 3
+YEAR_SUFFIX = ("_y0", "_y1", "_y2")     # y0 = 가장 최근
+
+CASH_ITEMS = ("영업활동현금흐름", "설비투자")
+
+FIN_COLUMNS = (
+    "code", "bsns_year", "rcept_dt",
+    *(f"{a}{y}" for a in NEEDED for y in YEAR_SUFFIX),
+    *(f"{a}{y}" for a in CASH_ITEMS for y in YEAR_SUFFIX),
+)
 
 
 def listing_with_cap(market: str = "KOSDAQ") -> pd.DataFrame:
@@ -114,11 +126,11 @@ def listing_with_cap(market: str = "KOSDAQ") -> pd.DataFrame:
 
 
 def _to_frame(rows: list[dict]) -> pd.DataFrame:
-    """모은 줄들을 표로. 없는 항목은 빈칸으로 둡니다."""
+    """모은 줄들을 표로. 없는 항목은 빈칸으로 둡니다 — 0 으로 채우지 않습니다."""
     if not rows:
         return pd.DataFrame(columns=list(FIN_COLUMNS))
     frame = pd.DataFrame(rows)
-    for column in NEEDED:
+    for column in FIN_COLUMNS:
         if column not in frame.columns:
             frame[column] = np.nan
     return frame[list(FIN_COLUMNS)]
@@ -126,8 +138,14 @@ def _to_frame(rows: list[dict]) -> pd.DataFrame:
 
 def latest_financials(key: str, index: pd.DataFrame, codes: list[str],
                       years_back: int = 2, progress: int = 100,
-                      on_partial=None) -> tuple[pd.DataFrame, list[str]]:
-    """종목별로 가장 최근 사업보고서의 주요계정을 모읍니다.
+                      on_partial=None,
+                      with_cash: bool = True) -> tuple[pd.DataFrame, list[str]]:
+    """종목별로 최근 3개 사업연도의 주요계정과 현금흐름을 모읍니다.
+
+    주요계정은 한 번 부르면 3개 연도가 함께 옵니다. 현금흐름은
+    전체 재무제표를 따로 불러야 해서 호출이 두 배가 됩니다.
+    with_cash=False 로 끄면 절반 시간에 끝나지만, '장부상 이익이
+    실제 현금으로 들어오나' 를 물을 수 없게 됩니다.
 
     돌려주는 표에는 rcept_dt(공시 접수일) 가 같이 들어갑니다. 지금
     화면을 보는 데는 필요 없지만, 나중에 과거 검증을 할 때 '이 숫자를
@@ -158,7 +176,6 @@ def latest_financials(key: str, index: pd.DataFrame, codes: list[str],
                 break
         except dart_kr.DartUnreachable as exc:
             # 한 종목 때문에 1,800종목이 통째로 날아가면 안 됩니다.
-            # 이미 모은 것은 지키고, 이 종목만 실패로 넘깁니다.
             실패.append(code)
             if len(실패) <= 5:
                 print(f"  {code} 건너뜀 — {exc}")
@@ -180,15 +197,40 @@ def latest_financials(key: str, index: pd.DataFrame, codes: list[str],
 
         row = {"code": code, "bsns_year": year,
                "rcept_dt": str(raw["rcept_no"].iloc[0])[:8] if "rcept_no" in raw else ""}
+
+        # 세 연도를 한꺼번에 챙깁니다. y0 = 가장 최근.
+        칸 = {"thstrm_amount": "_y0", "frmtrm_amount": "_y1",
+              "bfefrmtrm_amount": "_y2"}
         for _, item in raw.iterrows():
             label = _canonical(item.get("account_nm", ""))
-            if label and label not in row:
-                row[label] = dart_kr._to_number(item.get("thstrm_amount"))
+            if not label:
+                continue
+            for 열, 꼬리 in 칸.items():
+                이름 = f"{label}{꼬리}"
+                if 이름 not in row:
+                    row[이름] = dart_kr._to_number(item.get(열))
+
+        if with_cash:
+            try:
+                흐름 = dart_kr.cash_flow(key, corp, years=YEARS_KEPT,
+                                       end_year=year)
+                for 자리, 해 in enumerate(reversed(list(흐름.index))):
+                    if 자리 >= YEARS_KEPT:
+                        break
+                    꼬리 = YEAR_SUFFIX[자리]
+                    for 항목 in CASH_ITEMS:
+                        if 항목 in 흐름.columns:
+                            row[f"{항목}{꼬리}"] = float(흐름.at[해, 항목])
+            except dart_kr.DartUnreachable:
+                pass                # 현금흐름은 없어도 나머지는 쓸 수 있습니다
+            except dart_kr.DartError:
+                pass
+
         rows.append(row)
 
         if progress and i % progress == 0:
             print(f"  {i}/{len(codes)}... (실패 {len(실패)})")
-            if on_partial is not None:     # 중간에 끊겨도 여기까지는 남습니다
+            if on_partial is not None:
                 on_partial(_to_frame(rows))
 
     return _to_frame(rows), 실패
@@ -204,6 +246,15 @@ def valuation(listing: pd.DataFrame, fin: pd.DataFrame) -> pd.DataFrame:
     merged = listing.merge(fin, on="code", how="inner")
     if merged.empty:
         return merged
+
+    # 재무 파일이 3년치 형식(_y0)으로 바뀌었습니다. 예전 형식도 그대로
+    # 읽히게 두어, 옛 파일을 가진 채로 쓰던 명령이 갑자기 죽지 않게 합니다.
+    for 계정 in NEEDED:
+        새이름 = f"{계정}_y0"
+        if 계정 not in merged.columns and 새이름 in merged.columns:
+            merged[계정] = merged[새이름]
+        elif 계정 not in merged.columns:
+            merged[계정] = np.nan
 
     def _ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
         denom = denominator.where(denominator > 0)      # 0·마이너스는 계산 안 함

@@ -20,6 +20,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from . import backtest as bt_module
@@ -30,6 +31,7 @@ from . import dashboard as dash_module
 from . import journal as jn_module
 from . import livetest as lt_module
 from . import monthly as mo_module
+from . import quality as qual_module
 from . import value_kr as val_module
 from . import diagnose as dg_module
 from . import market_filter as mf_module
@@ -2175,6 +2177,117 @@ def cmd_ledger_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_screen_kr(args: argparse.Namespace) -> int:
+    """두 축으로 봅니다 — 좋은 기업인가, 값이 괜찮은가.
+
+    점수를 하나로 합치지 않습니다. 합치면 '싸지만 망해가는 회사' 와
+    '좋지만 너무 비싼 회사' 가 같은 점수로 섞입니다.
+    """
+    cfg = Config.load(args.config)
+    path = _resolve(args.fin)
+    if not path.exists():
+        print(f"재무 파일이 없습니다: {path}")
+        print("  python -m src.cli value-fetch --market KOSDAQ")
+        return 1
+
+    fin = pd.read_csv(path, dtype={"code": str, "rcept_dt": str})
+    if "매출액_y0" not in fin.columns:
+        print("⚠️ 예전 형식의 재무 파일입니다. 3년치와 현금흐름이 없습니다.")
+        print("   다시 받아야 두 축을 다 볼 수 있습니다:")
+        print("     python -m src.cli value-fetch --market KOSDAQ --restart")
+        return 1
+
+    print("시가총액과 시세를 받는 중입니다...")
+    try:
+        listing = val_module.listing_with_cap(args.market)
+    except DataUnavailable as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    묶음 = listing.merge(fin, on="code", how="inner")
+    if 묶음.empty:
+        print("재무를 붙일 수 있는 종목이 없습니다.")
+        return 1
+
+    # 최근 1년 고저를 붙여야 '과거 가격대' 를 볼 수 있습니다.
+    codes = list(묶음["code"])
+    frames = _frames_for(
+        codes, 1.2, 60,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
+    고저 = []
+    for code in codes:
+        daily = frames.get(code)
+        if daily is None or daily.empty:
+            고저.append({"close": np.nan, "high_52w": np.nan, "low_52w": np.nan})
+            continue
+        한해 = daily.tail(250)
+        고저.append({"close": float(한해["close"].iloc[-1]),
+                    "high_52w": float(한해["high"].max()),
+                    "low_52w": float(한해["low"].min())})
+    prices = pd.DataFrame(고저)
+
+    # 거래가 너무 적으면 사고팔 수가 없습니다. 먼저 거릅니다.
+    거래대금 = pd.to_numeric(묶음.get("turnover"), errors="coerce")
+    살만함 = (거래대금 >= args.min_turnover * 1e8) & (
+        pd.to_numeric(묶음["marcap"], errors="coerce") >= args.min_marcap * 1e8)
+    묶음 = 묶음[살만함.fillna(False)].reset_index(drop=True)
+    prices = prices[살만함.fillna(False).to_numpy()].reset_index(drop=True)
+    print(f"거래대금 {args.min_turnover:g}억 · 시총 {args.min_marcap:g}억 이상 "
+          f"{len(묶음):,}종목을 봅니다.")
+
+    결과 = qual_module.evaluate(묶음, prices)
+    print()
+    print(qual_module.report(결과, top=args.top))
+
+    out = _output_dir(cfg)
+    결과.to_csv(out / "kr_screen.csv", index=False, encoding="utf-8-sig")
+    print(f"\n전체 저장: {out}/kr_screen.csv")
+
+    # 후보로 남은 것만 공시 위험을 확인합니다 — 몇 종목뿐이라 금방입니다.
+    후보 = 결과[결과["판정"] == "후보"]
+    if not 후보.empty and not args.skip_dart:
+        print()
+        print(f"후보 {len(후보)}종목의 최근 공시를 확인합니다...")
+        _dart_flags_for(list(후보["code"]), dict(zip(후보["code"], 후보["name"])),
+                        args)
+    return 0
+
+
+def _dart_flags_for(codes: list[str], names: dict, args) -> None:
+    """후보 종목만 공시 위험을 봅니다. 전 종목을 보면 너무 오래 걸립니다."""
+    try:
+        key = dart_kr.api_key(getattr(args, "api_key", None))
+        index = dart_kr.load_corp_index(key, "data/cache/dart", refresh=False)
+    except (dart_kr.DartNotConfigured, dart_kr.DartError) as exc:
+        print(f"   공시 확인 건너뜀 — {exc}")
+        return
+
+    today = pd.Timestamp.today().normalize()
+    start = (today - pd.Timedelta(days=180)).strftime("%Y%m%d")
+    걸린것 = 0
+    for code in codes:
+        corp = dart_kr.find_corp_code(index, code)
+        if not corp:
+            continue
+        try:
+            flagged = dart_kr.flag_events(
+                dart_kr.filings(key, corp, start, today.strftime("%Y%m%d")))
+        except (dart_kr.DartError, dart_kr.DartUnreachable):
+            continue
+        if flagged.empty:
+            continue
+        높음 = flagged[flagged["severity"] == "높음"]
+        보일것 = 높음 if not 높음.empty else flagged.head(2)
+        걸린것 += 1
+        print(f"   ⚠️ {names.get(code, code)}({code})")
+        for _, row in 보일것.head(3).iterrows():
+            print(f"        {row['rcept_dt']} [{row['label']}] {row['report_nm']}")
+    if 걸린것 == 0:
+        print("   최근 6개월 공시 중 규칙에 걸린 것이 없습니다.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.cli",
@@ -2347,6 +2460,24 @@ def build_parser() -> argparse.ArgumentParser:
     ku.add_argument("--market", default="KOSPI", help="KOSPI / KOSDAQ / KRX")
     ku.add_argument("--out", default="data/universe_kr_all.txt", help="저장할 파일")
     ku.set_defaults(func=cmd_kr_universe)
+
+    sk = sub.add_parser(
+        "screen-kr",
+        help="[국내] 두 축으로 보기 — 좋은 기업인가 · 값이 괜찮은가",
+    )
+    sk.add_argument("--fin", default="data/fin_kr.csv", help="받아둔 재무 파일")
+    sk.add_argument("--market", default="KOSDAQ", help="KOSPI / KOSDAQ")
+    sk.add_argument("--min-marcap", type=float, default=300.0,
+                    help="시가총액 하한(억원)")
+    sk.add_argument("--min-turnover", type=float, default=5.0,
+                    help="하루 거래대금 하한(억원)")
+    sk.add_argument("--top", type=int, default=15, help="몇 종목까지 보여줄지")
+    sk.add_argument("--skip-dart", action="store_true",
+                    help="후보의 공시 확인을 건너뜁니다")
+    sk.add_argument("--api-key", help="DART 인증키를 직접 넘길 때만")
+    sk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    sk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    sk.set_defaults(func=cmd_screen_kr)
 
     vr = sub.add_parser(
         "value-record",
