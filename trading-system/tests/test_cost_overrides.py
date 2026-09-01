@@ -110,3 +110,73 @@ def test_바꾼_비용이_실제_손익_계산까지_내려간다():
         pytest.fail("표본에서 신호가 하나도 안 났습니다 — 이 검사는 아무것도 확인하지 못합니다")
 
     assert sum(t.pnl for t in 비싼결과) < sum(t.pnl for t in 싼결과)
+
+
+# ────────────────── 시세 서버를 쉬지 않고 때리지 않는가 ──────────────────
+# KRX 에서 실제로 하루 IP 차단을 당한 적이 있고, 그때 FinanceDataReader
+# 까지 같이 죽었습니다. 회사처럼 여러 사람이 같은 IP 를 쓰는 곳이면
+# 남까지 막힙니다.
+
+def test_수백_종목을_훑을_때는_종목마다_쉰다(monkeypatch, tmp_path):
+    import pandas as pd
+    from src import cli as cli_module
+
+    쉰시간 = []
+    monkeypatch.setattr(cli_module.data_kr_module.time, "sleep", 쉰시간.append)
+
+    days = pd.bdate_range("2024-01-01", periods=300)
+    표본 = pd.DataFrame({"open": 1.0, "high": 1.0, "low": 1.0,
+                        "close": 1.0, "volume": 1}, index=days)
+
+    def 가짜받기(code, years=2.0, pause=0.0):
+        if pause:
+            cli_module.data_kr_module.time.sleep(pause)
+        return 표본
+
+    monkeypatch.setattr(cli_module, "fetch_daily_kr", 가짜받기)
+    codes = [f"{i:06d}" for i in range(60)]
+    cli_module._frames_for(codes, 2.0, 100, None)
+
+    assert len(쉰시간) == 60                       # 종목마다 한 번씩
+    assert all(t > 0 for t in 쉰시간)
+
+
+def test_몇_종목_안_되면_굳이_쉬지_않는다(monkeypatch):
+    import pandas as pd
+    from src import cli as cli_module
+
+    쉰시간 = []
+    monkeypatch.setattr(cli_module.data_kr_module.time, "sleep", 쉰시간.append)
+
+    days = pd.bdate_range("2024-01-01", periods=300)
+    표본 = pd.DataFrame({"open": 1.0, "high": 1.0, "low": 1.0,
+                        "close": 1.0, "volume": 1}, index=days)
+
+    def 가짜받기(code, years=2.0, pause=0.0):
+        if pause:
+            cli_module.data_kr_module.time.sleep(pause)
+        return 표본
+
+    monkeypatch.setattr(cli_module, "fetch_daily_kr", 가짜받기)
+    cli_module._frames_for(["000001", "000002"], 2.0, 100, None)
+    assert 쉰시간 == []
+
+
+def test_조회에_실패해도_쉰다(monkeypatch):
+    """연달아 때리면 더 나빠집니다. 실패했을 때야말로 쉬어야 합니다."""
+    from src import data_kr
+
+    쉰시간 = []
+    monkeypatch.setattr(data_kr.time, "sleep", 쉰시간.append)
+
+    class 가짜fdr:
+        @staticmethod
+        def DataReader(*a, **k):
+            raise RuntimeError("접속 거부")
+
+    monkeypatch.setattr(data_kr, "_fdr", lambda: 가짜fdr)
+    try:
+        data_kr.fetch_daily("005930", pause=0.2)
+    except data_kr.DataUnavailable:
+        pass
+    assert 쉰시간 == [0.2]
