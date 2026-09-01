@@ -2030,10 +2030,18 @@ def cmd_monthly_review(args: argparse.Namespace) -> int:
              f" · 목표 {lt_module.TARGET_PCT:g}% · 무효 {lt_module.INVALID_PCT:g}%"
              f" · 장부판 v{lt_module.LEDGER_VERSION}"
              f" · 채점일 {today.date()}")
+    # 다음 달을 준비하려면 장부 전체를 봐야 합니다 — 이번 기간만이 아니라.
+    앞날 = mo_module.next_month(lt_module.active(기록),
+                              scored_total=len(scored),
+                              horizon=args.horizon)
+    앞날.waiting = len(이번기간) - len(scored)
+
     글 = mo_module.report(표, 기간이름, args.horizon,
                         recorded=len(이번기간),
-                        waiting=len(이번기간) - len(scored),
-                        basis=계산기준)
+                        waiting=앞날.waiting,
+                        basis=계산기준, ahead=앞날,
+                        target_pct=lt_module.TARGET_PCT,
+                        invalid_pct=lt_module.INVALID_PCT)
     print()
     print(글)
 
@@ -2352,7 +2360,8 @@ def build_parser() -> argparse.ArgumentParser:
     vr.add_argument("--max-debt", type=float, default=200.0)
     vr.add_argument("--min-marcap", type=float, default=300.0)
     vr.add_argument("--min-turnover", type=float, default=5.0)
-    vr.add_argument("--top", type=int, default=20, help="상위 몇 종목을 기록할지")
+    vr.add_argument("--top", type=int, default=10,
+                    help="상위 몇 종목을 기록할지. 많으면 버려지는 것만 늘어납니다")
     vr.add_argument("--file", default="data/livetest.csv", help="기록 파일")
     vr.set_defaults(func=cmd_value_record)
 

@@ -218,6 +218,33 @@ SHAPE_LESSON = {
 }
 
 
+@dataclass
+class NextMonth:
+    """다음 달에 무엇을 봐야 하나."""
+    waiting: int = 0            # 아직 성적이 안 나온 것
+    scored_so_far: int = 0      # 지금까지 성적이 나온 것 (누적)
+    need_more: int = 0          # 판정까지 몇 개 더 필요한가
+    target_hit: int = 0         # 목표에 닿은 것
+    invalid_hit: int = 0        # 무효선에 닿은 것
+    still_open: int = 0         # 목표도 무효도 아직인 것
+
+
+def next_month(ledger: pd.DataFrame, scored_total: int,
+               horizon: int = 20) -> NextMonth:
+    """다음 달을 준비하려면 알아야 하는 것들."""
+    안 = NextMonth(scored_so_far=scored_total,
+                  need_more=max(0, MIN_FOR_TRUST - scored_total))
+    if ledger.empty:
+        return 안
+    닿음 = ledger.get("target_hit_date", pd.Series(dtype=str)).astype(str)
+    무효 = ledger.get("invalid_hit_date", pd.Series(dtype=str)).astype(str)
+    진입 = ledger.get("entry_date", pd.Series(dtype=str)).astype(str)
+    안.target_hit = int((닿음 != "").sum())
+    안.invalid_hit = int((무효 != "").sum())
+    안.still_open = int(((진입 != "") & (닿음 == "") & (무효 == "")).sum())
+    return 안
+
+
 def plain_verdict(mean_excess: float, count: int) -> str:
     """한 줄로 답합니다. 이번 기간 결과가 어땠나."""
     if count == 0:
@@ -231,7 +258,9 @@ def plain_verdict(mean_excess: float, count: int) -> str:
 
 
 def report(scored: pd.DataFrame, period: str, horizon: int,
-           recorded: int = 0, waiting: int = 0, basis: str = "") -> str:
+           recorded: int = 0, waiting: int = 0, basis: str = "",
+           ahead: NextMonth | None = None,
+           target_pct: float = 20.0, invalid_pct: float = -12.0) -> str:
     """월말 브리핑. 주식을 잘 모르는 사람이 읽어도 알 수 있게 씁니다.
 
     숫자만 늘어놓으면 아무 뜻이 없습니다. 무슨 뜻인지, 왜 중요한지를
@@ -261,6 +290,11 @@ def report(scored: pd.DataFrame, period: str, horizon: int,
         lines.append("아직 성적을 매길 수 있는 게 없습니다.")
         lines.append(f"고른 뒤 {horizon}거래일이 지나야 점수가 나옵니다.")
         lines.append("한 달쯤 기다리셔야 합니다.")
+        if ahead is not None and ahead.waiting:
+            lines.append("")
+            lines.append("■ 다음 달에 볼 것")
+            lines.append(f"   기다리는 {ahead.waiting}개의 점수가 나옵니다.")
+            lines.append(f"   판정에는 {MIN_FOR_TRUST}개가 필요합니다.")
         if basis:
             lines.append("")
             lines.append(f"계산 기준: {basis}")
@@ -328,6 +362,36 @@ def report(scored: pd.DataFrame, period: str, horizon: int,
                              f"  초과수익 {_pct(s.mean_excess):>8}"
                              f"  잘한 비율 {s.win_rate:>3.0f}%")
             lines.append("")
+
+    # ── 다음 달 준비 ──
+    if ahead is not None:
+        lines.append("■ 다음 달에 볼 것")
+        lines.append("")
+        if ahead.waiting:
+            lines.append(f"   · 아직 성적이 안 나온 것 {ahead.waiting}개 —"
+                         f" 다음 달에 점수가 나옵니다")
+        if ahead.still_open:
+            lines.append(f"   · 목표({target_pct:g}%)도 무효선({invalid_pct:g}%)도"
+                         f" 아직인 것 {ahead.still_open}개 — 계속 지켜봅니다")
+        if ahead.target_hit:
+            lines.append(f"   · 목표 {target_pct:g}% 에 닿았던 것 {ahead.target_hit}개")
+        if ahead.invalid_hit:
+            lines.append(f"   · 무효선 {invalid_pct:g}% 에 닿았던 것"
+                         f" {ahead.invalid_hit}개 — 골라낸 기준이 틀렸던 경우")
+        lines.append("")
+        if ahead.need_more > 0:
+            lines.append(f"   판정까지 {ahead.need_more}개 더 필요합니다."
+                         f" (지금 {ahead.scored_so_far}개 / {MIN_FOR_TRUST}개)")
+            달수 = max(1, round(ahead.need_more / max(1, len(유효)))) if len(유효) else 3
+            lines.append(f"   지금 속도면 {달수}개월쯤 더 걸립니다.")
+        else:
+            lines.append(f"   판정에 필요한 {MIN_FOR_TRUST}개를 넘겼습니다"
+                         f" (지금 {ahead.scored_so_far}개).")
+            lines.append("   이제 비용을 뺀 실제 손익을 따져볼 때입니다.")
+        lines.append("")
+        lines.append("   다음 달에도 규칙은 그대로 둡니다. 지금 바꾸면 여기까지")
+        lines.append("   쌓은 것이 증거가 되지 못하고 처음부터 다시 시작합니다.")
+        lines.append("")
 
     # ── 어떻게 읽어야 하나 ──
     lines.append("■ 이 숫자를 어떻게 봐야 하나")
