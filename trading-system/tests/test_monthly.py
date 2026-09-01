@@ -240,8 +240,9 @@ def test_브리핑에_다음_달_볼_것이_들어간다():
 def test_목표_퍼센트는_정한_값을_그대로_쓴다():
     앞날 = mo.next_month(_ledger(10, 3, 2), scored_total=15)
     글 = mo.report(_scored(15), "2026-08", 20, ahead=앞날,
-                  target_pct=20.0, invalid_pct=-12.0)
-    assert "20%" in 글 and "-12%" in 글
+                  target_pct=25.0, invalid_pct=-15.0)
+    # 기본값(-20%)이 아니라 넘겨준 값이 나와야 합니다
+    assert "25%" in 글 and "-15%" in 글
 
 
 def test_다음_달에도_규칙을_그대로_두라고_말한다():

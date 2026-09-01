@@ -260,7 +260,7 @@ def plain_verdict(mean_excess: float, count: int) -> str:
 def report(scored: pd.DataFrame, period: str, horizon: int,
            recorded: int = 0, waiting: int = 0, basis: str = "",
            ahead: NextMonth | None = None,
-           target_pct: float = 20.0, invalid_pct: float = -12.0) -> str:
+           target_pct: float = 20.0, invalid_pct: float = -20.0) -> str:
     """월말 브리핑. 주식을 잘 모르는 사람이 읽어도 알 수 있게 씁니다.
 
     숫자만 늘어놓으면 아무 뜻이 없습니다. 무슨 뜻인지, 왜 중요한지를
