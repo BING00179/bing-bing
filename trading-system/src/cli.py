@@ -28,6 +28,7 @@ from . import case as case_module
 from . import dart_kr
 from . import dashboard as dash_module
 from . import journal as jn_module
+from . import livetest as lt_module
 from . import value_kr as val_module
 from . import diagnose as dg_module
 from . import market_filter as mf_module
@@ -1824,6 +1825,85 @@ def cmd_breakout_kr(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_livetest_record(args: argparse.Namespace) -> int:
+    """오늘 신호를 적어 둡니다. 앞으로의 자료라 제가 고칠 수 없습니다."""
+    cfg = Config.load(args.config)
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+    names = _names_for(codes, path)
+    setup = _breakout_setup(args)
+    기록 = lt_module.load(_resolve(args.file))
+
+    print(f"대상 {len(codes):,}종목 · 조건 {lt_module.rule_text(setup)}")
+    frames = _frames_for(
+        codes, args.years, setup.base_days + setup.surge_days + 10,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
+    if not frames:
+        print("시세를 하나도 받지 못했습니다.")
+        return 1
+
+    # ① 어제까지 적어 둔 것에 진입가와 갭을 채웁니다.
+    기록, 채운수 = lt_module.fill_entries(기록, frames)
+    if 채운수:
+        print(f"지난 신호 {채운수}건에 다음날 시가·갭을 채웠습니다.")
+
+    # ② 오늘 신호를 덧붙입니다.
+    hits = bo_module.scan_today(frames, setup, names=names)
+    기록, 새것 = lt_module.add_signals(기록, hits, setup)
+
+    저장 = lt_module.save(기록, _resolve(args.file))
+    print(f"오늘 신호 {len(hits)}건 (새로 적은 것 {새것}건) → {저장}")
+    for h in hits[:10]:
+        print(f"   {h.name[:14]:<14}({h.code})  {h.close:>9,.0f}원"
+              f"  거래량 {h.volume_mult:.1f}배  상승률 {h.runup_pct:.1f}%")
+    if hits:
+        print()
+        print(f"   ※ 다음날 아침 갭이 {lt_module.MAX_GAP_PCT:g}% 를 넘으면 "
+              "'사지 않은 것' 으로 기록됩니다.")
+        print("     갭은 내일 아침에야 아는 값이라 다음 실행 때 채웁니다.")
+    return 0
+
+
+def cmd_livetest_score(args: argparse.Namespace) -> int:
+    """기간이 찬 기록을 코스닥 지수와 견주어 채점합니다."""
+    cfg = Config.load(args.config)
+    기록 = lt_module.load(_resolve(args.file))
+    if 기록.empty:
+        print(lt_module.report(기록, [], lt_module.summarize([], args.horizon)))
+        return 0
+
+    codes = sorted({str(c) for c in 기록["code"]})
+    print(f"기록 {len(기록):,}건 · {len(codes):,}종목의 시세를 확인합니다...")
+    frames = _frames_for(
+        codes, args.years, 0,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
+    try:
+        index = fetch_index(args.index, years=args.years)
+    except DataUnavailable as exc:
+        print(f"지수를 못 받았습니다: {exc}")
+        return 1
+
+    scored = lt_module.score_rows(
+        기록, frames, index, horizon=args.horizon,
+        only_bought=not args.include_skipped,
+    )
+    verdict = lt_module.summarize(scored, args.horizon)
+    print()
+    print(lt_module.report(기록, scored, verdict))
+
+    if scored:
+        out = _output_dir(cfg)
+        pd.DataFrame([s.__dict__ for s in scored]).to_csv(
+            out / "kr_livetest_scored.csv", index=False, encoding="utf-8-sig"
+        )
+        print(f"\n채점 결과 저장: {out}/kr_livetest_scored.csv")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m src.cli",
@@ -1996,6 +2076,37 @@ def build_parser() -> argparse.ArgumentParser:
     ku.add_argument("--market", default="KOSPI", help="KOSPI / KOSDAQ / KRX")
     ku.add_argument("--out", default="data/universe_kr_all.txt", help="저장할 파일")
     ku.set_defaults(func=cmd_kr_universe)
+
+    lr = sub.add_parser(
+        "livetest-record",
+        help="[국내] 오늘 신호를 적어 두기 (실시간 검증 — 매일 자동 실행)",
+    )
+    lr.add_argument("--universe", help="종목 목록 파일")
+    lr.add_argument("--years", type=float, default=2.0, help="시세 조회 기간(년)")
+    lr.add_argument("--base-days", type=int, default=60)
+    lr.add_argument("--surge-days", type=int, default=5)
+    lr.add_argument("--max-range", type=float, default=45.0)
+    lr.add_argument("--min-volume-mult", type=float, default=3.0)
+    lr.add_argument("--max-runup", type=float, default=40.0)
+    lr.add_argument("--min-turnover", type=float, default=5.0)
+    lr.add_argument("--file", default="data/livetest.csv", help="기록 파일")
+    lr.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    lr.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    lr.set_defaults(func=cmd_livetest_record)
+
+    ls = sub.add_parser(
+        "livetest-score",
+        help="[국내] 쌓인 기록을 코스닥 지수 대비로 채점",
+    )
+    ls.add_argument("--file", default="data/livetest.csv", help="기록 파일")
+    ls.add_argument("--horizon", type=int, default=20, help="보유 거래일수")
+    ls.add_argument("--index", default="KQ11", help="비교할 지수")
+    ls.add_argument("--years", type=float, default=2.0, help="시세 조회 기간")
+    ls.add_argument("--include-skipped", action="store_true",
+                    help="갭이 커서 '안 산' 것도 채점에 포함 (비교용)")
+    ls.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    ls.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    ls.set_defaults(func=cmd_livetest_score)
 
     bk = sub.add_parser(
         "breakout-kr",
