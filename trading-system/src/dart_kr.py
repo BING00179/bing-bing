@@ -266,38 +266,59 @@ def filings(key: str, corp_code: str, start: str, end: str,
 class EventRule:
     label: str
     keywords: tuple[str, ...]
-    severity: str          # 높음 / 보통
+    severity: str          # 위험 / 확인 / 호재
     why: str
 
 
+# 등급을 셋으로 나눕니다.
+#   위험  주주에게 나쁜 쪽. 상장폐지·희석·경영권 흔들림
+#   확인  좋을 수도 나쁠 수도. 사람이 봐야 하는 것
+#   호재  주주에게 좋은 쪽. 배당·자사주 매입
+#
+# 처음에는 배당과 자사주 매입까지 경고로 냈습니다. 그러면 73종목이
+# 전부 ⚠️ 로 보여서, 정작 '횡령·배임' 같은 진짜 위험이 묻힙니다.
+# 좋은 소식을 경고로 내면 경고 자체가 무의미해집니다.
+RISK, CHECK, GOOD = "위험", "확인", "호재"
+
 EVENT_RULES: tuple[EventRule, ...] = (
+    # ── 위험 ──
     EventRule("감사의견 비적정", ("감사의견거절", "의견거절", "한정의견", "부적정"),
-              "높음", "상장폐지 사유가 될 수 있습니다."),
+              RISK, "상장폐지 사유가 될 수 있습니다."),
     EventRule("횡령·배임", ("횡령", "배임"),
-              "높음", "상장적격성 실질심사 대상이 될 수 있습니다."),
-    EventRule("거래정지·관리종목", ("관리종목", "매매거래정지", "상장폐지", "실질심사"),
-              "높음", "주식을 팔지 못하게 될 수 있습니다."),
+              RISK, "상장적격성 실질심사 대상이 될 수 있습니다."),
+    EventRule("상장폐지·실질심사", ("상장폐지", "실질심사", "관리종목지정"),
+              RISK, "주식을 팔지 못하게 될 수 있습니다."),
     EventRule("자본잠식", ("자본잠식",),
-              "높음", "자본이 마이너스면 상장폐지 요건에 걸립니다."),
+              RISK, "자본이 마이너스면 상장폐지 요건에 걸립니다."),
     EventRule("유상증자", ("유상증자",),
-              "보통", "주식 수가 늘어 기존 주주 지분이 희석됩니다."),
-    EventRule("전환사채·신주인수권", ("전환사채", "신주인수권부사채", "교환사채", "CB발행", "BW발행"),
-              "보통", "나중에 주식으로 바뀌면 물량 부담이 됩니다."),
+              RISK, "주식 수가 늘어 기존 주주 지분이 희석됩니다."),
+    EventRule("전환사채·신주인수권", ("전환사채", "신주인수권부사채", "교환사채",
+                                "CB발행", "BW발행"),
+              RISK, "나중에 주식으로 바뀌면 물량 부담이 됩니다."),
+
+    # ── 확인 ──
     EventRule("최대주주 변경", ("최대주주변경", "최대주주가변경"),
-              "보통", "경영권이 바뀌면 사업 방향도 바뀝니다."),
+              CHECK, "경영권이 바뀌면 사업 방향도 바뀝니다."),
+    EventRule("거래정지", ("매매거래정지",),
+              CHECK, "액면분할 같은 절차상 정지도 있습니다. 사유를 보십시오."),
     EventRule("소송", ("소송등의제기", "소송등의판결"),
-              "보통", "규모에 따라 실적에 영향을 줍니다."),
-    EventRule("유형자산·영업 양수도", ("영업양수", "영업양도", "자산양수", "자산양도"),
-              "보통", "회사의 사업 구성이 바뀝니다."),
-    EventRule("무상증자", ("무상증자",),
-              "보통", "주식 수가 늘지만 자본은 그대로입니다."),
+              CHECK, "규모에 따라 실적에 영향을 줍니다."),
+    EventRule("영업·자산 양수도", ("영업양수", "영업양도", "자산양수", "자산양도"),
+              CHECK, "회사의 사업 구성이 바뀝니다."),
     EventRule("액면분할·병합", ("액면분할", "액면병합"),
-              "보통", "주가 표시가 바뀝니다. 가치는 그대로입니다."),
+              CHECK, "주가 표시만 바뀝니다. 가치는 그대로입니다."),
+
+    # ── 호재 ──
+    EventRule("현금배당", ("현금ㆍ현물배당", "현금배당", "현금·현물배당"),
+              GOOD, "주주에게 돈을 나눠 줍니다."),
     EventRule("자기주식 취득", ("자기주식취득", "자기주식신탁"),
-              "보통", "회사가 자기 주식을 삽니다."),
-    EventRule("현금배당", ("현금ㆍ현물배당", "현금배당"),
-              "보통", "배당 결정입니다."),
+              GOOD, "회사가 자기 주식을 삽니다. 주식 수가 줄어듭니다."),
+    EventRule("무상증자", ("무상증자",),
+              GOOD, "주식 수가 늘지만 자본은 그대로라, 대개 호재로 봅니다."),
 )
+
+SEVERITY_ORDER = {RISK: 0, CHECK: 1, GOOD: 2}
+SEVERITY_MARK = {RISK: "🔴", CHECK: "🟡", GOOD: "🟢"}
 
 
 def _squeeze(text: str) -> str:
@@ -327,8 +348,7 @@ def flag_events(frame: pd.DataFrame) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(columns=columns)
     out = pd.DataFrame(rows)
-    order = {"높음": 0, "보통": 1}
-    out["_rank"] = out["severity"].map(order).fillna(9)
+    out["_rank"] = out["severity"].map(SEVERITY_ORDER).fillna(9)
     return (out.sort_values(["_rank", "rcept_dt"], ascending=[True, False])
                .drop(columns="_rank").reset_index(drop=True))
 
@@ -612,7 +632,7 @@ def report(item: CompanyBrief) -> str:
         lines.append("   해당 없음. (공시가 없다는 뜻이 아니라, 규칙에 걸린 게 없다는 뜻입니다)")
     else:
         for _, row in item.events.iterrows():
-            mark = "🔴" if row["severity"] == "높음" else "🟡"
+            mark = SEVERITY_MARK.get(row["severity"], "🟡")
             lines.append(f"   {mark} {row['rcept_dt']}  [{row['label']}] {row['report_nm']}")
             lines.append(f"        → {row['why']}")
     lines.append("")
