@@ -29,6 +29,7 @@ from . import dart_kr
 from . import dashboard as dash_module
 from . import journal as jn_module
 from . import livetest as lt_module
+from . import monthly as mo_module
 from . import value_kr as val_module
 from . import diagnose as dg_module
 from . import market_filter as mf_module
@@ -1849,7 +1850,16 @@ def cmd_livetest_record(args: argparse.Namespace) -> int:
     if 채운수:
         print(f"지난 신호 {채운수}건에 다음날 시가·갭을 채웠습니다.")
 
-    # ② 오늘 신호를 덧붙입니다.
+    # ② 진입 뒤의 최고가·최저가와 목표·무효선 도달을 덧쌓습니다.
+    #    최종 수익률만 남기면 '가는 길' 이 사라집니다.
+    기록, 갱신수 = lt_module.update_tracking(기록, frames)
+    if 갱신수:
+        닿음 = int((기록["target_hit_date"].astype(str) != "").sum())
+        무효 = int((기록["invalid_hit_date"].astype(str) != "").sum())
+        print(f"추적 갱신 {갱신수}건 — 목표({lt_module.TARGET_PCT:g}%) 도달 "
+              f"{닿음}건 · 무효({lt_module.INVALID_PCT:g}%) 도달 {무효}건")
+
+    # ③ 오늘 신호를 덧붙입니다.
     hits = bo_module.scan_today(frames, setup, names=names)
     기록, 새것 = lt_module.add_signals(기록, hits, setup)
 
@@ -1901,6 +1911,259 @@ def cmd_livetest_score(args: argparse.Namespace) -> int:
             out / "kr_livetest_scored.csv", index=False, encoding="utf-8-sig"
         )
         print(f"\n채점 결과 저장: {out}/kr_livetest_scored.csv")
+    return 0
+
+
+def _scored_frame(scored: list) -> pd.DataFrame:
+    """채점 결과를 조건값과 함께 표로 — 조건별로 쪼개 보려면 필요합니다."""
+    if not scored:
+        return pd.DataFrame()
+    return pd.DataFrame([s.__dict__ for s in scored])
+
+
+def cmd_value_record(args: argparse.Namespace) -> int:
+    """오늘 저평가 후보를 기록해 둡니다. 나중에 성적을 매기려고."""
+    path = _resolve(args.fin)
+    if not path.exists():
+        print(f"재무 파일이 없습니다: {path}")
+        print("  python -m src.cli value-fetch --market KOSDAQ")
+        return 1
+
+    fin = pd.read_csv(path, dtype={"code": str, "rcept_dt": str})
+    try:
+        listing = val_module.listing_with_cap(args.market)
+    except DataUnavailable as exc:
+        print(f"실패: {exc}")
+        return 1
+
+    rule = val_module.Screen(
+        max_pbr=args.max_pbr, max_per=args.max_per,
+        require_profit=not args.allow_loss, max_debt_ratio=args.max_debt,
+        min_marcap=args.min_marcap * 1e8, min_turnover=args.min_turnover * 1e8,
+    )
+    screened = val_module.screen(val_module.valuation(listing, fin), rule)
+    통과 = val_module.rank(screened[screened["통과"]])
+
+    조건 = (f"pbr{rule.max_pbr:g}/per{rule.max_per:g}/debt{rule.max_debt_ratio:g}"
+          f"/cap{rule.min_marcap / 1e8:g}억/turnover{rule.min_turnover / 1e8:g}억"
+          f"/profit{'Y' if rule.require_profit else 'N'}")
+
+    기록 = lt_module.load(_resolve(args.file))
+    기록, 새것 = lt_module.add_value_picks(기록, 통과, 조건, top=args.top)
+    저장 = lt_module.save(기록, _resolve(args.file))
+
+    print(f"저평가 후보 {len(통과):,}종목 중 상위 {args.top}개를 기록했습니다 "
+          f"(새로 적은 것 {새것}건) → {저장}")
+    print(f"   조건 {조건}")
+    for _, row in 통과.head(min(10, args.top)).iterrows():
+        경고 = " ⚠️" if str(row.get("일회성경고", "") or "") else ""
+        print(f"   {str(row.get('name',''))[:14]:<14}({row['code']})"
+              f"  PBR {row['PBR']:.2f}  PER {row['PER']:.1f}{경고}")
+    print("\n※ 매수하지 않았습니다. 기록만 했습니다.")
+    return 0
+
+
+def cmd_monthly_review(args: argparse.Namespace) -> int:
+    """월말 브리핑 — 지난 기간에 고른 종목이 어떻게 됐나."""
+    cfg = Config.load(args.config)
+    기록 = lt_module.load(_resolve(args.file))
+    today = pd.Timestamp.today().normalize()
+    시작 = today - pd.Timedelta(days=args.days)
+
+    if 기록.empty:
+        print(mo_module.report(pd.DataFrame(), f"최근 {args.days}일",
+                               args.horizon))
+        return 0
+
+    날짜 = pd.to_datetime(기록["signal_date"], errors="coerce")
+    이번기간 = 기록[(날짜 >= 시작) & (날짜 <= today)]
+    if 이번기간.empty:
+        print(mo_module.report(pd.DataFrame(), f"최근 {args.days}일",
+                               args.horizon))
+        return 0
+
+    codes = sorted({str(c) for c in 이번기간["code"]})
+    print(f"기간 내 기록 {len(이번기간):,}건 · {len(codes):,}종목 확인 중...")
+    frames = _frames_for(
+        codes, args.years, 0,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
+    try:
+        index = fetch_index(args.index, years=args.years)
+    except DataUnavailable as exc:
+        print(f"지수를 못 받았습니다: {exc}")
+        return 1
+
+    scored = lt_module.score_rows(이번기간, frames, index, horizon=args.horizon)
+    표 = _scored_frame(scored)
+
+    # 조건값을 붙여야 '어떤 조건일 때 올랐나' 를 볼 수 있습니다.
+    if not 표.empty:
+        붙일것 = 이번기간[["code", "signal_date", "setup",
+                       "volume_mult", "base_range_pct", "runup_pct"]].copy()
+        표 = 표.merge(붙일것, on=["code", "signal_date"], how="left")
+        표 = 표.rename(columns={"volume_mult": "거래량배수",
+                              "base_range_pct": "박스폭%",
+                              "runup_pct": "상승률%",
+                              "gap_pct": "갭%"})
+
+        # 값이 어떻게 움직였는지 — 바로 올랐나, 빠졌다 돌아왔나.
+        모양들, 최대손실들, 최대이익들, 고점까지들 = [], [], [], []
+        for _, row in 표.iterrows():
+            daily = frames.get(str(row["code"]))
+            길 = (mo_module.path_shape(daily, row["entry_date"], args.horizon)
+                 if daily is not None else None)
+            모양들.append(길.shape if 길 else "")
+            최대손실들.append(길.max_loss_pct if 길 else float("nan"))
+            최대이익들.append(길.max_gain_pct if 길 else float("nan"))
+            고점까지들.append(길.days_to_peak if 길 else float("nan"))
+        표["모양"] = 모양들
+        표["최대손실%"] = 최대손실들
+        표["최대이익%"] = 최대이익들
+        표["고점까지일"] = 고점까지들
+
+    기간이름 = f"{시작.date()} ~ {today.date()}"
+    # 채점에 쓴 계산 기준. 나중에 '그때 어떻게 쟀지?' 를 물을 수 있어야
+    # 합니다. 기준이 바뀌면 앞뒤 성적을 그대로 견줄 수 없습니다.
+    계산기준 = (f"보유 {args.horizon}거래일 · 비교지수 {args.index}"
+             f" · 목표 {lt_module.TARGET_PCT:g}% · 무효 {lt_module.INVALID_PCT:g}%"
+             f" · 장부판 v{lt_module.LEDGER_VERSION}"
+             f" · 채점일 {today.date()}")
+    글 = mo_module.report(표, 기간이름, args.horizon,
+                        recorded=len(이번기간),
+                        waiting=len(이번기간) - len(scored),
+                        basis=계산기준)
+    print()
+    print(글)
+
+    if not 표.empty:
+        out = _output_dir(cfg)
+        표.to_csv(out / "kr_monthly_review.csv", index=False,
+                  encoding="utf-8-sig")
+        print(f"\n저장: {out}/kr_monthly_review.csv")
+
+    if args.telegram:
+        try:
+            보냄 = send(글, dry_run=args.dry_run)
+            print("텔레그램 전송 " + ("성공" if 보냄 else "실패"))
+        except TelegramNotConfigured as exc:
+            print(f"텔레그램 미설정: {exc}")
+    return 0
+
+
+def cmd_ledger_export(args: argparse.Namespace) -> int:
+    """장부를 압축해서 따로 보관합니다.
+
+    깃에도 남아 있지만, 손에 쥐고 있는 사본이 하나 더 있으면
+    마음이 놓입니다. 기록 자체는 10년을 쌓아도 2MB 남짓이라
+    공간 때문에 지울 일은 없습니다.
+    """
+    import zipfile
+
+    cfg = Config.load(args.config)
+    담을것: list[tuple[Path, str]] = []
+    for 경로, 이름 in (
+        (_resolve(args.file), "livetest.csv"),
+        (_resolve(args.journal), "journal.csv"),
+        (_resolve("data/fin_kr.csv"), "fin_kr.csv"),
+    ):
+        if 경로.exists():
+            담을것.append((경로, 이름))
+
+    out_dir = _output_dir(cfg)
+    for 이름 in ("kr_monthly_review.csv", "kr_livetest_scored.csv",
+                "journal_scored.csv", "kr_value_candidates.csv"):
+        경로 = out_dir / 이름
+        if 경로.exists():
+            담을것.append((경로, f"output/{이름}"))
+
+    if not 담을것:
+        print("보관할 기록이 아직 없습니다.")
+        return 0
+
+    날 = datetime.now().strftime("%Y%m%d")
+    target = _resolve(args.out or f"output/장부_{날}.zip")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as 묶음:
+        for 경로, 이름 in 담을것:
+            묶음.write(경로, 이름)
+
+    크기 = target.stat().st_size
+    print(f"{len(담을것)}개 파일을 담았습니다 → {target}")
+    print(f"   크기 {크기 / 1024:,.0f} KB")
+    for _, 이름 in 담을것:
+        print(f"   · {이름}")
+    print()
+    print("※ 원본은 그대로 있습니다. 사본을 하나 더 만든 것뿐입니다.")
+    print("   기록은 10년을 쌓아도 2MB 남짓이라 지울 일이 없습니다.")
+    print("   공간을 먹는 것은 시세 저장고(data/cache)이고, 그건")
+    print("   `python -m src.cli cache --clear` 로 언제든 지워도 됩니다.")
+    return 0
+
+
+def cmd_ledger_fix(args: argparse.Namespace) -> int:
+    """장부를 고칩니다 — 덮어쓰지 않고 정정 기록을 붙입니다."""
+    path = _resolve(args.file)
+    기록 = lt_module.load(path)
+    if 기록.empty:
+        print("장부가 비어 있습니다.")
+        return 1
+
+    바꿀것 = {}
+    for 이름, 값 in (("name", args.name), ("basis", args.basis),
+                   ("source", args.source)):
+        if 값:
+            바꿀것[이름] = 값
+    if not 바꿀것:
+        print("무엇을 고칠지 하나는 주셔야 합니다 (--name / --basis / --source).")
+        return 1
+
+    try:
+        기록, 새id = lt_module.add_correction(기록, args.row_id, args.reason,
+                                            **바꿀것)
+    except (KeyError, ValueError) as exc:
+        print(f"고치지 않았습니다: {exc}")
+        return 1
+
+    lt_module.save(기록, path)
+    print(f"정정 기록을 붙였습니다 → {새id}")
+    print(f"   원래 줄 {args.row_id} 는 '정정됨' 으로 표시만 하고 그대로 남습니다.")
+    print(f"   사유: {args.reason}")
+    return 0
+
+
+def cmd_ledger_show(args: argparse.Namespace) -> int:
+    """장부를 들여다봅니다 — 판, 정정, 목표 도달 현황."""
+    기록 = lt_module.load(_resolve(args.file))
+    if 기록.empty:
+        print("장부가 비어 있습니다.")
+        return 0
+
+    print(lt_module.size_note(_resolve(args.file)))
+    print(f"전체 {len(기록):,}줄 · 유효 {len(lt_module.active(기록)):,}줄")
+    print(f"판(version): {', '.join(lt_module.versions_seen(기록)) or '—'}")
+    고친것 = lt_module.corrections(기록)
+    print(f"정정 기록: {len(고친것)}건")
+    print()
+
+    if args.row_id:
+        한줄 = 기록[기록["row_id"].astype(str) == args.row_id]
+        if 한줄.empty:
+            print(f"그런 줄이 없습니다: {args.row_id}")
+            return 1
+        for 이름, 값 in 한줄.iloc[0].items():
+            if str(값).strip() and str(값) != "nan":
+                print(f"   {이름:<18} {값}")
+        return 0
+
+    보일것 = ["row_id", "signal_date", "code", "name", "setup", "status",
+            "entry_date", "gap_pct", "bought", "target_hit_date",
+            "invalid_hit_date"]
+    보일것 = [c for c in 보일것 if c in 기록.columns]
+    print(기록.tail(args.limit)[보일것].to_string(index=False))
+    print()
+    print("한 줄을 자세히 보려면:  --row-id <번호>")
     return 0
 
 
@@ -2076,6 +2339,65 @@ def build_parser() -> argparse.ArgumentParser:
     ku.add_argument("--market", default="KOSPI", help="KOSPI / KOSDAQ / KRX")
     ku.add_argument("--out", default="data/universe_kr_all.txt", help="저장할 파일")
     ku.set_defaults(func=cmd_kr_universe)
+
+    vr = sub.add_parser(
+        "value-record",
+        help="[국내] 오늘 저평가 후보를 기록해 두기 (나중에 성적 매기려고)",
+    )
+    vr.add_argument("--fin", default="data/fin_kr.csv", help="받아둔 재무 파일")
+    vr.add_argument("--market", default="KOSDAQ", help="KOSPI / KOSDAQ")
+    vr.add_argument("--max-pbr", type=float, default=1.0)
+    vr.add_argument("--max-per", type=float, default=15.0)
+    vr.add_argument("--allow-loss", action="store_true")
+    vr.add_argument("--max-debt", type=float, default=200.0)
+    vr.add_argument("--min-marcap", type=float, default=300.0)
+    vr.add_argument("--min-turnover", type=float, default=5.0)
+    vr.add_argument("--top", type=int, default=20, help="상위 몇 종목을 기록할지")
+    vr.add_argument("--file", default="data/livetest.csv", help="기록 파일")
+    vr.set_defaults(func=cmd_value_record)
+
+    lf = sub.add_parser(
+        "ledger-fix",
+        help="[국내] 장부 정정 — 덮어쓰지 않고 정정 기록을 붙입니다",
+    )
+    lf.add_argument("--row-id", required=True, help="고칠 줄 번호 (ledger-show 로 확인)")
+    lf.add_argument("--reason", required=True, help="무엇을 왜 고치는지")
+    lf.add_argument("--name", help="종목명을 고칠 때")
+    lf.add_argument("--basis", help="근거를 고칠 때")
+    lf.add_argument("--source", help="출처를 고칠 때")
+    lf.add_argument("--file", default="data/livetest.csv", help="장부 파일")
+    lf.set_defaults(func=cmd_ledger_fix)
+
+    lsh = sub.add_parser("ledger-show", help="[국내] 장부 들여다보기")
+    lsh.add_argument("--row-id", help="이 줄만 자세히")
+    lsh.add_argument("--limit", type=int, default=20, help="최근 몇 줄")
+    lsh.add_argument("--file", default="data/livetest.csv", help="장부 파일")
+    lsh.set_defaults(func=cmd_ledger_show)
+
+    le = sub.add_parser(
+        "ledger-export",
+        help="[국내] 장부를 압축해서 따로 보관하기",
+    )
+    le.add_argument("--file", default="data/livetest.csv", help="실시간 검증 기록")
+    le.add_argument("--journal", default="data/journal.csv", help="판단 기록장")
+    le.add_argument("--out", help="저장할 zip 경로")
+    le.set_defaults(func=cmd_ledger_export)
+
+    mr = sub.add_parser(
+        "monthly-review",
+        help="[국내] 월말 브리핑 — 지난 기간에 고른 종목이 어떻게 됐나",
+    )
+    mr.add_argument("--file", default="data/livetest.csv", help="기록 파일")
+    mr.add_argument("--days", type=int, default=90,
+                    help="며칠 전까지의 기록을 볼지. 20거래일 보유를 채우려면 넉넉히")
+    mr.add_argument("--horizon", type=int, default=20, help="보유 거래일수")
+    mr.add_argument("--index", default="KQ11", help="비교할 지수")
+    mr.add_argument("--years", type=float, default=2.0, help="시세 조회 기간")
+    mr.add_argument("--telegram", action="store_true", help="텔레그램으로 보내기")
+    mr.add_argument("--dry-run", action="store_true", help="보내지 않고 출력만")
+    mr.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    mr.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    mr.set_defaults(func=cmd_monthly_review)
 
     lr = sub.add_parser(
         "livetest-record",
