@@ -79,11 +79,28 @@ COLUMNS = (
     "target_hit_date",  # 목표에 닿은 날. 안 닿았으면 빈칸
     "invalid_pct",      # 무효 기준
     "invalid_hit_date", # 무효선에 닿은 날
+    # 분할 매도 단계별 도달일. 한 번 적히면 덮어쓰지 않습니다.
+    "sell1_date",       # 1차 (+10%, 30%)
+    "sell2_date",       # 2차 (+20%, 40%)
+    "sell3_date",       # 3차 (+35%, 30%)
 )
 
 MAX_GAP_PCT = 5.0        # 이 값을 바꾸면 판을 올려야 합니다
 TARGET_PCT = 20.0        # 목표: 진입가 대비 +20% (사장님이 정하셨습니다)
-INVALID_PCT = -12.0      # 무효: 진입가 대비 -12%
+INVALID_PCT = -20.0      # 무효: 진입가 대비 -20% (2026-09-01 사장님이 정하셨습니다)
+# 처음에 -12% 로 잡았다가 -20% 로 넓혔습니다. 사장님 투자원칙 문서의
+# "개별 종목은 최대 -20% 하락까지 감수하되, 근거가 먼저 훼손되면 더 일찍 정리한다"
+# 와 같은 값입니다. 장부에 아직 기록이 한 건도 없어 판(v1)은 그대로 둡니다.
+# 기록이 쌓인 뒤에 이 값을 바꾸면 그때는 LEDGER_VERSION 을 올려야 합니다.
+
+# 분할 매도 — 사장님이 정하신 30 / 40 / 30 (2026-09-01)
+# 목표가(+20%)가 가운데입니다. 한 번에 다 팔면 더 갈 때 아쉽고,
+# 안 팔면 되돌릴 때 다 잃습니다. 나눠 파는 이유가 그것입니다.
+SELL_TRANCHES = (
+    (10.0, 30),      # 1차 +10% 에서 30%
+    (20.0, 40),      # 2차 +20% (목표) 에서 40%
+    (35.0, 30),      # 3차 +35% 에서 30%. 근거가 훼손되면 그 전에 정리
+)
 
 KIND_RECORD, KIND_FIX = "기록", "정정"
 STATUS_OK, STATUS_FIXED = "유효", "정정됨"
@@ -105,6 +122,7 @@ def rule_text(setup) -> str:
             f"/turnover{setup.min_turnover / 1e8:g}억"
             f"/maxgap{MAX_GAP_PCT:g}"
             f"/target{TARGET_PCT:g}/invalid{INVALID_PCT:g}"
+            f"/sell{'-'.join(f'{p:g}x{w}' for p, w in SELL_TRANCHES)}"
             f"@v{LEDGER_VERSION}")
 
 
@@ -209,6 +227,7 @@ def _base_row(signal_date: str, code: str, name: str, close: float,
         "low_since": np.nan, "low_date": "",
         "target_pct": TARGET_PCT, "target_hit_date": "",
         "invalid_pct": INVALID_PCT, "invalid_hit_date": "",
+        "sell1_date": "", "sell2_date": "", "sell3_date": "",
     }
 
 
@@ -417,6 +436,15 @@ def update_tracking(frame: pd.DataFrame, frames: dict[str, pd.DataFrame],
             닿음 = 창.index[창["low"] <= 시가 * (1 + 무효 / 100.0)]
             if len(닿음):
                 frame.at[i, "invalid_hit_date"] = str(닿음[0].date())
+
+        # 분할 매도 단계. 처음 닿은 날이 사실이므로 덮어쓰지 않습니다.
+        for 번호, (오름, _비중) in enumerate(SELL_TRANCHES, 1):
+            열 = f"sell{번호}_date"
+            if str(row.get(열, "")):
+                continue
+            닿음 = 창.index[창["high"] >= 시가 * (1 + 오름 / 100.0)]
+            if len(닿음):
+                frame.at[i, 열] = str(닿음[0].date())
         갱신 += 1
 
     return frame, 갱신

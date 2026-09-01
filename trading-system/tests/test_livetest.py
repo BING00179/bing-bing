@@ -408,14 +408,70 @@ def test_진입_뒤_최고가_최저가를_덧쌓는다():
 def test_목표와_무효선_도달일을_적는다():
     frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
                               [_hit(close=1000.0)], bo.Setup())
-    # 진입 시가 1000 → +15% 는 1150, -12% 는 880
-    daily = _bars([1000.0, 850.0, 1200.0], opens=[1000.0, 1000.0, 1150.0])
+    # 진입 시가 1000 → 목표 +20% 는 1200, 무효 -20% 는 800
+    daily = _bars([1000.0, 780.0, 1200.0], opens=[1000.0, 1000.0, 1150.0])
     frame, _ = lt.fill_entries(frame, {"000001": daily})
     frame, _ = lt.update_tracking(frame, {"000001": daily},
                                  today=pd.Timestamp("2026-12-31"))
     row = frame.iloc[0]
     assert str(row["target_hit_date"])           # 목표에 닿음
     assert str(row["invalid_hit_date"])          # 무효선에도 닿음
+
+
+def test_분할_매도_단계마다_닿은_날을_적는다():
+    """30 / 40 / 30 으로 나눠 팔기로 했으니, 각 단계에 닿은 날을 남깁니다.
+
+    파는 것은 사람이 합니다. 장부는 '여기 닿았다' 만 적습니다.
+    """
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(close=1000.0)], bo.Setup())
+    # 진입 시가 1000 → 1차 1100, 2차 1200, 3차 1350
+    daily = _bars([1000.0, 1090.0, 1190.0, 1340.0],
+                  opens=[1000.0, 1000.0, 1000.0, 1000.0])
+    frame, _ = lt.fill_entries(frame, {"000001": daily})
+    frame, _ = lt.update_tracking(frame, {"000001": daily},
+                                 today=pd.Timestamp("2026-12-31"))
+    row = frame.iloc[0]
+    # 고가는 종가의 1.01 배라 1090→1100.9, 1190→1201.9, 1340→1353.4
+    assert str(row["sell1_date"]) and str(row["sell2_date"])
+    assert str(row["sell3_date"])
+    # 낮은 단계가 먼저 닿아야 합니다
+    assert row["sell1_date"] <= row["sell2_date"] <= row["sell3_date"]
+
+
+def test_아직_안_닿은_분할_단계는_비워_둔다():
+    """없는 것은 없다고 씁니다. 0 이나 오늘 날짜로 채우지 않습니다."""
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(close=1000.0)], bo.Setup())
+    daily = _bars([1000.0, 1090.0, 1050.0], opens=[1000.0, 1000.0, 1000.0])
+    frame, _ = lt.fill_entries(frame, {"000001": daily})
+    frame, _ = lt.update_tracking(frame, {"000001": daily},
+                                 today=pd.Timestamp("2026-12-31"))
+    row = frame.iloc[0]
+    assert str(row["sell1_date"])            # +10% 는 닿음
+    assert not str(row["sell2_date"])        # +20% 는 아직
+    assert not str(row["sell3_date"])
+
+
+def test_분할_매도_날짜도_덮어쓰지_않는다():
+    frame, _ = lt.add_signals(pd.DataFrame(columns=list(lt.COLUMNS)),
+                              [_hit(close=1000.0)], bo.Setup())
+    daily = _bars([1000.0, 1090.0, 1000.0, 1200.0],
+                  opens=[1000.0, 1000.0, 1000.0, 1000.0])
+    frame, _ = lt.fill_entries(frame, {"000001": daily})
+    frame, _ = lt.update_tracking(frame, {"000001": daily},
+                                 today=pd.Timestamp("2026-12-31"))
+    처음 = frame.iloc[0]["sell1_date"]
+    frame, _ = lt.update_tracking(frame, {"000001": daily},
+                                 today=pd.Timestamp("2026-12-31"))
+    assert frame.iloc[0]["sell1_date"] == 처음
+
+
+def test_조건_한_줄에_무효선과_분할이_들어간다():
+    """판을 나누는 근거입니다. 값이 바뀌면 이 줄이 달라져야 합니다."""
+    줄 = lt.rule_text(bo.Setup())
+    assert "invalid-20" in 줄
+    assert "sell10x30-20x40-35x30" in 줄
 
 
 def test_한_번_닿은_날은_덮어쓰지_않는다():
