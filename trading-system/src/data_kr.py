@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import date, timedelta
 
 import pandas as pd
@@ -75,15 +76,30 @@ def _normalize_frame(df: pd.DataFrame, code: str) -> pd.DataFrame:
     return out[out["volume"] > 0]
 
 
-def fetch_daily(code: str, years: float = 2.0) -> pd.DataFrame:
-    """일봉을 받아옵니다(기본 2년)."""
+# 시세 서버에 쉬지 않고 때리면 IP 가 막힙니다. 실제로 KRX 에서
+# 하루 차단당한 적이 있고, 그때 FinanceDataReader 까지 같이 죽었습니다.
+# 회사처럼 여러 사람이 같은 IP 를 쓰는 곳이면 남까지 막힙니다.
+FETCH_PAUSE = 0.2         # 종목 사이 간격(초)
+
+
+def fetch_daily(code: str, years: float = 2.0,
+                pause: float = 0.0) -> pd.DataFrame:
+    """일봉을 받아옵니다(기본 2년).
+
+    pause 를 주면 받고 나서 그만큼 쉽니다. 한 종목만 볼 때는 0 이어도
+    되지만, 수백·수천 종목을 훑을 때는 반드시 넣어야 합니다.
+    """
     fdr = _fdr()
     code = normalize_code(code)
     start = (date.today() - timedelta(days=int(365 * years) + 30)).isoformat()
     try:
         df = fdr.DataReader(code, start)
     except Exception as exc:  # noqa: BLE001 - 라이브러리가 다양한 예외를 냅니다
+        if pause:
+            time.sleep(pause)      # 실패했을 때도 쉽니다. 연달아 때리면 더 나빠집니다.
         raise DataUnavailable(f"{code}: 조회 실패 - {exc}") from exc
+    if pause:
+        time.sleep(pause)
     return _normalize_frame(df, code)
 
 

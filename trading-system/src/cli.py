@@ -43,6 +43,7 @@ from . import report_html
 from . import scanner_a, scanner_b, scanner_kr
 from .config import Config
 from .data import NY, DataUnavailable, fetch_daily, load_csv, read_universe
+from . import data_kr as data_kr_module
 from .data_kr import fetch_index
 from .data_kr import fetch_daily as fetch_daily_kr
 from .data_kr import list_market, read_universe_kr
@@ -653,6 +654,7 @@ def _frames_for(
     min_rows: int,
     cache_dir: Path | None,
     refresh: bool = False,
+    pause: float | None = None,
 ) -> dict[str, pd.DataFrame]:
     """시세를 확보합니다. 저장된 것이 있으면 그것부터 씁니다.
 
@@ -660,6 +662,9 @@ def _frames_for(
     한 번 받아두면 두 번째부터는 몇 초에 끝납니다.
     """
     cache = PriceCache(cache_dir) if cache_dir else None
+    # 몇 종목 안 되면 굳이 쉬지 않습니다. 수백 종목을 훑을 때만 쉽니다.
+    쉬는간격 = (data_kr_module.FETCH_PAUSE if len(codes) >= 50 else 0.0
+              ) if pause is None else pause
 
     if cache and not refresh:
         info = cache.info()
@@ -678,7 +683,7 @@ def _frames_for(
 
         if daily is None:
             try:
-                daily = fetch_daily_kr(code, years=years)
+                daily = fetch_daily_kr(code, years=years, pause=쉬는간격)
             except DataUnavailable:
                 continue
             except Exception:  # noqa: BLE001
@@ -688,6 +693,10 @@ def _frames_for(
                 cache.put(code, daily)
             if fetched % 100 == 0:
                 print(f"  받는 중 {fetched:,}종목...")
+            if fetched == 1 and 쉬는간격:
+                남은시간 = len(codes) * 쉬는간격 / 60
+                print(f"  종목 사이에 {쉬는간격}초씩 쉽니다 — IP 가 막히지 않게."
+                      f" (대기시간만 약 {남은시간:.0f}분)")
 
         if len(daily) >= min_rows:
             frames[code] = daily
