@@ -287,4 +287,25 @@ def test_중간_저장을_불러준다(monkeypatch):
 def test_계정이_하나도_안_맞아도_표는_모양을_지킨다():
     frame = v._to_frame([{"code": "A", "bsns_year": 2025, "rcept_dt": "20260315"}])
     assert list(frame.columns) == list(v.FIN_COLUMNS)
-    assert pd.isna(frame.iloc[0]["매출액"])
+    assert pd.isna(frame.iloc[0]["매출액_y0"])       # 3년치 형식
+
+
+def test_예전_형식의_재무_파일도_읽힌다():
+    """열 이름이 바뀌었다고 옛 파일을 가진 사람이 갑자기 못 쓰면 안 됩니다."""
+    옛것 = pd.DataFrame({"code": ["000001"], "bsns_year": [2025],
+                       "rcept_dt": ["20260315"],
+                       "매출액": [3e11], "영업이익": [3e10],
+                       "당기순이익": [2e10], "자산총계": [4e11],
+                       "부채총계": [1e11], "자본총계": [3e11]})
+    val = v.valuation(_listing(), 옛것)
+    assert abs(val.iloc[0]["PBR"] - (1e11 / 3e11)) < 1e-12
+
+
+def test_새_형식의_재무_파일도_읽힌다():
+    새것 = pd.DataFrame({"code": ["000001"], "bsns_year": [2025],
+                       "rcept_dt": ["20260315"],
+                       "매출액_y0": [3e11], "영업이익_y0": [3e10],
+                       "당기순이익_y0": [2e10], "자산총계_y0": [4e11],
+                       "부채총계_y0": [1e11], "자본총계_y0": [3e11]})
+    val = v.valuation(_listing(), 새것)
+    assert abs(val.iloc[0]["PBR"] - (1e11 / 3e11)) < 1e-12
