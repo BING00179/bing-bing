@@ -2256,34 +2256,56 @@ def cmd_screen_kr(args: argparse.Namespace) -> int:
 
     결과 = qual_module.evaluate(묶음, prices)
     print()
+    print("=" * 60)
+    print("  기업이 좋은가 · 값이 괜찮은가")
+    print("=" * 60)
     print(qual_module.report(결과, top=args.top))
+    print("=" * 60)
 
     out = _output_dir(cfg)
     결과.to_csv(out / "kr_screen.csv", index=False, encoding="utf-8-sig")
-    print(f"\n전체 저장: {out}/kr_screen.csv")
 
-    # 후보로 남은 것만 공시 위험을 확인합니다 — 몇 종목뿐이라 금방입니다.
-    후보 = 결과[결과["판정"] == "후보"]
+    # 표를 화면에 쏟아내면 아무것도 눈에 안 들어옵니다. 보기 좋은
+    # 한 장으로 따로 냅니다.
+    print(f"\n  전체 표:  {out}/kr_screen.csv")
+
+    # 공시는 좁힌 목록만 확인합니다. 73종목을 다 부르면 오래 걸리고,
+    # 어차피 사장님이 열어 볼 것은 위쪽 몇 개뿐입니다.
+    후보 = qual_module.shortlist(결과)
+    if 후보.empty:                      # 좁혀서 아무것도 안 남으면 후보 전체
+        후보 = 결과[결과["판정"] == "후보"].head(20)
     if not 후보.empty and not args.skip_dart:
         print()
-        print(f"후보 {len(후보)}종목의 최근 공시를 확인합니다...")
-        _dart_flags_for(list(후보["code"]), dict(zip(후보["code"], 후보["name"])),
-                        args)
+        print(f"  고른 {len(후보)}종목의 최근 공시를 확인합니다...")
+        위험모음 = _dart_flags_for(
+            list(후보["code"]), dict(zip(후보["code"], 후보["name"])), args)
+    else:
+        위험모음 = {}
+
+    # 표를 화면에 쏟아내면 아무것도 눈에 안 들어옵니다. 좋은 점·걸리는 점·
+    # 무엇을 하면 되는지까지 담은 한 장을 따로 냅니다.
+    페이지 = out / "종목선별.html"
+    페이지.write_text(qual_module.render_html(결과, risks=위험모음),
+                    encoding="utf-8")
+    print(f"\n  ▶ 보기 좋은 한 장:  {페이지}")
+    print(f"    브라우저로 열기:  start {페이지}")
     return 0
 
 
-def _dart_flags_for(codes: list[str], names: dict, args) -> None:
+def _dart_flags_for(codes: list[str], names: dict, args) -> dict:
     """후보 종목만 공시 위험을 봅니다. 전 종목을 보면 너무 오래 걸립니다."""
     try:
         key = dart_kr.api_key(getattr(args, "api_key", None))
         index = dart_kr.load_corp_index(key, "data/cache/dart", refresh=False)
     except (dart_kr.DartNotConfigured, dart_kr.DartError) as exc:
         print(f"   공시 확인 건너뜀 — {exc}")
-        return
+        return {}
 
     today = pd.Timestamp.today().normalize()
     start = (today - pd.Timedelta(days=180)).strftime("%Y%m%d")
     걸린것 = 0
+    계속: list[str] = []
+    모음: dict[str, list[dict]] = {}
     for code in codes:
         corp = dart_kr.find_corp_code(index, code)
         if not corp:
@@ -2295,14 +2317,28 @@ def _dart_flags_for(codes: list[str], names: dict, args) -> None:
             continue
         if flagged.empty:
             continue
-        높음 = flagged[flagged["severity"] == "높음"]
-        보일것 = 높음 if not 높음.empty else flagged.head(2)
+        위험 = flagged[flagged["severity"] == dart_kr.RISK]
+        확인 = flagged[flagged["severity"] == dart_kr.CHECK]
+        if 위험.empty and 확인.empty:
+            계속.append(code)           # 배당·자사주만 있으면 조용히 넘어갑니다
+            continue
         걸린것 += 1
-        print(f"   ⚠️ {names.get(code, code)}({code})")
-        for _, row in 보일것.head(3).iterrows():
-            print(f"        {row['rcept_dt']} [{row['label']}] {row['report_nm']}")
+        모음[code] = pd.concat([위험, 확인]).head(3).to_dict("records")
+        표시 = "🔴" if not 위험.empty else "🟡"
+        print(f"   {표시} {names.get(code, code)}({code})")
+        for _, row in pd.concat([위험, 확인]).head(3).iterrows():
+            print(f"        {dart_kr.SEVERITY_MARK.get(row['severity'], '')} "
+                  f"{row['rcept_dt']} [{row['label']}] {row['report_nm']}")
+            print(f"           → {row['why']}")
+
     if 걸린것 == 0:
-        print("   최근 6개월 공시 중 규칙에 걸린 것이 없습니다.")
+        print("   최근 6개월 공시 중 눈여겨볼 것이 없습니다.")
+    else:
+        print()
+        print(f"   🔴 위험 · 🟡 확인 — {걸린것}종목에 걸렸습니다.")
+        print(f"   배당·자사주 매입 같은 호재만 있는 {len(계속)}종목은 조용히 넘겼습니다.")
+        print("   ⚠️ 위험 표시가 붙은 종목은 후보에서 빼거나, 원문을 꼭 읽으십시오.")
+    return 모음
 
 
 def build_parser() -> argparse.ArgumentParser:

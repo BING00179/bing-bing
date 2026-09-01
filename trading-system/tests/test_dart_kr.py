@@ -161,11 +161,39 @@ def _공시(*제목: str) -> pd.DataFrame:
     ])
 
 
-def test_감사의견_거절은_높음으로_잡는다():
+def test_감사의견_거절은_위험으로_잡는다():
     flagged = dart_kr.flag_events(_공시("감사보고서제출(감사의견거절)"))
     assert len(flagged) == 1
     assert flagged.iloc[0]["label"] == "감사의견 비적정"
-    assert flagged.iloc[0]["severity"] == "높음"
+    assert flagged.iloc[0]["severity"] == dart_kr.RISK
+
+
+def test_배당과_자사주_매입은_경고가_아니라_호재다():
+    """좋은 소식을 경고로 내면 경고 자체가 무의미해집니다.
+
+    처음에는 배당·자사주까지 경고로 냈습니다. 그러니 73종목이 전부
+    ⚠️ 로 보여서 정작 '횡령·배임' 같은 진짜 위험이 묻혔습니다.
+    """
+    배당 = dart_kr.flag_events(_공시("현금ㆍ현물배당결정"))
+    자사주 = dart_kr.flag_events(_공시("자기주식취득결정"))
+    assert 배당.iloc[0]["severity"] == dart_kr.GOOD
+    assert 자사주.iloc[0]["severity"] == dart_kr.GOOD
+
+
+def test_희석되는_것은_위험으로_본다():
+    for 제목 in ("유상증자결정", "전환사채권발행결정"):
+        assert dart_kr.flag_events(_공시(제목)).iloc[0]["severity"] == dart_kr.RISK
+
+
+def test_판단이_필요한_것은_확인으로_둔다():
+    """액면분할 때문에 생긴 거래정지를 위험이라 하면 안 됩니다."""
+    for 제목 in ("최대주주변경", "주권매매거래정지", "소송등의제기"):
+        assert dart_kr.flag_events(_공시(제목)).iloc[0]["severity"] == dart_kr.CHECK
+
+
+def test_위험이_호재보다_먼저_나온다():
+    flagged = dart_kr.flag_events(_공시("현금ㆍ현물배당결정", "횡령·배임혐의발생"))
+    assert flagged.iloc[0]["severity"] == dart_kr.RISK
 
 
 def test_띄어쓰기가_달라도_잡는다():
@@ -178,7 +206,7 @@ def test_규칙에_없는_공시는_거르지_않는다():
 
 
 def test_심각한_것이_위로_온다():
-    flagged = dart_kr.flag_events(_공시("유상증자결정", "횡령·배임혐의발생"))
+    flagged = dart_kr.flag_events(_공시("현금ㆍ현물배당결정", "횡령·배임혐의발생"))
     assert flagged.iloc[0]["label"] == "횡령·배임"
 
 
