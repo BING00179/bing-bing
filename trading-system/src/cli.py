@@ -34,6 +34,7 @@ from . import monthly as mo_module
 from . import quality as qual_module
 from . import value_kr as val_module
 from . import diagnose as dg_module
+from . import exits as ex_module
 from . import market_filter as mf_module
 from . import notify_policy
 from . import analyze
@@ -1418,6 +1419,83 @@ def cmd_diagnose_kr(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_exits_kr(args: argparse.Namespace) -> int:
+    """어떻게 하면 될까 — 신호는 그대로 두고 나가는 규칙만 바꿔 봅니다.
+
+    "왜 안 되나" 는 여섯 번 확인했습니다. 이건 그 다음 질문입니다.
+    """
+    cfg = Config.load(args.config)
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+
+    market_ok = None
+    print("=" * 78)
+    if args.market_filter:
+        index = fetch_index(cfg.market_filter.index_code)
+        market_ok = mf_module.tradable_series(index, cfg.market_filter)
+        print(f"✅ 시장 필터 켬 — 매수 허용 {market_ok.mean() * 100:.1f}%")
+    else:
+        print("⚠️ 시장 필터 꺼짐")
+    print(f"대상 {len(codes):,}종목 · 최근 {args.years}년 · 조건 {args.setup}")
+    print("=" * 78)
+
+    holds = tuple(sorted({int(x) for x in args.holds.split(",") if x.strip()}))
+    stops = tuple(sorted({float(x) for x in args.stops.split(",") if x.strip()}))
+    print(f"\n미리 정해 둔 것 — 보유 {holds} 일 / 손절 {stops} % / "
+          f"합격선 t ≥ 2.0, 표본 {ex_module.MIN_SAMPLE}건 이상")
+    print("결과를 보고 합격선을 만들지 않기 위해 먼저 적어 둡니다.\n")
+
+    frames = _frames_for(
+        codes, args.years, cfg.scanner_b.sma_slow + 30,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
+    if len(frames) < 30:
+        print("시세를 받은 종목이 너무 적습니다.")
+        return 1
+
+    print("신호를 모으는 중...")
+    signals: dict[str, pd.DatetimeIndex] = {}
+    for code, daily in frames.items():
+        if args.setup == "breakout":
+            dates = bo_module.signal_dates(daily, bo_module.Setup())
+            if market_ok is not None and len(dates):
+                허용 = market_ok.reindex(dates).fillna(False).astype(bool)
+                dates = dates[허용.to_numpy()]
+        else:
+            rows = bt_module.signal_rows(code, daily, cfg.scanner_b, market_ok)
+            dates = rows.index if not rows.empty else pd.DatetimeIndex([])
+        if len(dates):
+            signals[code] = pd.DatetimeIndex(dates)
+
+    총신호 = sum(len(v) for v in signals.values())
+    if 총신호 == 0:
+        print("신호가 하나도 없습니다.")
+        return 0
+    print(f"신호 {총신호:,}건")
+
+    print("같은 날 아무 종목이나 샀을 때의 평균을 구합니다 (비교 기준)...")
+    market = dg_module.market_forward(frames, horizons=holds)
+
+    print("산 뒤의 길을 펴는 중...")
+    paths = ex_module.build_paths(frames, signals, max_days=max(holds))
+    print(f"길을 편 신호 {len(paths):,}건\n")
+
+    curve = ex_module.hold_curve(paths, market, holds=holds)
+    grid = ex_module.exit_grid(paths, stops=stops, holds=holds,
+                               cost_pct=args.cost)
+    missed = ex_module.missed_upside(paths, args.now_stop, args.now_hold)
+
+    print(ex_module.report(curve, grid, missed,
+                           now_stop=args.now_stop, now_hold=args.now_hold))
+
+    out = _output_dir(cfg)
+    if not grid.empty:
+        grid.to_csv(out / "kr_exit_grid.csv", index=False, encoding="utf-8-sig")
+        print(f"\n조합별 원자료 저장: {out}/kr_exit_grid.csv")
+    return 0
+
+
 def cmd_case_kr(args: argparse.Namespace) -> int:
     """종목 하나를 통째로 뜯어봅니다 — 그때 우리 시스템은 뭐라고 했나."""
     cfg = Config.load(args.config)
@@ -2742,6 +2820,27 @@ def build_parser() -> argparse.ArgumentParser:
     dgk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
     dgk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
     dgk.set_defaults(func=cmd_diagnose_kr)
+
+    exk = sub.add_parser(
+        "exits-kr",
+        help="[국내] 어떻게 하면 될까 — 나가는 규칙을 바꿔 보기",
+    )
+    exk.add_argument("--universe", help="종목코드 목록 파일")
+    exk.add_argument("--years", type=float, default=5.0, help="조회 기간 (년)")
+    exk.add_argument("--setup", default="breakout", choices=["trendjoin", "breakout"],
+                     help="어떤 신호를 볼지")
+    exk.add_argument("--holds", default="5,10,20,40,60,90,120",
+                     help="들고 있을 날 수 후보 (쉼표)")
+    exk.add_argument("--stops", default="3,5,8,12,20",
+                     help="손절폭 후보 퍼센트 (쉼표)")
+    exk.add_argument("--now-stop", type=float, default=3.0, help="지금 쓰는 손절폭")
+    exk.add_argument("--now-hold", type=int, default=20, help="지금 쓰는 최대 보유일")
+    exk.add_argument("--cost", type=float, default=0.51,
+                     help="왕복 비용 퍼센트 (슬리피지+수수료+거래세)")
+    exk.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
+    exk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    exk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    exk.set_defaults(func=cmd_exits_kr)
 
     dd = sub.add_parser(
         "dart-dashboard",
