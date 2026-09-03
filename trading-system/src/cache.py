@@ -34,7 +34,7 @@ from pathlib import Path
 
 import pandas as pd
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 META_FILE = "_meta.json"
 
 
@@ -52,18 +52,40 @@ SUFFIX = ".parquet" if USE_PARQUET else ".pkl"
 
 @dataclass
 class CacheInfo:
+    """저장고에 실제로 들어 있는 것. 마지막 실행이 아니라 **전체**를 말합니다.
+
+    저장고는 여러 번에 걸쳐 채워집니다. 14종목을 5년치로 받은 실행이
+    1,821종목 3년치 저장고의 이름표를 "5년치, 오늘 받음" 으로 덮어쓰면,
+    화면은 그럴듯해지고 판단은 망가집니다. 그래서 섞였으면 섞였다고
+    적습니다.
+    """
     directory: Path
     codes: int
-    fetched_on: str
-    years: float
+    years_min: float
+    years_max: float
+    first_on: str        # 제일 오래전에 받은 날
+    last_on: str         # 제일 최근에 받은 날
+
+    @property
+    def mixed(self) -> bool:
+        return self.years_min != self.years_max or self.first_on != self.last_on
 
     def as_line(self) -> str:
-        age = (date.today() - date.fromisoformat(self.fetched_on)).days
+        # 오래됐는지는 **제일 오래된 것** 기준으로 봅니다.
+        age = (date.today() - date.fromisoformat(self.first_on)).days
         stale = "  ⚠️ 오래됨" if age > 7 else ""
-        return (
-            f"저장된 시세 {self.codes:,}종목 · {self.years}년치 · "
-            f"{self.fetched_on} 기준 ({age}일 전){stale}"
-        )
+
+        if self.years_min == self.years_max:
+            기간 = f"{self.years_min:g}년치"
+        else:
+            기간 = f"{self.years_min:g}~{self.years_max:g}년치 (섞임)"
+
+        if self.first_on == self.last_on:
+            언제 = f"{self.first_on} 기준 ({age}일 전)"
+        else:
+            언제 = f"{self.first_on}~{self.last_on} 에 나눠 받음 (섞임)"
+
+        return f"저장된 시세 {self.codes:,}종목 · {기간} · {언제}{stale}"
 
 
 class PriceCache:
@@ -113,14 +135,33 @@ class PriceCache:
             frame.to_pickle(path)
 
     def save_meta(self, codes: int, years: float) -> None:
+        """이름표를 갱신합니다 — **덮어쓰지 않고 합칩니다.**
+
+        14종목을 5년치로 받은 실행이 1,821종목 3년치 저장고의 이름표를
+        통째로 바꿔 버리면 안 됩니다. 기간은 넓은 쪽으로, 받은 날은
+        처음과 마지막을 둘 다 남깁니다.
+        """
         self.directory.mkdir(parents=True, exist_ok=True)
+        오늘 = date.today().isoformat()
+        이전 = self.info()
+
+        years_min = min(이전.years_min, years) if 이전 else years
+        years_max = max(이전.years_max, years) if 이전 else years
+        first_on = min(이전.first_on, 오늘) if 이전 else 오늘
+
         (self.directory / META_FILE).write_text(
             json.dumps(
                 {
                     "version": CACHE_VERSION,
                     "codes": codes,
-                    "years": years,
-                    "fetched_on": date.today().isoformat(),
+                    "years_min": years_min,
+                    "years_max": years_max,
+                    "first_on": first_on,
+                    "last_on": 오늘,
+                    # 옛 형식으로 읽는 곳을 위해 남겨 둡니다. 넓게 보는 쪽
+                    # (제일 짧은 기간, 제일 오래된 날) 을 적습니다.
+                    "years": years_min,
+                    "fetched_on": first_on,
                     "fetched_at": datetime.now().isoformat(timespec="seconds"),
                 },
                 ensure_ascii=False,
@@ -139,11 +180,16 @@ class PriceCache:
             raw = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             return None
+        # 옛 형식(years / fetched_on 하나씩)도 읽을 수 있게 합니다.
+        옛기간 = float(raw.get("years", 0.0))
+        옛날짜 = str(raw.get("fetched_on", date.today().isoformat()))
         return CacheInfo(
             directory=self.directory,
             codes=int(raw.get("codes", 0)),
-            fetched_on=str(raw.get("fetched_on", date.today().isoformat())),
-            years=float(raw.get("years", 0.0)),
+            years_min=float(raw.get("years_min", 옛기간)),
+            years_max=float(raw.get("years_max", 옛기간)),
+            first_on=str(raw.get("first_on", 옛날짜)),
+            last_on=str(raw.get("last_on", 옛날짜)),
         )
 
     def stored_codes(self) -> list[str]:
