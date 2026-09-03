@@ -679,7 +679,7 @@ def report(frame: pd.DataFrame, scored: list[Scored], verdict: Verdict) -> str:
     elif verdict.passes:
         lines.append("   · 표본 30건 이상, 초과수익 +, t ≥ 2 — 세 가지를 다 넘겼습니다.")
         lines.append("     과거 자료가 아니라 앞으로의 자료에서 나온 결과입니다.")
-        lines.append("     다만 거래비용(왕복 0.51%)을 빼고도 남는지 따로 보셔야 합니다.")
+        lines.append("     다만 거래비용(왕복 0.53%)을 빼고도 남는지 따로 보셔야 합니다.")
     elif verdict.mean_excess <= 0:
         lines.append("   · 초과수익이 0 이하입니다. 이 조건은 무작위보다 나을 게 없습니다.")
         lines.append("     과거 자료에서 좋아 보였던 것은 그 자료에 맞춘 답이었습니다.")

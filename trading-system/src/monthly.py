@@ -402,7 +402,7 @@ def report(scored: pd.DataFrame, period: str, horizon: int,
         lines.append("      좋게 나와도 그건 아무 뜻이 없습니다.")
     else:
         lines.append(f"   1. {len(유효)}개가 모였습니다. 이제 볼 만합니다.")
-        lines.append("      다만 여기서 사고파는 비용(왕복 0.51%)을 빼야")
+        lines.append("      다만 여기서 사고파는 비용(왕복 0.53%)을 빼야")
         lines.append("      실제로 남는 돈이 됩니다.")
     lines.append("")
     lines.append("   2. 위의 '어떤 종목이 잘 됐나' 표는 참고만 하십시오.")

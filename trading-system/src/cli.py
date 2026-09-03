@@ -1441,7 +1441,9 @@ def cmd_exits_kr(args: argparse.Namespace) -> int:
 
     holds = tuple(sorted({int(x) for x in args.holds.split(",") if x.strip()}))
     stops = tuple(sorted({float(x) for x in args.stops.split(",") if x.strip()}))
+    targets = tuple(sorted({float(x) for x in args.targets.split(",") if x.strip()}))
     print(f"\n미리 정해 둔 것 — 보유 {holds} 일 / 손절 {stops} % / "
+          f"목표 {targets} % (0=없음) / "
           f"합격선 t ≥ 2.0, 표본 {ex_module.MIN_SAMPLE}건 이상")
     print("결과를 보고 합격선을 만들지 않기 위해 먼저 적어 둡니다.\n")
 
@@ -1483,7 +1485,7 @@ def cmd_exits_kr(args: argparse.Namespace) -> int:
 
     curve = ex_module.hold_curve(paths, market, holds=holds)
     grid = ex_module.exit_grid(paths, stops=stops, holds=holds,
-                               cost_pct=args.cost)
+                               targets=targets, cost_pct=args.cost)
     missed = ex_module.missed_upside(paths, args.now_stop, args.now_hold)
 
     print(ex_module.report(curve, grid, missed,
@@ -2833,10 +2835,13 @@ def build_parser() -> argparse.ArgumentParser:
                      help="들고 있을 날 수 후보 (쉼표)")
     exk.add_argument("--stops", default="3,5,8,12,20",
                      help="손절폭 후보 퍼센트 (쉼표)")
+    exk.add_argument("--targets", default="0,10,20,35",
+                     help="익절 목표 후보 퍼센트 (쉼표). 0 = 목표 없음")
     exk.add_argument("--now-stop", type=float, default=3.0, help="지금 쓰는 손절폭")
     exk.add_argument("--now-hold", type=int, default=20, help="지금 쓰는 최대 보유일")
-    exk.add_argument("--cost", type=float, default=0.51,
-                     help="왕복 비용 퍼센트 (슬리피지+수수료+거래세)")
+    exk.add_argument("--cost", type=float, default=ex_module.COST_ROUND_TRIP_PCT,
+                     help="왕복 비용 퍼센트. 기본값은 수수료·세금 0.2408%% "
+                          "(2026-09-03 실제 거래명세) + 슬리피지 가정 0.30%%")
     exk.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
     exk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
     exk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
