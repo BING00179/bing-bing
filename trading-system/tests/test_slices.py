@@ -137,3 +137,94 @@ def test_보고서가_탐색이라고_못박는다():
     rows, bar = sl.all_cuts(s, _market(s), 20)
     글 = sl.report(rows, bar, 20)
     assert "탐색이지 검증이 아닙니다" in 글
+
+
+# ────────── 줄이 서는가 ──────────
+#
+# t 값만으로는 부족합니다. 실제 결과에서 이 차이가 나왔습니다.
+#
+#   깨어난 세기  +1.39 → +1.64 → +0.60 → -0.49 → -2.94   줄이 섭니다
+#   주가 수준    +0.37 → -0.50 → -0.49 → +1.82 → -0.99   혼자 튑니다
+#
+# 앞은 "세게 깨어날수록 나쁘다" 는 이야기가 되고, 뒤는 안 됩니다.
+
+def _row(cut, excess, t=0.0, n=2800):
+    return sl.SliceRow(cut=cut, label="", count=n, signal_mean=0.0,
+                       market_mean=0.0, excess=excess, t_stat=t, win_rate=40.0)
+
+
+def test_한_방향으로_이어지면_줄이_선다고_본다():
+    깨어남 = [_row("깨어난 세기", v) for v in (1.39, 1.64, 0.60, -0.49, -2.94)]
+    assert sl.trend(깨어남) == sl.MONO_DOWN
+
+
+def test_혼자_튀면_들쭉날쭉이다():
+    주가 = [_row("주가 수준", v) for v in (0.37, -0.50, -0.49, 1.82, -0.99)]
+    assert sl.trend(주가) == sl.BUMPY
+
+
+def test_보고서가_줄이_서는_것과_혼자_튀는_것을_갈라_말한다():
+    rows = ([_row("깨어난 세기", v, t) for v, t in
+             ((1.39, 4.06), (1.64, 4.22), (0.60, 1.53), (-0.49, -1.23),
+              (-2.94, -9.31))]
+            + [_row("주가 수준", v, t) for v, t in
+               ((0.37, 0.93), (-0.50, -1.59), (-0.49, -1.37), (1.82, 3.94),
+                (-0.99, -3.43))])
+    글 = sl.report(rows, bar=3.14, horizon=20)
+    assert "줄이 서 있습니다" in 글 and "깨어난 세기" in 글
+    assert "혼자 튑니다" in 글
+
+
+# ────────── 조건을 겹쳐서 ──────────
+
+def test_겹치면_남는_표본이_줄어든다():
+    s = _signals(3000, seed=1)
+    m = _market(s)
+    전체 = sl.combo(s, m, 20, ())
+    좁힘 = sl.combo(s, m, 20, (("volume_mult", 3.0, 6.0),))
+    assert 전체.kept == 3000
+    assert 좁힘.kept < 전체.kept
+    assert 좁힘.dropped == 전체.kept - 좁힘.kept
+
+
+def test_남는_게_너무_적으면_판정하지_않는다():
+    s = _signals(3000, seed=1)
+    좁힘 = sl.combo(s, _market(s), 20, (("volume_mult", 19.99, 20.0),))
+    assert 좁힘 is None
+    assert "너무 적습니다" in sl.combo_report(좁힘, 20)
+
+
+def test_거래대금이_작은_쪽만_남기면_비용_경고를_붙인다():
+    """거래대금 작은 종목은 슬리피지가 훨씬 큽니다.
+
+    거기서 나온 초과수익은 비용에 먹힐 수 있습니다. 그걸 안 적으면
+    화면만 좋아 보이고 실제 돈은 그대로 잃습니다.
+    """
+    s = _signals(3000, seed=1)
+    좁힘 = sl.combo(s, _market(s), 20, (("turnover", None, 2.8e9),))
+    글 = sl.combo_report(좁힘, 20)
+    assert "슬리피지" in 글 and "비용에 먹힐 수 있습니다" in 글
+
+
+def test_큰_거래대금만_남기면_그_경고는_안_붙인다():
+    s = _signals(3000, seed=1)
+    좁힘 = sl.combo(s, _market(s), 20, (("turnover", 5e9, None),))
+    assert "비용에 먹힐 수 있습니다" not in sl.combo_report(좁힘, 20)
+
+
+def test_없는_열로_겹치려_하면_판정하지_않는다():
+    s = _signals(3000, seed=1)
+    assert sl.combo(s, _market(s), 20, (("없는열", 1.0, 2.0),)) is None
+
+
+def test_조건_적는_법을_잘못_쓰면_알려준다():
+    from src.cli import _parse_keep
+    assert _parse_keep("volume_mult:3:6") == ("volume_mult", 3.0, 6.0)
+    assert _parse_keep("turnover::2.8e9") == ("turnover", None, 2.8e9)
+    for 틀린것 in ("volume_mult:3", ":3:6"):
+        try:
+            _parse_keep(틀린것)
+        except SystemExit:
+            pass
+        else:
+            raise AssertionError(f"{틀린것} 을 걸러내지 못했습니다")

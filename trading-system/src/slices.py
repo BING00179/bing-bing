@@ -176,21 +176,39 @@ def report(rows: list[SliceRow], bar: float, horizon: int,
     좋은쪽 = [r for r in 통과 if r.excess > 0]
     나쁜쪽 = [r for r in 통과 if r.excess < 0]
 
-    줄 += ["   기준     조각                 표본     초과     t     승률"]
-    for r in sorted(rows, key=lambda x: x.excess, reverse=True):
-        표 = ""
-        if r.passes(bar):
-            표 = "  ← 통과" if r.excess > 0 else "  ← 반대로 유의"
-        줄.append(f"   {r.cut:<10s} {r.label:<18s} {r.count:6,d} "
-                  f"{r.excess:+7.2f}% {r.t_stat:6.2f} {r.win_rate:5.1f}%{표}")
+    # 기준별로 묶어서, 작은 값부터 순서대로 보여줍니다. 줄이 서는지는
+    # 순서대로 놓고 봐야 보입니다. 좋은 순으로 정렬하면 안 보입니다.
+    방향 = trends(rows)
+    묶음: dict[str, list[SliceRow]] = {}
+    for r in rows:
+        묶음.setdefault(r.cut, []).append(r)
+
+    for 이름, 칸들 in 묶음.items():
+        표시 = 방향.get(이름, BUMPY)
+        꼬리 = "" if 표시 == BUMPY else "   ← 줄이 섭니다"
+        줄 += ["", f"   [{이름}]  {표시}{꼬리}",
+               "     조각                 표본     초과     t     승률"]
+        for r in 칸들:
+            표 = ""
+            if r.passes(bar):
+                표 = "  ← 통과" if r.excess > 0 else "  ← 반대로 유의"
+            줄.append(f"     {r.label:<18s} {r.count:6,d} "
+                      f"{r.excess:+7.2f}% {r.t_stat:6.2f} {r.win_rate:5.1f}%{표}")
 
     줄 += [""]
     if 좋은쪽:
-        제일 = max(좋은쪽, key=lambda r: r.excess)
-        줄 += [f"   ✅ 통과한 조각 {len(좋은쪽)}개. 제일 나은 것은 "
-               f"{제일.cut} {제일.label} — 초과 {제일.excess:+.2f}%, "
-               f"t {제일.t_stat:.2f}, 표본 {제일.count:,}건.",
-               "",
+        줄이선것 = [r for r in 좋은쪽 if 방향.get(r.cut, BUMPY) != BUMPY]
+        혼자튄것 = [r for r in 좋은쪽 if 방향.get(r.cut, BUMPY) == BUMPY]
+        줄 += [f"   ✅ 통과한 조각 {len(좋은쪽)}개."]
+        if 줄이선것:
+            이름들 = sorted({r.cut for r in 줄이선것})
+            줄 += [f"      이 중 {', '.join(이름들)} 은 **줄이 서 있습니다** — 조각 하나가",
+                   "      우연히 좋은 게 아니라 한 방향으로 이어집니다. 더 믿을 만합니다."]
+        if 혼자튄것:
+            이름들 = sorted({r.cut for r in 혼자튄것})
+            줄 += [f"      반면 {', '.join(이름들)} 은 **혼자 튑니다** — 앞뒤 칸과",
+                   "      이어지지 않습니다. t 가 높아도 우연일 수 있습니다."]
+        줄 += ["",
                "   ⚠️ 그래도 이건 **탐색이지 검증이 아닙니다.** 같은 자료에서",
                "      찾은 조각이라 그 자료에 맞춘 것일 수 있습니다. 조건으로",
                "      넣기 전에 장부에 쌓아 앞으로의 자료로 다시 확인합니다."]
@@ -205,4 +223,153 @@ def report(rows: list[SliceRow], bar: float, horizon: int,
                f"(제일 나쁜 것 {제일나쁜.cut} {제일나쁜.label}, "
                f"{제일나쁜.excess:+.2f}%).",
                "      이건 '피할 것' 을 알려줍니다. 거르는 조건은 될 수 있습니다."]
+    return "\n".join(줄)
+
+# ─────────────── 줄이 서는가 ───────────────
+#
+# t 값만으로는 부족합니다. 조각 하나가 혼자 튄 것과, 다섯 칸이 순서대로
+# 이어지는 것은 성격이 다릅니다.
+#
+#   깨어난 세기   +1.39 → +1.64 → +0.60 → -0.49 → -2.94   줄이 섭니다
+#   주가 수준     +0.37 → -0.50 → -0.49 → +1.82 → -0.99   혼자 튑니다
+#
+# 앞은 "세게 깨어날수록 나쁘다" 는 이야기가 되고, 뒤는 이야기가 안
+# 됩니다. 우연히 잘 나온 칸 하나를 조건으로 삼으면 앞으로의 자료에서
+# 그대로 무너집니다. 그래서 줄이 서는지를 같이 봅니다.
+
+MONO_UP, MONO_DOWN, BUMPY = "커질수록 좋아짐", "커질수록 나빠짐", "들쭉날쭉"
+
+
+def trend(rows: list[SliceRow], tolerance: int = 1) -> str:
+    """한 기준 안의 조각들이 한 방향으로 이어지는가.
+
+    칸 하나쯤 어긋나는 것은 봐줍니다(tolerance). 세 칸 이상 어긋나면
+    이야기가 안 되는 것으로 봅니다.
+    """
+    if len(rows) < 3:
+        return BUMPY
+    값 = [r.excess for r in rows]
+    오름 = sum(1 for a, b in zip(값, 값[1:]) if b < a)
+    내림 = sum(1 for a, b in zip(값, 값[1:]) if b > a)
+    if 오름 <= tolerance:
+        return MONO_UP
+    if 내림 <= tolerance:
+        return MONO_DOWN
+    return BUMPY
+
+
+def trends(rows: list[SliceRow]) -> dict[str, str]:
+    """기준마다 줄이 서는지. 조각 순서는 만들어진 순서(작은 값부터)입니다."""
+    묶음: dict[str, list[SliceRow]] = {}
+    for r in rows:
+        묶음.setdefault(r.cut, []).append(r)
+    return {이름: trend(칸들) for 이름, 칸들 in 묶음.items()}
+
+
+# ─────────────── 조건을 겹쳐서 ───────────────
+#
+# 조각 하나하나가 좋았다고 겹쳤을 때도 좋다는 보장은 없습니다. 남는
+# 표본이 확 줄기도 하고, 조건끼리 겹쳐서 사실상 같은 것을 두 번 거는
+# 일도 생깁니다. 그래서 겹친 것도 따로 잽니다.
+#
+# ⚠️ 겹치는 조건을 **자료를 보고 고르면** 그건 더 깊은 탐색입니다.
+# 여기서 나온 숫자는 앞으로의 자료로 반드시 다시 확인해야 합니다.
+
+@dataclass
+class ComboResult:
+    kept: int
+    dropped: int
+    excess: float
+    t_stat: float
+    win_rate: float
+    signal_mean: float
+    market_mean: float
+    rules: tuple
+
+    @property
+    def kept_pct(self) -> float:
+        전체 = self.kept + self.dropped
+        return self.kept / 전체 * 100.0 if 전체 else 0.0
+
+
+def combo(signals: pd.DataFrame, market: pd.DataFrame, horizon: int,
+          rules: tuple) -> ComboResult | None:
+    """조건을 전부 만족하는 신호만 남겨서 잽니다.
+
+    rules 는 (열 이름, 하한, 상한) 들입니다. None 은 제한 없음.
+    """
+    값열, 시장열 = f"fwd{horizon}", f"fwd{horizon}_mkt"
+    if signals.empty or market is None or market.empty or 값열 not in market:
+        return None
+
+    붙임 = signals.merge(market, left_on="entry_date", right_index=True,
+                        how="left", suffixes=("", "_mkt"))
+    if 시장열 not in 붙임:
+        return None
+    쓸것 = 붙임.dropna(subset=[값열, 시장열])
+    전체 = len(쓸것)
+    if 전체 == 0:
+        return None
+
+    남김 = pd.Series(True, index=쓸것.index)
+    for 열, 하한, 상한 in rules:
+        if 열 not in 쓸것:
+            return None
+        값 = pd.to_numeric(쓸것[열], errors="coerce")
+        if 하한 is not None:
+            남김 &= 값 >= 하한
+        if 상한 is not None:
+            남김 &= 값 <= 상한
+        남김 &= 값.notna()
+
+    남은것 = 쓸것[남김]
+    if len(남은것) < MIN_SAMPLE:
+        return None
+
+    차 = 남은것[값열] - 남은것[시장열]
+    표준편차 = float(차.std(ddof=1))
+    t = float(차.mean() / (표준편차 / np.sqrt(len(차)))) if 표준편차 > 0 else 0.0
+    return ComboResult(
+        kept=len(남은것), dropped=전체 - len(남은것),
+        excess=float(차.mean()), t_stat=t,
+        win_rate=float((남은것[값열] > 0).mean() * 100.0),
+        signal_mean=float(남은것[값열].mean()),
+        market_mean=float(남은것[시장열].mean()),
+        rules=rules,
+    )
+
+
+# 거래대금이 작은 종목은 슬리피지가 훨씬 큽니다. 우리 비용 가정
+# (편도 0.15%) 은 대형주 기준이라, 작은 종목에서 나온 초과수익은
+# 비용에 먹힐 수 있습니다. 그래서 경고를 붙입니다.
+THIN_TURNOVER = 3_000_000_000     # 30억
+
+
+def combo_report(result: ComboResult | None, horizon: int,
+                 base: float | None = None) -> str:
+    if result is None:
+        return ("   겹친 조건으로 남는 신호가 너무 적습니다 "
+                f"(최소 {MIN_SAMPLE}건 필요).")
+    조건글 = ", ".join(
+        f"{열} {'' if 하한 is None else f'{하한:g} 이상'}"
+        f"{'' if 상한 is None else f' {상한:g} 이하'}".strip()
+        for 열, 하한, 상한 in result.rules
+    )
+    줄 = [f"   조건: {조건글}",
+          f"   남은 신호 {result.kept:,}건 "
+          f"(전체의 {result.kept_pct:.1f}%, {result.dropped:,}건 걸러짐)",
+          f"   {horizon}일 초과수익 {result.excess:+.2f}%  t {result.t_stat:.2f}  "
+          f"승률 {result.win_rate:.1f}%"]
+    if base is not None:
+        줄.append(f"   (거르기 전 전체는 {base:+.2f}% 였습니다)")
+
+    얇은가 = any(열 == "turnover" and 상한 is not None and 상한 <= THIN_TURNOVER
+               for 열, _하한, 상한 in result.rules)
+    if 얇은가:
+        줄 += ["",
+               "   ⚠️ 거래대금이 작은 쪽만 남겼습니다. 우리 비용 가정의 슬리피지",
+               "      (편도 0.15%) 는 대형주 기준입니다. 하루 거래대금 30억 이하",
+               "      종목을 시초가에 사면 실제로는 훨씬 더 밀립니다. **여기서 나온",
+               "      초과수익은 비용에 먹힐 수 있습니다.** 실제로 사보기 전에는",
+               "      확인할 수 없습니다."]
     return "\n".join(줄)

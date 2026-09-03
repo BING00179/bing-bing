@@ -1491,6 +1491,16 @@ def cmd_slice_kr(args: argparse.Namespace) -> int:
 
     rows, bar = sl_module.all_cuts(signals, market, args.horizon)
     글 = sl_module.report(rows, bar, args.horizon, total=len(signals))
+
+    if args.keep:
+        규칙 = tuple(_parse_keep(x) for x in args.keep)
+        전체 = sl_module.combo(signals, market, args.horizon, ())
+        결과 = sl_module.combo(signals, market, args.horizon, 규칙)
+        글 += ("\n\n" + "─" * 60 + "\n🧪 조건을 겹쳐서\n\n"
+               + sl_module.combo_report(결과, args.horizon,
+                                        base=전체.excess if 전체 else None)
+               + "\n\n   ⚠️ 겹칠 조건을 자료를 보고 골랐다면 이건 더 깊은 탐색입니다."
+                 "\n      앞으로의 자료로 반드시 다시 확인해야 합니다.")
     print(글)
 
     out = _output_dir(cfg)
@@ -1500,6 +1510,18 @@ def cmd_slice_kr(args: argparse.Namespace) -> int:
     저장 = _write_text(args.out or (out / "kr_slices.txt"), 글)
     print(f"\n보고서 저장: {저장}  (메모장으로 열어도 안 깨집니다)")
     return 0
+
+
+def _parse_keep(text: str) -> tuple:
+    """"volume_mult:3:6" 을 (열, 하한, 상한) 으로. 빈칸은 제한 없음."""
+    조각 = text.split(":")
+    if len(조각) != 3:
+        raise SystemExit(f"--keep 은 '열:하한:상한' 꼴이라야 합니다: {text}")
+    열, 하한, 상한 = (x.strip() for x in 조각)
+    if not 열:
+        raise SystemExit(f"--keep 에 열 이름이 없습니다: {text}")
+    숫자 = lambda x: float(x) if x else None
+    return (열, 숫자(하한), 숫자(상한))
 
 
 def _attach_traits(frame: pd.DataFrame, daily: pd.DataFrame,
@@ -2995,6 +3017,10 @@ def build_parser() -> argparse.ArgumentParser:
     slk.add_argument("--horizon", type=int, default=20, help="며칠 뒤로 잴지")
     slk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
     slk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    slk.add_argument("--keep", action="append", metavar="열:하한:상한",
+                     help="조건을 겹쳐서 재봅니다. 여러 번 쓸 수 있습니다. "
+                          "예: --keep volume_mult:3:6 --keep turnover::2800000000. "
+                          "빈칸은 제한 없음")
     slk.add_argument("--out", help="보고서를 저장할 경로 (기본 output/kr_slices.txt)")
     slk.set_defaults(func=cmd_slice_kr)
 
