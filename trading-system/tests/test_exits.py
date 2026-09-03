@@ -226,10 +226,10 @@ def test_우위가_없으면_손절표를_믿지_말라고_경고한다():
     """
     curve = [ex.HoldRow(days=20, mean=1.0, market=1.0, excess=0.0,
                         win_rate=50.0, t_stat=0.1, count=500)]
-    grid = pd.DataFrame([{"stop_pct": 20.0, "hold_days": 60, "mean": 5.0,
-                          "win_rate": 55.0, "stopped_pct": 20.0,
-                          "stopped_day1_pct": 0.0, "profit_factor": 1.9,
-                          "count": 500}])
+    grid = pd.DataFrame([{"stop_pct": 20.0, "target_pct": 0.0, "hold_days": 60,
+                          "mean": 5.0, "win_rate": 55.0, "stopped_pct": 20.0,
+                          "stopped_day1_pct": 0.0, "target_hit_pct": 0.0,
+                          "profit_factor": 1.9, "count": 500}])
     글 = ex.report(curve, grid, {})
     assert "그냥 시장이" in 글 and "그건 우위가 아닙니다" in 글
 
@@ -237,8 +237,95 @@ def test_우위가_없으면_손절표를_믿지_말라고_경고한다():
 def test_우위가_있으면_그_경고를_붙이지_않는다():
     curve = [ex.HoldRow(days=20, mean=3.0, market=1.0, excess=2.0,
                         win_rate=55.0, t_stat=3.5, count=500)]
-    grid = pd.DataFrame([{"stop_pct": 20.0, "hold_days": 60, "mean": 5.0,
-                          "win_rate": 55.0, "stopped_pct": 20.0,
-                          "stopped_day1_pct": 0.0, "profit_factor": 1.9,
-                          "count": 500}])
+    grid = pd.DataFrame([{"stop_pct": 20.0, "target_pct": 0.0, "hold_days": 60,
+                          "mean": 5.0, "win_rate": 55.0, "stopped_pct": 20.0,
+                          "stopped_day1_pct": 0.0, "target_hit_pct": 0.0,
+                          "profit_factor": 1.9, "count": 500}])
     assert "그건 우위가 아닙니다" not in ex.report(curve, grid, {})
+
+
+# ────────── 목표에 닿으면 파는 규칙 ──────────
+#
+# 사장님 질문 — "일정 목표 금액에 닿으면 20일 전에도 팔아야 하지 않나".
+# 백테스트에는 그 규칙이 없었고(take_profit_pct=0), 장부에는 있었습니다.
+# 같은 시스템이 두 규칙으로 돌고 있었습니다.
+
+def _rising(n_signals=60, days=10):
+    """진입 뒤 꾸준히 오르는 종목들. 목표에 닿습니다."""
+    frames, signals = {}, {}
+    for k in range(n_signals):
+        code = f"{k:06d}"
+        closes = [100, 100, 105, 112, 120, 128, 136, 145, 155, 165][:days]
+        frames[code] = _daily(closes,
+                              lows=[c * 0.995 for c in closes],
+                              highs=[c * 1.005 for c in closes],
+                              opens=[100.0] * len(closes))
+        signals[code] = pd.DatetimeIndex([frames[code].index[0]])
+    return ex.build_paths(frames, signals, max_days=days - 1)
+
+
+def test_목표에_닿으면_기간이_남아도_거기서_끝난다():
+    paths = _rising()
+    grid = ex.exit_grid(paths, stops=(20.0,), holds=(9,),
+                        targets=(0.0, 20.0), cost_pct=0.0)
+    없음 = grid[grid["target_pct"] == 0.0].iloc[0]
+    있음 = grid[grid["target_pct"] == 20.0].iloc[0]
+    assert 있음["target_hit_pct"] == 100.0
+    assert abs(있음["mean"] - 20.0) < 1e-9        # 정확히 목표에서 끝남
+    assert 없음["mean"] > 있음["mean"]            # 계속 올랐으니 안 판 쪽이 더 벎
+
+
+def test_목표를_끄면_목표도달이_0이다():
+    grid = ex.exit_grid(_rising(), stops=(20.0,), holds=(9,),
+                        targets=(0.0,), cost_pct=0.0)
+    assert grid.iloc[0]["target_hit_pct"] == 0.0
+
+
+def test_같은_날_둘_다_닿으면_손절_쪽으로_본다():
+    """일봉만 보면 그날 어느 쪽이 먼저였는지 모릅니다.
+
+    모르는 것을 유리하게 가정하면 백테스트만 좋아집니다.
+    """
+    frames, signals = {}, {}
+    for k in range(60):
+        code = f"{k:06d}"
+        # 진입 다음 날 저가 -10%, 고가 +30% — 같은 날 둘 다 닿습니다
+        frames[code] = _daily([100, 100, 100],
+                              lows=[100, 90, 100],
+                              highs=[100, 130, 100],
+                              opens=[100, 100, 100])
+        signals[code] = pd.DatetimeIndex([frames[code].index[0]])
+    paths = ex.build_paths(frames, signals, max_days=2)
+    grid = ex.exit_grid(paths, stops=(5.0,), holds=(2,),
+                        targets=(20.0,), cost_pct=0.0)
+    r = grid.iloc[0]
+    assert r["stopped_pct"] == 100.0        # 손절로 봤다
+    assert r["target_hit_pct"] == 0.0
+    assert abs(r["mean"] + 5.0) < 1e-9
+
+
+def test_목표를_켜는_게_나은지_아닌지_말해_준다():
+    좋음 = pd.DataFrame([
+        {"stop_pct": 5.0, "target_pct": 0.0, "hold_days": 20, "mean": 1.0,
+         "win_rate": 50.0, "stopped_pct": 10.0, "stopped_day1_pct": 0.0,
+         "target_hit_pct": 0.0, "profit_factor": 1.1, "count": 500},
+        {"stop_pct": 5.0, "target_pct": 20.0, "hold_days": 20, "mean": 2.0,
+         "win_rate": 60.0, "stopped_pct": 10.0, "stopped_day1_pct": 0.0,
+         "target_hit_pct": 30.0, "profit_factor": 1.5, "count": 500},
+    ])
+    assert "목표를 켠 쪽이 낫습니다" in ex._grid_lesson(좋음, 5.0, 20)
+
+    나쁨 = 좋음.copy()
+    나쁨.loc[1, "profit_factor"] = 0.9
+    나쁨.loc[1, "mean"] = 0.1
+    assert "목표를 끄는 쪽이 낫습니다" in ex._grid_lesson(나쁨, 5.0, 20)
+
+
+def test_목표별로_한_줄씩만_보여준다():
+    """조합이 백 개가 넘습니다. 전부 찍으면 아무것도 안 보입니다."""
+    paths = _rising()
+    grid = ex.exit_grid(paths, stops=(3.0, 5.0, 20.0), holds=(5, 9),
+                        targets=(0.0, 10.0, 20.0))
+    줄 = ex._grid_lines(grid)
+    assert len(줄) == 1 + 3 + 2          # 머리 + 목표 3개 + 안내 2줄
+    assert "없음" in 줄[1]

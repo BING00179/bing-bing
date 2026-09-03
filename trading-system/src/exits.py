@@ -35,6 +35,14 @@ HOLDS = (5, 10, 20, 40, 60, 90, 120)
 # 손절폭 후보. 지금 규칙은 3% 입니다.
 STOPS = (3.0, 5.0, 8.0, 12.0, 20.0)
 
+# 익절 목표 후보. 0 은 "목표 없음"(지금 백테스트 설정) 입니다.
+#
+# 사장님이 물으신 것 — "일정 목표 금액에 닿으면 20일 전에도 팔아야
+# 하지 않나". 맞는 질문이고, 지금 백테스트에는 그 규칙이 없습니다
+# (take_profit_pct = 0). 반면 장부에는 +10/+20/+35 로 들어가 있습니다.
+# 같은 시스템이 두 규칙으로 돌고 있었습니다. 그래서 재봅니다.
+TARGETS = (0.0, 10.0, 20.0, 35.0)
+
 MIN_SAMPLE = 30          # 이보다 적으면 판정하지 않습니다
 
 
@@ -178,61 +186,85 @@ def _market_at(market: pd.DataFrame, dates: pd.DatetimeIndex, n: int) -> np.ndar
 @dataclass
 class ExitRow:
     stop_pct: float
+    target_pct: float        # 0 = 목표 없음
     hold_days: int
     mean: float              # 비용 뺀 평균 수익 (%)
     win_rate: float
     stopped_pct: float       # 손절로 끝난 비율
     stopped_day1_pct: float  # 그중 진입 첫날에 잘린 비율
+    target_hit_pct: float    # 목표에 닿아서 끝난 비율
     profit_factor: float
     count: int
 
 
 def exit_grid(paths: Paths, stops: tuple[float, ...] = STOPS,
               holds: tuple[int, ...] = HOLDS,
+              targets: tuple[float, ...] = TARGETS,
               cost_pct: float = 0.51) -> pd.DataFrame:
-    """손절폭 × 보유일수 조합마다 결과를 냅니다.
+    """손절폭 × 익절목표 × 보유일수 조합마다 결과를 냅니다.
 
-    손절은 그날 저가가 닿으면 그 값에 나간 것으로 봅니다(넉넉하게 불리하게).
+    나가는 길이 셋입니다 — 손절선에 닿거나, 목표에 닿거나, 기간이 다 차거나.
+    셋 중 **먼저 오는 것**으로 끝냅니다.
+
+    ⚠️ 손절과 목표가 같은 날에 둘 다 닿으면 **손절 쪽으로 봅니다.** 일봉만
+    보면 그날 어느 쪽이 먼저였는지 알 수 없습니다. 모르는 것을 유리하게
+    가정하면 백테스트만 좋아지고 실제 돈은 그대로 잃습니다.
+
     비용 0.51% 는 슬리피지 0.15%×2 + 수수료 0.015%×2 + 거래세 0.18% 입니다.
     """
     if len(paths) == 0:
         return pd.DataFrame()
 
+    아주큼 = np.iinfo(np.int32).max
     rows: list[ExitRow] = []
+
     for stop in stops:
         선 = -abs(stop)
-        # 며칟날 처음 손절선에 닿았나 (안 닿았으면 아주 큰 수)
-        닿음 = paths.low <= 선
-        닿음 &= paths.alive
-        첫날 = np.where(닿음.any(axis=1), 닿음.argmax(axis=1), np.iinfo(np.int32).max)
+        손절닿음 = (paths.low <= 선) & paths.alive
+        손절날 = np.where(손절닿음.any(axis=1), 손절닿음.argmax(axis=1), 아주큼)
 
-        for n in holds:
-            if n > paths.close.shape[1]:
-                continue
-            마지막 = _last_alive(paths.alive, n)
-            쓸수있음 = 마지막 >= 0
-            if 쓸수있음.sum() < MIN_SAMPLE:
-                continue
+        for target in targets:
+            if target > 0:
+                목표닿음 = (paths.high >= target) & paths.alive
+                목표날 = np.where(목표닿음.any(axis=1), 목표닿음.argmax(axis=1), 아주큼)
+            else:
+                목표날 = np.full(len(paths), 아주큼)
 
-            잘림 = 첫날 <= 마지막
-            결과 = np.where(
-                잘림, 선,
-                paths.close[np.arange(len(paths)), np.maximum(마지막, 0)],
-            )
-            결과 = 결과[쓸수있음] - cost_pct
-            잘림있음 = 잘림[쓸수있음]
-            번것 = 결과[결과 > 0].sum()
-            잃은것 = -결과[결과 < 0].sum()
-            pf = float(번것 / 잃은것) if 잃은것 > 0 else float("inf")
-            첫날잘림 = int((첫날[쓸수있음][잘림있음] == 0).sum())
-            rows.append(ExitRow(
-                stop_pct=stop, hold_days=n,
-                mean=float(결과.mean()),
-                win_rate=float((결과 > 0).mean() * 100.0),
-                stopped_pct=float(잘림있음.mean() * 100.0),
-                stopped_day1_pct=float(첫날잘림 / max(잘림있음.sum(), 1) * 100.0),
-                profit_factor=pf, count=int(쓸수있음.sum()),
-            ))
+            for n in holds:
+                if n > paths.close.shape[1]:
+                    continue
+                마지막 = _last_alive(paths.alive, n)
+                쓸수있음 = 마지막 >= 0
+                if 쓸수있음.sum() < MIN_SAMPLE:
+                    continue
+
+                잘림 = 손절날 <= 마지막
+                # 같은 날이면 손절 쪽 — 모르는 것을 유리하게 보지 않습니다.
+                익절 = (목표날 <= 마지막) & (목표날 < 손절날)
+
+                결과 = np.where(
+                    잘림 & ~익절, 선,
+                    np.where(익절, target,
+                             paths.close[np.arange(len(paths)),
+                                         np.maximum(마지막, 0)]),
+                )
+                결과 = 결과[쓸수있음] - cost_pct
+                잘림있음 = (잘림 & ~익절)[쓸수있음]
+                익절있음 = 익절[쓸수있음]
+
+                번것 = 결과[결과 > 0].sum()
+                잃은것 = -결과[결과 < 0].sum()
+                pf = float(번것 / 잃은것) if 잃은것 > 0 else float("inf")
+                첫날잘림 = int((손절날[쓸수있음][잘림있음] == 0).sum())
+                rows.append(ExitRow(
+                    stop_pct=stop, target_pct=target, hold_days=n,
+                    mean=float(결과.mean()),
+                    win_rate=float((결과 > 0).mean() * 100.0),
+                    stopped_pct=float(잘림있음.mean() * 100.0),
+                    stopped_day1_pct=float(첫날잘림 / max(잘림있음.sum(), 1) * 100.0),
+                    target_hit_pct=float(익절있음.mean() * 100.0),
+                    profit_factor=pf, count=int(쓸수있음.sum()),
+                ))
     return pd.DataFrame([r.__dict__ for r in rows])
 
 
@@ -319,15 +351,7 @@ def report(curve: list[HoldRow], grid: pd.DataFrame, missed: dict,
     if grid.empty:
         줄 += ["   자료가 모자라 판정하지 않습니다.", ""]
     else:
-        best = grid.sort_values("profit_factor", ascending=False).iloc[0]
-        줄 += ["   손절   보유    평균     승률    잘린비율  첫날잘림    PF"]
-        for _, r in grid.iterrows():
-            표 = "  ←" if (r["stop_pct"] == best["stop_pct"]
-                          and r["hold_days"] == best["hold_days"]) else ""
-            줄.append(f"   {r['stop_pct']:4.0f}%  {int(r['hold_days']):3d}일  "
-                      f"{r['mean']:+6.2f}%  {r['win_rate']:5.1f}%  "
-                      f"{r['stopped_pct']:6.1f}%   {r['stopped_day1_pct']:5.1f}%  "
-                      f"{r['profit_factor']:5.3f}{표}")
+        줄 += _grid_lines(grid)
         줄 += ["", "   " + _grid_lesson(grid, now_stop, now_hold), ""]
 
     줄 += ["③ 나간 뒤에 얼마나 더 갔나", ""]
@@ -366,18 +390,56 @@ def _hold_lesson(curve: list[HoldRow], now_hold: int) -> str:
     return f"지금 {now_hold}일 근처가 제일 낫습니다. 여기는 문제가 아닙니다."
 
 
+def _grid_lines(grid: pd.DataFrame) -> list[str]:
+    """조합이 백 개가 넘습니다. 전부 찍으면 아무것도 안 보입니다.
+
+    그래서 **목표별로 제일 나은 조합 한 줄씩**만 보여줍니다. 사장님이
+    물으신 것이 "목표를 켜면 나아지나" 이므로, 그 비교가 보여야 합니다.
+    """
+    줄 = ["   목표     제일 나은 조합      평균     승률   목표도달   잘린비율    PF"]
+    있는목표 = sorted(grid["target_pct"].unique())
+    전체최고 = grid["profit_factor"].max()
+    for tgt in 있는목표:
+        칸 = grid[grid["target_pct"] == tgt]
+        r = 칸.sort_values("profit_factor", ascending=False).iloc[0]
+        이름 = "없음  " if tgt == 0 else f"+{tgt:g}%  "
+        표 = "  ←" if r["profit_factor"] == 전체최고 else ""
+        줄.append(
+            f"   {이름:6s}  손절{r['stop_pct']:3.0f}% {int(r['hold_days']):3d}일   "
+            f"{r['mean']:+6.2f}%  {r['win_rate']:5.1f}%   "
+            f"{r['target_hit_pct']:5.1f}%    {r['stopped_pct']:5.1f}%  "
+            f"{r['profit_factor']:5.3f}{표}"
+        )
+    줄 += ["", "   (조합 전부는 output/kr_exit_grid.csv 에 있습니다)"]
+    return 줄
+
+
 def _grid_lesson(grid: pd.DataFrame, now_stop: float, now_hold: int) -> str:
     best = grid.sort_values("profit_factor", ascending=False).iloc[0]
-    지금 = grid[(grid["stop_pct"] == now_stop) & (grid["hold_days"] == now_hold)]
     if best["profit_factor"] < 1.0:
         return ("어느 조합도 PF 1.0 을 넘지 못했습니다. 비용까지 넣으면 "
                 "**전부 돈을 잃는 쪽**입니다. 나가는 규칙 문제가 아닙니다.")
-    앞 = (f"제일 나은 조합은 손절 {best['stop_pct']:g}% / "
+
+    목표이름 = ("없음" if best["target_pct"] == 0
+              else f"+{best['target_pct']:g}%")
+    앞 = (f"제일 나은 조합은 손절 {best['stop_pct']:g}% / 목표 {목표이름} / "
           f"{int(best['hold_days'])}일 보유 — PF {best['profit_factor']:.3f}.")
-    if 지금.empty:
+
+    목표없음 = grid[grid["target_pct"] == 0]
+    목표있음 = grid[grid["target_pct"] > 0]
+    if 목표없음.empty or 목표있음.empty:
         return 앞
-    이전 = float(지금.iloc[0]["profit_factor"])
-    return 앞 + f" 지금 규칙은 PF {이전:.3f} 입니다."
+    없음최고 = float(목표없음["profit_factor"].max())
+    있음최고 = float(목표있음["profit_factor"].max())
+    if 있음최고 > 없음최고:
+        뒤 = (f" 목표를 켠 쪽이 낫습니다 (PF {있음최고:.3f} vs {없음최고:.3f}). "
+              "일정 이익에 닿으면 파는 규칙이 도움이 된다는 뜻입니다.")
+    elif 없음최고 > 있음최고:
+        뒤 = (f" 목표를 끄는 쪽이 낫습니다 (PF {없음최고:.3f} vs {있음최고:.3f}). "
+              "목표를 두면 더 갈 종목이 거기서 끊깁니다.")
+    else:
+        뒤 = " 목표를 켜나 끄나 차이가 없습니다."
+    return 앞 + 뒤
 
 
 def _missed_lesson(missed: dict) -> str:
