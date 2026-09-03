@@ -65,14 +65,14 @@ def test_왕복_총비용을_항상_알려준다(capsys):
     cli._apply_cost_overrides(cfg, _args())
     화면 = capsys.readouterr().out
     assert "왕복 총비용" in 화면
-    assert "0.510" in 화면                     # 0.15*2 + 0.015*2 + 0.18
+    assert "0.528" in 화면                     # 0.15*2 + 0.014*2 + 0.20
 
 
 def test_슬리피지를_올리면_왕복_비용도_같이_오른다(capsys):
     cfg = Config()
     cli._apply_cost_overrides(cfg, _args(slippage=0.3))
     화면 = capsys.readouterr().out
-    assert "0.810" in 화면                     # 0.3*2 + 0.015*2 + 0.18
+    assert "0.828" in 화면                     # 0.3*2 + 0.014*2 + 0.20
 
 
 def test_바꾼_비용이_실제_손익_계산까지_내려간다():

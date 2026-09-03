@@ -304,49 +304,84 @@ def _last_alive(alive: np.ndarray, n: int) -> np.ndarray:
 
 # ────────────────── ③ 나간 뒤에 얼마나 더 갔나 ──────────────────
 
-def missed_upside(paths: Paths, stop_pct: float, hold_days: int,
-                  look_days: int = 120) -> dict:
-    """손절이나 기간만료로 나간 뒤, 그 종목이 얼마나 더 올랐나.
+AFTER_DAYS = (20, 60)
 
-    우리기술이 여기서 걸립니다. 나가고 나서 크게 올랐다면 나가는 규칙이
-    돈을 버린 것입니다. 나가고 나서 더 빠졌다면 나간 게 옳았던 것입니다.
+
+def _after_horizons(missed: dict) -> list[int]:
+    """결과에 실제로 들어 있는 관찰일수. 상수가 아니라 자료를 봅니다."""
+    import re
+    나온것 = (re.fullmatch(r"나간_뒤_(\d+)일_평균", k) for k in missed)
+    return sorted(int(m.group(1)) for m in 나온것 if m)
+
+
+def missed_upside(paths: Paths, stop_pct: float, hold_days: int,
+                  look_days: int = 120,
+                  after_days: tuple[int, ...] = AFTER_DAYS) -> dict:
+    """나가고 나서 그 종목이 어떻게 됐나.
+
+    우리기술이 여기서 걸립니다. 나간 뒤 크게 올랐다면 나가는 규칙이 돈을
+    버린 것이고, 더 빠졌다면 나간 게 옳았던 것입니다.
+
+    ⚠️ 처음에 이걸 **"나간 뒤 120일 최고가"** 로 쟀다가 96.8% 가 나왔습니다.
+    그 숫자는 뜻이 없습니다 — 120일이나 되는 구간의 꼭짓점은 어느 시점보다도
+    거의 항상 높습니다. 아무 날 아무 종목을 팔아도 90% 넘게 나옵니다.
+    ②에서는 전부 지는데 ③만 좋게 나왔던 게 그 증거였습니다.
+
+    그래서 **나간 뒤 N일 종가**로 다시 잽니다. 그건 실제로 계속 들고
+    있었으면 받았을 값입니다. 최고가 쪽은 "제일 좋았을 때 얼마였나" 라는
+    참고 숫자로만 남기고, 판정은 종가로 합니다.
     """
     if len(paths) == 0:
         return {}
+    아주큼 = np.iinfo(np.int32).max
     선 = -abs(stop_pct)
     닿음 = (paths.low <= 선) & paths.alive
-    첫날 = np.where(닿음.any(axis=1), 닿음.argmax(axis=1), np.iinfo(np.int32).max)
+    손절날 = np.where(닿음.any(axis=1), 닿음.argmax(axis=1), 아주큼)
     마지막 = _last_alive(paths.alive, hold_days)
-    나간날 = np.where(첫날 <= 마지막, 첫날, 마지막)
+    나간날 = np.where(손절날 <= 마지막, 손절날, 마지막)
+    나간값 = np.where(손절날 <= 마지막, 선,
+                    paths.close[np.arange(len(paths)), np.maximum(마지막, 0)])
 
-    쓸수있음 = (마지막 >= 0) & (나간날 >= 0)
+    쓸수있음 = 마지막 >= 0
     if 쓸수있음.sum() < MIN_SAMPLE:
         return {}
 
-    끝 = min(look_days, paths.high.shape[1])
+    결과: dict = {
+        "표본": int(쓸수있음.sum()),
+        "손절로_나간_비율": float((손절날 <= 마지막)[쓸수있음].mean() * 100.0),
+        "본_기간": min(look_days, paths.high.shape[1]),
+    }
+
+    # ── 판정에 쓰는 값: 나간 뒤 N일 **종가** ──
+    폭 = paths.close.shape[1]
+    for n in after_days:
+        자리 = 나간날 + n
+        볼수있음 = 쓸수있음 & (자리 < 폭)
+        if 볼수있음.sum() >= MIN_SAMPLE:
+            뒤값 = paths.close[np.arange(len(paths)), np.minimum(자리, 폭 - 1)]
+            볼수있음 = 볼수있음 & np.isfinite(뒤값)
+        if 볼수있음.sum() < MIN_SAMPLE:
+            continue
+        차 = 뒤값[볼수있음] - 나간값[볼수있음]
+        결과[f"나간_뒤_{n}일_더_오른_비율"] = float((차 > 0).mean() * 100.0)
+        결과[f"나간_뒤_{n}일_평균"] = float(차.mean())
+        결과[f"나간_뒤_{n}일_중앙값"] = float(np.median(차))
+        결과[f"나간_뒤_{n}일_표본"] = int(볼수있음.sum())
+
+    # ── 참고용: 나간 뒤 최고가 (구조상 부풀려진 값) ──
+    끝 = 결과["본_기간"]
     나중최고 = np.full(len(paths), np.nan)
     for i in np.flatnonzero(쓸수있음):
         뒤 = paths.high[i, 나간날[i] + 1:끝]
         뒤 = 뒤[np.isfinite(뒤)]
         if len(뒤):
             나중최고[i] = 뒤.max()
-
-    나간값 = np.where(첫날 <= 마지막, 선,
-                    paths.close[np.arange(len(paths)), np.maximum(마지막, 0)])
     볼수있음 = 쓸수있음 & np.isfinite(나중최고)
-    if 볼수있음.sum() < MIN_SAMPLE:
-        return {}
+    if 볼수있음.sum() >= MIN_SAMPLE:
+        결과["참고_최고가까지_평균"] = float(
+            (나중최고[볼수있음] - 나간값[볼수있음]).mean())
 
-    더간것 = 나중최고[볼수있음] - 나간값[볼수있음]
-    return {
-        "표본": int(볼수있음.sum()),
-        "손절로_나간_비율": float((첫날 <= 마지막)[볼수있음].mean() * 100.0),
-        "나간_뒤_더_오른_비율": float((더간것 > 0).mean() * 100.0),
-        "나간_뒤_10퍼_넘게_오른_비율": float((더간것 > 10).mean() * 100.0),
-        "나간_뒤_평균_추가상승": float(더간것.mean()),
-        "나간_뒤_중앙값_추가상승": float(np.median(더간것)),
-        "본_기간": 끝,
-    }
+    return 결과
 
 
 # ────────────────── 읽을 수 있게 ──────────────────
@@ -382,16 +417,31 @@ def report(curve: list[HoldRow], grid: pd.DataFrame, missed: dict,
         줄 += _grid_lines(grid)
         줄 += ["", "   " + _grid_lesson(grid, now_stop, now_hold), ""]
 
-    줄 += ["③ 나간 뒤에 얼마나 더 갔나", ""]
+    줄 += ["③ 나간 뒤에 얼마나 더 갔나 (나간 값 대비, 종가 기준)", ""]
     if not missed:
         줄 += ["   자료가 모자라 판정하지 않습니다.", ""]
     else:
-        줄 += [f"   지금 규칙으로 나간 {missed['표본']:,}건을 "
-               f"{missed['본_기간']}일까지 따라가 봤습니다.",
-               f"     나간 뒤 더 오른 것          {missed['나간_뒤_더_오른_비율']:.1f}%",
-               f"     나간 뒤 10% 넘게 오른 것    {missed['나간_뒤_10퍼_넘게_오른_비율']:.1f}%",
-               f"     평균 추가 상승             {missed['나간_뒤_평균_추가상승']:+.2f}%p",
-               "", "   " + _missed_lesson(missed), ""]
+        줄 += [f"   지금 규칙으로 나간 {missed['표본']:,}건 "
+               f"(그중 손절이 {missed['손절로_나간_비율']:.1f}%)"]
+        본것 = False
+        for n in _after_horizons(missed):
+            열 = f"나간_뒤_{n}일_더_오른_비율"
+            본것 = True
+            줄.append(
+                f"     {n:3d}일 뒤   더 오른 것 {missed[열]:5.1f}%   "
+                f"평균 {missed[f'나간_뒤_{n}일_평균']:+6.2f}%p   "
+                f"중앙값 {missed[f'나간_뒤_{n}일_중앙값']:+6.2f}%p   "
+                f"({missed[f'나간_뒤_{n}일_표본']:,}건)"
+            )
+        if not 본것:
+            줄 += ["   나간 뒤를 볼 자료가 모자랍니다.", ""]
+        else:
+            if "참고_최고가까지_평균" in missed:
+                줄 += ["",
+                       f"   (참고 — 나간 뒤 최고가까지는 평균 "
+                       f"{missed['참고_최고가까지_평균']:+.2f}%p 입니다. 다만 긴 구간의",
+                       "    꼭짓점은 어느 시점보다도 거의 항상 높으므로 판정에 쓰지 않습니다.)"]
+            줄 += ["", "   " + _missed_lesson(missed), ""]
 
     줄 += ["", "⚠️ 여기 숫자는 **탐색이지 검증이 아닙니다.**",
            "   같은 자료로 조합을 여러 개 돌려 제일 좋은 걸 골랐으니,",
@@ -471,12 +521,20 @@ def _grid_lesson(grid: pd.DataFrame, now_stop: float, now_hold: int) -> str:
 
 
 def _missed_lesson(missed: dict) -> str:
-    큰것 = missed["나간_뒤_10퍼_넘게_오른_비율"]
-    if 큰것 >= 30.0:
-        return (f"나간 뒤 10% 넘게 오른 것이 {큰것:.0f}% 입니다. "
-                "**나가는 손이 돈을 버리고 있습니다.** 더 들고 가는 쪽을 봐야 합니다.")
-    if 큰것 <= 15.0:
-        return (f"나간 뒤 크게 오른 것은 {큰것:.0f}% 뿐입니다. "
+    """판정은 **종가** 기준으로만 합니다. 최고가는 참고입니다."""
+    쓸것 = _after_horizons(missed)
+    if not 쓸것:
+        return "나간 뒤를 볼 자료가 모자라 판정하지 않습니다."
+    n = max(쓸것)
+    평균 = missed[f"나간_뒤_{n}일_평균"]
+    비율 = missed[f"나간_뒤_{n}일_더_오른_비율"]
+
+    if 평균 > 2.0 and 비율 >= 55.0:
+        return (f"나간 뒤 {n}일 종가가 평균 {평균:+.2f}%p 높습니다 "
+                f"(더 오른 것 {비율:.0f}%). **나가는 손이 돈을 버리고 있습니다.** "
+                "더 들고 가는 쪽을 봐야 합니다.")
+    if 평균 < -2.0:
+        return (f"나간 뒤 {n}일 종가가 평균 {평균:+.2f}%p 입니다. "
                 "나간 판단은 대체로 옳았습니다. 문제는 다른 데 있습니다.")
-    return (f"나간 뒤 10% 넘게 오른 것이 {큰것:.0f}% 입니다. "
-            "한쪽으로 말하기 어렵습니다 — 더 봐야 합니다.")
+    return (f"나간 뒤 {n}일 종가가 평균 {평균:+.2f}%p (더 오른 것 {비율:.0f}%). "
+            "한쪽으로 말하기 어렵습니다 — 나가는 시점이 문제의 중심은 아닙니다.")

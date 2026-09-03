@@ -170,35 +170,61 @@ def test_전부_지면_규칙_문제가_아니라고_말한다():
 
 # ────────────────── ③ 나간 뒤에 더 갔나 ──────────────────
 
-def test_나간_뒤에_크게_오르면_그렇게_말한다():
+def _after(closes, lows, highs):
     frames, signals = {}, {}
     for k in range(60):
         code = f"{k:06d}"
-        # 첫날 -5% 로 잘리고 그 뒤로 크게 오릅니다 (우리기술 모양)
-        frames[code] = _daily([100, 95, 120, 150, 180],
-                              lows=[100, 94, 115, 145, 175],
-                              highs=[100, 100, 125, 155, 185],
-                              opens=[100, 100, 100, 100, 100])
+        frames[code] = _daily(closes, lows=lows, highs=highs,
+                              opens=[100.0] * len(closes))
         signals[code] = pd.DatetimeIndex([frames[code].index[0]])
-    paths = ex.build_paths(frames, signals, max_days=4)
-    결과 = ex.missed_upside(paths, stop_pct=3.0, hold_days=2, look_days=4)
-    assert 결과["나간_뒤_10퍼_넘게_오른_비율"] > 90.0
+    return ex.build_paths(frames, signals, max_days=len(closes) - 1)
+
+
+def test_나간_뒤에_크게_오르면_그렇게_말한다():
+    """우리기술 모양 — 첫날 잘리고 그 뒤로 크게 오릅니다."""
+    paths = _after([100, 95, 120, 150, 180, 200],
+                   [100, 94, 115, 145, 175, 195],
+                   [100, 100, 125, 155, 185, 205])
+    결과 = ex.missed_upside(paths, stop_pct=3.0, hold_days=2,
+                          look_days=5, after_days=(3,))
+    assert 결과["나간_뒤_3일_평균"] > 20.0
     assert "나가는 손이 돈을 버리고" in ex._missed_lesson(결과)
 
 
 def test_나간_뒤에_더_빠지면_나간_게_옳았다고_말한다():
-    frames, signals = {}, {}
-    for k in range(60):
-        code = f"{k:06d}"
-        frames[code] = _daily([100, 95, 90, 85, 80],
-                              lows=[100, 94, 89, 84, 79],
-                              highs=[100, 100, 95, 90, 85],
-                              opens=[100, 100, 100, 100, 100])
-        signals[code] = pd.DatetimeIndex([frames[code].index[0]])
-    paths = ex.build_paths(frames, signals, max_days=4)
-    결과 = ex.missed_upside(paths, stop_pct=3.0, hold_days=2, look_days=4)
-    assert 결과["나간_뒤_10퍼_넘게_오른_비율"] < 15.0
+    paths = _after([100, 95, 90, 85, 80, 75],
+                   [100, 94, 89, 84, 79, 74],
+                   [100, 100, 95, 90, 85, 80])
+    결과 = ex.missed_upside(paths, stop_pct=3.0, hold_days=2,
+                          look_days=5, after_days=(3,))
+    assert 결과["나간_뒤_3일_평균"] < -2.0
     assert "나간 판단은 대체로 옳았습니다" in ex._missed_lesson(결과)
+
+
+def test_판정은_최고가가_아니라_종가로_한다():
+    """긴 구간의 꼭짓점은 어느 시점보다도 거의 항상 높습니다.
+
+    최고가로 재면 아무 날 아무 종목을 팔아도 90% 넘게 "더 올랐다" 가
+    나옵니다. 그 숫자로 판정하면 안 됩니다.
+    """
+    # 나간 뒤 잠깐 튀었다가 도로 내려앉는 모양
+    paths = _after([100, 95, 95, 95, 95, 95],
+                   [100, 94, 94, 94, 94, 94],
+                   [100, 100, 150, 150, 100, 100])   # 최고가만 크게 튐
+    결과 = ex.missed_upside(paths, stop_pct=3.0, hold_days=2,
+                          look_days=5, after_days=(3,))
+    assert 결과["참고_최고가까지_평균"] > 40.0        # 최고가로 보면 굉장해 보임
+    assert 결과["나간_뒤_3일_평균"] < 5.0            # 종가로 보면 별것 없음
+    assert "나가는 손이 돈을 버리고" not in ex._missed_lesson(결과)
+
+
+def test_보고서가_최고가는_판정에_안_쓴다고_밝힌다():
+    paths = _after([100, 95, 120, 150, 180, 200],
+                   [100, 94, 115, 145, 175, 195],
+                   [100, 100, 125, 155, 185, 205])
+    결과 = ex.missed_upside(paths, 3.0, 2, look_days=5, after_days=(3,))
+    글 = ex.report([], pd.DataFrame(), 결과)
+    assert "판정에 쓰지 않습니다" in 글
 
 
 def test_표본이_모자라면_빈_결과다():
