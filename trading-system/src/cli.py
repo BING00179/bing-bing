@@ -752,11 +752,11 @@ def _add_cost_args(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--commission", type=float,
-        help="편도 수수료율(퍼센트)을 바꿔서 돌립니다. 기본 0.015",
+        help="편도 수수료율(퍼센트)을 바꿔서 돌립니다. 기본 0.014 (실제 명세 기준)",
     )
     parser.add_argument(
         "--sell-tax", type=float, dest="sell_tax",
-        help="증권거래세(퍼센트)를 바꿔서 돌립니다. 기본 0.18",
+        help="매도 시 세금(퍼센트)을 바꿔서 돌립니다. 기본 0.20 (실제 명세 기준)",
     )
 
 
