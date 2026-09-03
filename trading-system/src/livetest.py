@@ -329,6 +329,14 @@ def add_value_picks(frame: pd.DataFrame, ranked: pd.DataFrame,
         per = row.get("PER", float("nan"))
         경고 = str(row.get("일회성경고", "") or "")
         근거 = f"PBR {pbr:.2f} · PER {per:.1f}" if pd.notna(pbr) else "저평가 조건 통과"
+        # 두 축 점수가 있으면 같이 남깁니다. 나중에 "점수가 높았던 것이
+        # 실제로 나았나" 를 물으려면 그때 점수가 적혀 있어야 합니다.
+        기업, 가격 = row.get("기업점수"), row.get("가격점수")
+        if pd.notna(기업) and pd.notna(가격):
+            근거 += f" · 기업 {float(기업):.0f} / 가격 {float(가격):.0f}"
+            판정 = str(row.get("판정", "") or "")
+            if 판정:
+                근거 += f" ({판정})"
         if 경고:
             근거 += f" ⚠️ {경고}"
 

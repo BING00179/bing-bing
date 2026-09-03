@@ -33,7 +33,9 @@ from . import livetest as lt_module
 from . import monthly as mo_module
 from . import quality as qual_module
 from . import value_kr as val_module
+from . import quality as qa_module
 from . import diagnose as dg_module
+from . import slices as sl_module
 from . import exits as ex_module
 from . import market_filter as mf_module
 from . import notify_policy
@@ -1432,6 +1434,97 @@ def cmd_diagnose_kr(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_slice_kr(args: argparse.Namespace) -> int:
+    """전체 평균이 0 이어도 안에 좋은 조각이 있을 수 있습니다.
+
+    다만 조각을 많이 보면 아무 뜻 없는 자료에서도 하나는 좋아 보입니다.
+    그래서 본 조각 수만큼 통과선을 올려 잡습니다.
+    """
+    cfg = Config.load(args.config)
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+
+    print("=" * 78)
+    print(f"대상 {len(codes):,}종목 · 최근 {args.years}년 · 조건 {args.setup} · "
+          f"{args.horizon}일 초과수익")
+    print("=" * 78)
+    print(f"\n미리 정해 둔 것 — 조각 기준 {len(sl_module.CUTS)}가지, "
+          f"조각당 최소 {sl_module.MIN_SAMPLE}건, 전체 유의수준 "
+          f"{sl_module.ALPHA:g}")
+    print("통과선은 실제로 본 조각 수를 세서 정합니다 (본페로니).\n")
+
+    frames = _frames_for(
+        codes, args.years, cfg.scanner_b.sma_slow + 30,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
+    if len(frames) < 30:
+        print("시세를 받은 종목이 너무 적습니다.")
+        return 1
+
+    print("같은 날 아무 종목이나 샀을 때의 평균을 구합니다 (비교 기준)...")
+    market = dg_module.market_forward(frames, horizons=(args.horizon,))
+
+    print("신호를 모으는 중...")
+    setup = bo_module.Setup()
+    parts = []
+    for code, daily in frames.items():
+        if args.setup == "breakout":
+            dates = bo_module.signal_dates(daily, setup)
+        else:
+            rows = bt_module.signal_rows(code, daily, cfg.scanner_b, None)
+            dates = rows.index if not rows.empty else pd.DatetimeIndex([])
+        if not len(dates):
+            continue
+        조각 = dg_module.signal_forward(code, daily, dates,
+                                      horizons=(args.horizon,))
+        if 조각.empty:
+            continue
+        조각 = _attach_traits(조각, daily, setup)
+        parts.append(조각)
+
+    if not parts:
+        print("신호가 하나도 없습니다.")
+        return 0
+    signals = pd.concat(parts, ignore_index=True)
+    print(f"신호 {len(signals):,}건\n")
+
+    rows, bar = sl_module.all_cuts(signals, market, args.horizon)
+    글 = sl_module.report(rows, bar, args.horizon, total=len(signals))
+    print(글)
+
+    out = _output_dir(cfg)
+    if rows:
+        pd.DataFrame([r.__dict__ for r in rows]).to_csv(
+            out / "kr_slices.csv", index=False, encoding="utf-8-sig")
+    저장 = _write_text(args.out or (out / "kr_slices.txt"), 글)
+    print(f"\n보고서 저장: {저장}  (메모장으로 열어도 안 깨집니다)")
+    return 0
+
+
+def _attach_traits(frame: pd.DataFrame, daily: pd.DataFrame,
+                   setup) -> pd.DataFrame:
+    """조각낼 재료를 신호마다 붙입니다 — 전부 신호일까지의 정보로만.
+
+    거래대금·기저 변동폭·거래량 배수·직전 상승률은 breakout 조건을
+    만들 때 쓰는 것과 같은 계산입니다. 신호가 난 그날 종가까지만
+    봅니다. 그 뒤 값이 섞이면 미래를 보는 것이 됩니다.
+    """
+    if frame.empty:
+        return frame
+    바탕 = bo_module.signals(daily, setup)
+    자리 = pd.DatetimeIndex(frame["signal_date"])
+    붙일 = 바탕.reindex(자리)
+    for 우리이름, 저쪽이름 in (("turnover", "거래대금"),
+                          ("base_range_pct", "박스폭%"),
+                          ("volume_mult", "거래량배수"),
+                          ("runup_pct", "상승률%")):
+        frame[우리이름] = (붙일[저쪽이름].to_numpy()
+                        if 저쪽이름 in 붙일 else np.nan)
+    frame["signal_close"] = daily["close"].reindex(자리).to_numpy()
+    return frame
+
+
 def cmd_exits_kr(args: argparse.Namespace) -> int:
     """어떻게 하면 될까 — 신호는 그대로 두고 나가는 규칙만 바꿔 봅니다.
 
@@ -2067,6 +2160,23 @@ def cmd_value_record(args: argparse.Namespace) -> int:
           f"/cap{rule.min_marcap / 1e8:g}억/turnover{rule.min_turnover / 1e8:g}억"
           f"/profit{'Y' if rule.require_profit else 'N'}")
 
+    # 두 축(기업이 좋은가 · 값이 괜찮은가)으로 다시 봅니다.
+    #
+    # PBR·PER 만으로 고르면 '싸지만 망해가는 회사' 가 그대로 들어옵니다.
+    # 사장님 원칙은 "싼 주식이 아니라 가치가 유지되는 기업을 합리적인
+    # 값에" 입니다. 그래서 기록에도 두 점수를 같이 남깁니다 — 나중에
+    # "점수가 높았던 것이 실제로 나았나" 를 물을 수 있어야 합니다.
+    if not 통과.empty:
+        평가 = qa_module.evaluate(통과)
+        if not 평가.empty:
+            통과 = 평가
+            if not args.all_verdicts:
+                후보 = 평가[평가["판정"] == "후보"]
+                if len(후보) >= 1:
+                    통과 = 후보
+            조건 += (f"/기업{qa_module.GOOD_BUSINESS:g}"
+                     f"/가격{qa_module.GOOD_PRICE:g}")
+
     기록 = lt_module.load(_resolve(args.file))
     기록, 새것 = lt_module.add_value_picks(기록, 통과, 조건, top=args.top)
     저장 = lt_module.save(기록, _resolve(args.file))
@@ -2076,8 +2186,11 @@ def cmd_value_record(args: argparse.Namespace) -> int:
     print(f"   조건 {조건}")
     for _, row in 통과.head(min(10, args.top)).iterrows():
         경고 = " ⚠️" if str(row.get("일회성경고", "") or "") else ""
+        점수 = ""
+        if pd.notna(row.get("기업점수")) and pd.notna(row.get("가격점수")):
+            점수 = f"  기업 {row['기업점수']:.0f} / 가격 {row['가격점수']:.0f}"
         print(f"   {str(row.get('name',''))[:14]:<14}({row['code']})"
-              f"  PBR {row['PBR']:.2f}  PER {row['PER']:.1f}{경고}")
+              f"  PBR {row['PBR']:.2f}  PER {row['PER']:.1f}{점수}{경고}")
     print("\n※ 매수하지 않았습니다. 기록만 했습니다.")
     return 0
 
@@ -2644,6 +2757,8 @@ def build_parser() -> argparse.ArgumentParser:
     vr.add_argument("--max-debt", type=float, default=200.0)
     vr.add_argument("--min-marcap", type=float, default=300.0)
     vr.add_argument("--min-turnover", type=float, default=5.0)
+    vr.add_argument("--all-verdicts", action="store_true",
+                    help="두 축 판정이 '후보' 가 아닌 것도 기록합니다")
     vr.add_argument("--top", type=int, default=10,
                     help="상위 몇 종목을 기록할지. 많으면 버려지는 것만 늘어납니다")
     vr.add_argument("--file", default="data/livetest.csv", help="기록 파일")
@@ -2868,6 +2983,20 @@ def build_parser() -> argparse.ArgumentParser:
     exk.add_argument("--out", help="보고서를 저장할 경로 "
                                    "(기본 output/kr_exits.txt, UTF-8)")
     exk.set_defaults(func=cmd_exits_kr)
+
+    slk = sub.add_parser(
+        "slice-kr",
+        help="[국내] 어디가 다른가 — 신호를 조각내서 좋은 조각을 찾기",
+    )
+    slk.add_argument("--universe", help="종목코드 목록 파일")
+    slk.add_argument("--years", type=float, default=3.0, help="조회 기간 (년)")
+    slk.add_argument("--setup", default="breakout",
+                     choices=["trendjoin", "breakout"], help="어떤 신호를 볼지")
+    slk.add_argument("--horizon", type=int, default=20, help="며칠 뒤로 잴지")
+    slk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    slk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    slk.add_argument("--out", help="보고서를 저장할 경로 (기본 output/kr_slices.txt)")
+    slk.set_defaults(func=cmd_slice_kr)
 
     dd = sub.add_parser(
         "dart-dashboard",
