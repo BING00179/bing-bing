@@ -127,7 +127,7 @@ def return_distribution(trades: pd.DataFrame) -> pd.DataFrame:
     return counted
 
 
-def cost_weight(trades: pd.DataFrame, cost_pct_round_trip: float = 0.51) -> dict:
+def cost_weight(trades: pd.DataFrame, cost_pct_round_trip: float = 0.53) -> dict:
     """거래비용이 결과에서 차지하는 무게.
 
     매매 건수 × 왕복 비용률로 어림합니다. 비용을 빼기 전 수익률이

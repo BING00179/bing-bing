@@ -2839,8 +2839,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="익절 목표 후보 퍼센트 (쉼표). 0 = 목표 없음")
     exk.add_argument("--now-stop", type=float, default=3.0, help="지금 쓰는 손절폭")
     exk.add_argument("--now-hold", type=int, default=20, help="지금 쓰는 최대 보유일")
-    exk.add_argument("--cost", type=float, default=0.51,
-                     help="왕복 비용 퍼센트 (슬리피지+수수료+거래세)")
+    exk.add_argument("--cost", type=float, default=ex_module.COST_ROUND_TRIP_PCT,
+                     help="왕복 비용 퍼센트. 기본값은 수수료·세금 0.2408%% "
+                          "(2026-09-03 실제 거래명세) + 슬리피지 가정 0.30%%")
     exk.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
     exk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
     exk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
