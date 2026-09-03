@@ -526,3 +526,37 @@ def test_커지면_백업_먼저_받으라는_순서를_알려준다(tmp_path, m
     assert "ledger-export" in 말
     assert "승인" in 말
     assert "승인 없이 지우는 길은 코드에 두지 않았습니다" in 말
+
+
+# ────────── 두 축 점수를 기록에 남기는가 ──────────
+#
+# 사장님 원칙 — "싼 주식이 아니라 가치가 유지되는 기업을 합리적인 값에".
+# PBR·PER 만 적어 두면 나중에 "기업 점수가 높았던 것이 실제로 나았나"
+# 를 물을 수가 없습니다. 그때 점수가 적혀 있어야 물을 수 있습니다.
+
+def _value_row(**kw):
+    바탕 = {"code": "000001", "name": "가나", "close": 10000.0,
+          "PBR": 0.6, "PER": 7.0, "turnover": 1e9, "저평가점수": 80.0}
+    바탕.update(kw)
+    return pd.DataFrame([바탕])
+
+
+def test_두_축_점수를_근거에_같이_적는다():
+    frame, 수 = lt.add_value_picks(
+        pd.DataFrame(columns=list(lt.COLUMNS)),
+        _value_row(기업점수=87.0, 가격점수=90.0, 판정="후보"),
+        rule="pbr1/per10", top=10)
+    assert 수 == 1
+    근거 = frame.iloc[0]["basis"]
+    assert "기업 87" in 근거 and "가격 90" in 근거
+    assert "(후보)" in 근거
+
+
+def test_점수가_없으면_지어내지_않는다():
+    """없는 것은 없다고 씁니다. 0 으로 채우면 안 됩니다."""
+    frame, _ = lt.add_value_picks(
+        pd.DataFrame(columns=list(lt.COLUMNS)),
+        _value_row(), rule="pbr1/per10", top=10)
+    근거 = frame.iloc[0]["basis"]
+    assert "기업" not in 근거
+    assert "PBR 0.60" in 근거
