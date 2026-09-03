@@ -653,6 +653,19 @@ def _pick_top_signals(frames, cfg, market_ok, args) -> dict[str, set]:
     return {code: set(part.index) for code, part in kept.groupby("ticker")}
 
 
+def _write_text(path, text: str) -> Path:
+    """글을 UTF-8 로 씁니다 — 메모장에서 깨지지 않게.
+
+    파워쉘의 `> 파일` 은 파이썬이 낸 UTF-8 을 다른 글자표로 받아 적어서
+    한글이 깨집니다. 프로그램이 직접 쓰면 그 일이 없습니다. 맨 앞에
+    BOM 을 붙이는 utf-8-sig 라야 메모장이 확실히 알아봅니다.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8-sig")
+    return path
+
+
 def _frames_for(
     codes: list[str],
     years: float,
@@ -1488,13 +1501,20 @@ def cmd_exits_kr(args: argparse.Namespace) -> int:
                                targets=targets, cost_pct=args.cost)
     missed = ex_module.missed_upside(paths, args.now_stop, args.now_hold)
 
-    print(ex_module.report(curve, grid, missed,
-                           now_stop=args.now_stop, now_hold=args.now_hold))
+    글 = ex_module.report(curve, grid, missed,
+                         now_stop=args.now_stop, now_hold=args.now_hold)
+    print(글)
 
     out = _output_dir(cfg)
     if not grid.empty:
         grid.to_csv(out / "kr_exit_grid.csv", index=False, encoding="utf-8-sig")
         print(f"\n조합별 원자료 저장: {out}/kr_exit_grid.csv")
+
+    # 결과를 파일로도 남깁니다. 파워쉘에서 `> 파일` 로 받으면 글자표가
+    # 어긋나 한글이 깨집니다. 프로그램이 직접 UTF-8 로 쓰면 그 일이
+    # 없습니다. 결과가 길어 화면에서 잘리기도 하고요.
+    저장 = _write_text(args.out or (out / "kr_exits.txt"), 글)
+    print(f"보고서 저장: {저장}  (메모장으로 열어도 안 깨집니다)")
     return 0
 
 
@@ -2845,6 +2865,8 @@ def build_parser() -> argparse.ArgumentParser:
     exk.add_argument("--market-filter", action="store_true", help="시장 필터 적용")
     exk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
     exk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    exk.add_argument("--out", help="보고서를 저장할 경로 "
+                                   "(기본 output/kr_exits.txt, UTF-8)")
     exk.set_defaults(func=cmd_exits_kr)
 
     dd = sub.add_parser(

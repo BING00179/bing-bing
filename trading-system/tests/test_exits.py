@@ -392,3 +392,23 @@ def test_확인된_비용과_가정한_비용을_갈라_둔다():
 def test_보고서가_어디까지_확인된_비용인지_밝힌다():
     글 = ex.report([], pd.DataFrame(), {})
     assert "확인됨" in 글 and "가정" in 글
+
+
+# ────────── 파일로 남길 때 글자가 깨지지 않는가 ──────────
+#
+# 파워쉘의 `> 파일` 로 받았더니 메모장에서 한글이 전부 깨졌습니다.
+# 프로그램이 직접 UTF-8 로 쓰면 그 일이 없습니다.
+
+def test_보고서를_utf8로_저장하면_그대로_읽힌다(tmp_path):
+    from src.cli import _write_text
+    글 = ex.report([], pd.DataFrame(), {})
+    경로 = _write_text(tmp_path / "결과.txt", 글)
+    assert 경로.read_text(encoding="utf-8-sig") == 글
+    # 메모장이 알아보도록 맨 앞에 BOM 이 붙어야 합니다
+    assert 경로.read_bytes().startswith(b"\xef\xbb\xbf")
+
+
+def test_저장할_폴더가_없으면_만든다(tmp_path):
+    from src.cli import _write_text
+    경로 = _write_text(tmp_path / "없던폴더" / "결과.txt", "한글 테스트")
+    assert 경로.read_text(encoding="utf-8-sig") == "한글 테스트"
