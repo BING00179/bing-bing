@@ -228,3 +228,68 @@ def test_조건_적는_법을_잘못_쓰면_알려준다():
             pass
         else:
             raise AssertionError(f"{틀린것} 을 걸러내지 못했습니다")
+
+
+# ────────── 우연인지 아닌지 ──────────
+
+def _dated(n=1200, seed=0, horizon=20, half_only=False, one_stock=False):
+    """앞뒤 절반, 종목 쏠림을 만들어 볼 수 있는 자료."""
+    rng = np.random.default_rng(seed)
+    날 = pd.bdate_range("2023-01-02", periods=n)
+    codes = [f"{i % 40:06d}" for i in range(n)]
+    frame = pd.DataFrame({
+        "entry_date": 날, "code": codes,
+        "volume_mult": rng.uniform(1, 20, n),
+    })
+    값 = rng.normal(0, 5, n)
+    if half_only:                       # 뒤 절반에서만 좋음
+        값 = 값 + 6.0 * (np.arange(n) >= n // 2)
+    else:
+        값 = 값 + 3.0
+    if one_stock:                       # 한 종목이 다 만듦
+        값 = rng.normal(0, 5, n) + 200.0 * (np.array(codes) == "000007")
+    frame[f"fwd{horizon}"] = 값
+    return frame
+
+
+def test_앞뒤_둘_다_되면_그렇게_말한다():
+    s = _dated(1200, seed=5)
+    굳음 = sl.stability(s, _market(s), 20, ())
+    assert 굳음.both_halves
+    assert "둘 다 됩니다" in sl.stability_report(굳음)
+
+
+def test_한쪽에서만_되면_우연일_수_있다고_말한다():
+    s = _dated(1200, seed=5, half_only=True)
+    굳음 = sl.stability(s, _market(s), 20, ())
+    assert not 굳음.both_halves
+    assert "한쪽에서만 됩니다" in sl.stability_report(굳음)
+
+
+def test_한_종목이_다_만들면_그것을_짚어준다():
+    """우리기술 한 종목이 성적을 다 만들던 것과 같은 일입니다."""
+    s = _dated(1200, seed=5, one_stock=True)
+    굳음 = sl.stability(s, _market(s), 20, ())
+    assert 굳음.top_code == "000007"
+    assert 굳음.top_code_share >= 20.0
+    assert "한 종목이" in sl.stability_report(굳음)
+
+
+def test_중앙값이_마이너스면_숨기지_않는다():
+    """승률이 절반 아래인데 평균만 플러스인 경우입니다."""
+    rng = np.random.default_rng(1)
+    n = 1200
+    값 = np.where(rng.random(n) < 0.15, 40.0, -3.0)      # 15%만 크게 오름
+    s = pd.DataFrame({"entry_date": pd.bdate_range("2023-01-02", periods=n),
+                      "code": [f"{i%40:06d}" for i in range(n)],
+                      "fwd20": 값})
+    굳음 = sl.stability(s, _market(s), 20, ())
+    assert 굳음.median_excess < 0
+    글 = sl.stability_report(굳음)
+    assert "중앙값은 마이너스입니다" in 글
+
+
+def test_표본이_모자라면_판정하지_않는다():
+    s = _dated(150)
+    assert sl.stability(s, _market(s), 20, ()) is None
+    assert "표본이 모자랍니다" in sl.stability_report(None)

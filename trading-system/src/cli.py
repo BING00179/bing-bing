@@ -1501,6 +1501,12 @@ def cmd_slice_kr(args: argparse.Namespace) -> int:
                                         base=전체.excess if 전체 else None)
                + "\n\n   ⚠️ 겹칠 조건을 자료를 보고 골랐다면 이건 더 깊은 탐색입니다."
                  "\n      앞으로의 자료로 반드시 다시 확인해야 합니다.")
+        굳은가 = sl_module.stability(signals, market, args.horizon, 규칙)
+        글 += ("\n\n" + "─" * 60
+               + "\n🧷 우연인지 아닌지 — 같은 자료 안에서 할 수 있는 확인\n\n"
+               + sl_module.stability_report(굳은가)
+               + "\n\n   이 셋을 통과해도 여전히 탐색입니다. 다만 통과 못 하면"
+                 "\n   더 볼 것도 없습니다.")
     print(글)
 
     out = _output_dir(cfg)

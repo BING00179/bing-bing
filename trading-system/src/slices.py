@@ -373,3 +373,131 @@ def combo_report(result: ComboResult | None, horizon: int,
                "      초과수익은 비용에 먹힐 수 있습니다.** 실제로 사보기 전에는",
                "      확인할 수 없습니다."]
     return "\n".join(줄)
+
+
+# ─────────────── 우연인지 아닌지 ───────────────
+#
+# 조건을 자료에 맞춰 고르면 t 는 얼마든지 커집니다. 그래서 같은 자료
+# 안에서라도 최소한 이 셋은 봐야 합니다.
+#
+#   ① 기간을 반으로 갈라 앞뒤 둘 다에서 되는가
+#      우연이면 한쪽에서만 됩니다. 둘 다 되면 좀 더 믿을 만합니다.
+#   ② 중앙값도 플러스인가
+#      승률이 절반 아래인데 평균만 플러스면, 크게 오른 몇 개가 끌어올린
+#      것입니다. 그런 건 다음 자료에서 그대로 무너집니다.
+#   ③ 한두 종목이 다 만든 것은 아닌가
+#      우리기술 한 종목이 성적을 다 만들던 것과 같은 일입니다.
+#
+# 이걸 통과해도 여전히 탐색입니다. 다만 통과 못 하면 볼 것도 없습니다.
+
+@dataclass
+class Stability:
+    first_n: int
+    first_excess: float
+    first_t: float
+    second_n: int
+    second_excess: float
+    second_t: float
+    median_excess: float
+    codes: int
+    top_code: str
+    top_code_share: float      # 제일 많이 기여한 종목이 차지하는 몫 (%)
+
+    @property
+    def both_halves(self) -> bool:
+        """앞뒤 둘 다 플러스이고 둘 다 어느 정도 유의한가."""
+        return (self.first_excess > 0 and self.second_excess > 0
+                and min(self.first_t, self.second_t) >= 1.96)
+
+
+def _excess_and_t(part: pd.DataFrame, 값열: str, 시장열: str):
+    차 = part[값열] - part[시장열]
+    표준편차 = float(차.std(ddof=1)) if len(차) > 1 else 0.0
+    t = float(차.mean() / (표준편차 / np.sqrt(len(차)))) if 표준편차 > 0 else 0.0
+    return float(차.mean()), t, 차
+
+
+def stability(signals: pd.DataFrame, market: pd.DataFrame, horizon: int,
+              rules: tuple) -> Stability | None:
+    """조건을 건 뒤, 그게 우연인지 아닌지를 세 가지로 봅니다."""
+    값열, 시장열 = f"fwd{horizon}", f"fwd{horizon}_mkt"
+    if signals.empty or market is None or market.empty or 값열 not in market:
+        return None
+    붙임 = signals.merge(market, left_on="entry_date", right_index=True,
+                        how="left", suffixes=("", "_mkt"))
+    if 시장열 not in 붙임:
+        return None
+    쓸것 = 붙임.dropna(subset=[값열, 시장열])
+
+    남김 = pd.Series(True, index=쓸것.index)
+    for 열, 하한, 상한 in rules:
+        if 열 not in 쓸것:
+            return None
+        값 = pd.to_numeric(쓸것[열], errors="coerce")
+        if 하한 is not None:
+            남김 &= 값 >= 하한
+        if 상한 is not None:
+            남김 &= 값 <= 상한
+        남김 &= 값.notna()
+    남은것 = 쓸것[남김].sort_values("entry_date")
+    if len(남은것) < MIN_SAMPLE * 2:
+        return None
+
+    가른날 = 남은것["entry_date"].median()
+    앞 = 남은것[남은것["entry_date"] <= 가른날]
+    뒤 = 남은것[남은것["entry_date"] > 가른날]
+    if len(앞) < MIN_SAMPLE or len(뒤) < MIN_SAMPLE:
+        return None
+
+    앞평균, 앞t, _ = _excess_and_t(앞, 값열, 시장열)
+    뒤평균, 뒤t, _ = _excess_and_t(뒤, 값열, 시장열)
+    _전체평균, _전체t, 전체차 = _excess_and_t(남은것, 값열, 시장열)
+
+    # 종목별 기여 — 한 종목이 다 만든 것은 아닌가
+    기여 = 전체차.groupby(남은것["code"].to_numpy()).sum()
+    합 = float(기여.sum())
+    if 합 > 0:
+        제일 = 기여.idxmax()
+        몫 = float(기여.max() / 합 * 100.0)
+    else:
+        제일, 몫 = "", 0.0
+
+    return Stability(
+        first_n=len(앞), first_excess=앞평균, first_t=앞t,
+        second_n=len(뒤), second_excess=뒤평균, second_t=뒤t,
+        median_excess=float(전체차.median()),
+        codes=int(남은것["code"].nunique()),
+        top_code=str(제일), top_code_share=몫,
+    )
+
+
+def stability_report(s: Stability | None) -> str:
+    if s is None:
+        return ("   앞뒤로 가르기에 표본이 모자랍니다 "
+                f"(각 {MIN_SAMPLE}건 이상 필요).")
+    줄 = ["   ① 기간을 반으로 갈라서",
+          f"      앞 절반  {s.first_n:5,d}건   초과 {s.first_excess:+.2f}%   "
+          f"t {s.first_t:5.2f}",
+          f"      뒤 절반  {s.second_n:5,d}건   초과 {s.second_excess:+.2f}%   "
+          f"t {s.second_t:5.2f}"]
+    줄.append("      → " + ("**둘 다 됩니다.** 우연이면 한쪽에서만 됩니다."
+                          if s.both_halves else
+                          "**한쪽에서만 됩니다.** 우연일 가능성이 큽니다."))
+
+    줄 += ["", "   ② 중앙값",
+           f"      중앙값 초과수익 {s.median_excess:+.2f}%"]
+    줄.append("      → " + (
+        "중앙값도 플러스입니다. 몇 개가 끌어올린 게 아닙니다."
+        if s.median_excess > 0 else
+        "**중앙값은 마이너스입니다.** 평균이 플러스인 것은 크게 오른 몇 개"
+        " 덕분이고,\n         절반 넘는 거래는 시장보다 못했다는 뜻입니다."))
+
+    줄 += ["", "   ③ 한두 종목이 다 만든 것은 아닌가",
+           f"      종목 {s.codes:,}개 · 제일 큰 기여 {s.top_code} "
+           f"{s.top_code_share:.1f}%"]
+    줄.append("      → " + (
+        f"**{s.top_code} 한 종목이 {s.top_code_share:.0f}% 를 만들었습니다.** "
+        "그 종목을 빼면 남는 게 없습니다."
+        if s.top_code_share >= 20.0 else
+        "한 종목에 쏠려 있지 않습니다."))
+    return "\n".join(줄)
