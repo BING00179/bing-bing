@@ -103,5 +103,26 @@
   },
   "signals": [],
   "count": 0
+ },
+ {
+  "when": "2026-09-07 10:07 KST",
+  "date": "2026-09-07",
+  "market": {
+   "index_name": "코스피",
+   "close": 6687.21,
+   "sma_slow": 6062.82,
+   "above_sma_slow": true,
+   "rsi": 48.6,
+   "drawdown_pct": 26.63,
+   "volatility_pct": 42.84,
+   "verdict": "위험",
+   "reasons": [
+    "고점대비 -26.6%",
+    "변동성 42.8%"
+   ],
+   "tradable": false
+  },
+  "signals": [],
+  "count": 0
  }
 ]
