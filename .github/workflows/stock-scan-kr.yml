@@ -70,7 +70,9 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m src.cli scan-kr-a ${{ inputs.force && '--force' || '' }}
+        run: |
+          python -m src.cli scan-kr-a ${{ inputs.force && '--force' || '' }} \
+            || echo "::error::스캐너 A 가 실패했습니다"
 
       - name: 스캐너 B — 전략 조건 + 웹페이지 갱신
         continue-on-error: true   # 조회 실패로 웹페이지 갱신까지 막지 않습니다
@@ -78,7 +80,9 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m src.cli scan-kr-b --web ${{ inputs.force && '--force' || '' }}
+        run: |
+          python -m src.cli scan-kr-b --web ${{ inputs.force && '--force' || '' }} \
+            || echo "::error::스캐너 B 가 실패했습니다 — 웹페이지가 안 갱신됩니다"
 
       # 장 마감 후 내일 볼 종목을 미리 추립니다.
       # 장중 스캐너가 "지금 살까"를 본다면, 이쪽은 "내일 뭘 볼까"입니다.
@@ -121,17 +125,37 @@ jobs:
       # 여기 쌓이는 것만이 '앞으로의 자료' 라, 조건을 고쳐서 맞출 수
       # 없는 유일한 증거입니다. 하루 한 번, 장 마감 뒤에만 돌립니다.
       - name: 실시간 검증 — 오늘 신호 적어 두기
+        # ⚠️ working-directory 가 빠져 있어서 2026-09-01 부터 2026-09-14 까지
+        #    매일 ModuleNotFoundError 로 죽었습니다. continue-on-error 가
+        #    그 실패를 숨겨서 워크플로는 계속 '성공' 으로 찍혔고, 장부에는
+        #    한 건도 안 쌓였습니다. 앞으로의 자료를 모으는 일이 2주 동안
+        #    통째로 멈춰 있었던 것입니다.
+        #
+        #    그래서 두 가지를 고칩니다.
+        #      ① working-directory 를 넣습니다 (진짜 원인)
+        #      ② 실패하면 ::error:: 로 화면에 빨갛게 남깁니다.
+        #         continue-on-error 는 그대로 둡니다 — 기록이 실패했다고
+        #         웹페이지 갱신까지 막을 이유는 없습니다. 다만 조용히
+        #         넘어가지는 않습니다.
         continue-on-error: true
+        working-directory: trading-system
         run: |
           HOUR=$(TZ=Asia/Seoul date +%H)
           MIN=$(TZ=Asia/Seoul date +%M)
           if [ "$HOUR" = "15" ] && [ "$MIN" -ge 20 ] && [ "$MIN" -le 40 ]; then
             if [ ! -f data/universe_kosdaq.txt ]; then
               python -m src.cli kr-universe --market KOSDAQ \
-                --out data/universe_kosdaq.txt
+                --out data/universe_kosdaq.txt \
+                || echo "::error::종목 목록을 못 만들었습니다"
             fi
             python -m src.cli livetest-record \
-              --universe data/universe_kosdaq.txt
+              --universe data/universe_kosdaq.txt \
+              || echo "::error::장부 기록에 실패했습니다 — 앞으로의 자료가 안 쌓입니다"
+            if [ -f data/livetest.csv ]; then
+              echo "장부 줄 수: $(( $(wc -l < data/livetest.csv) - 1 ))건"
+            else
+              echo "::error::장부 파일이 안 만들어졌습니다"
+            fi
           else
             echo "마감 시각이 아니므로 기록하지 않습니다. (현재 $HOUR:$MIN KST)"
           fi
@@ -139,7 +163,10 @@ jobs:
       # 월말 브리핑 — 매달 마지막 거래일에 한 번.
       # 지난 기간에 고른 종목이 실제로 어떻게 됐는지 텔레그램으로 보냅니다.
       - name: 월말 브리핑
+        # 이 단계도 working-directory 가 빠져 있었습니다. 2026-08-31 월말
+        # 브리핑이 조용히 실패했습니다.
         continue-on-error: true
+        working-directory: trading-system
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -151,8 +178,10 @@ jobs:
           # 내일 날짜가 1 이면 오늘이 그 달의 마지막 날입니다.
           if [ "$HOUR" = "15" ] && [ "$MIN" -ge 20 ] && [ "$MIN" -le 40 ] \
              && [ "$TOMORROW" = "01" ]; then
-            python -m src.cli value-record --market KOSDAQ --top 10 || true
-            python -m src.cli monthly-review --days 120 --telegram
+            python -m src.cli value-record --market KOSDAQ --top 10 \
+              || echo "::error::저평가 후보 기록에 실패했습니다"
+            python -m src.cli monthly-review --days 120 --telegram \
+              || echo "::error::월말 브리핑에 실패했습니다"
           else
             echo "월말 마감 시각이 아닙니다. (오늘 $TODAY일, 현재 $HOUR:$MIN KST)"
           fi
