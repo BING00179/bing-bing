@@ -38,7 +38,7 @@ class NotifyState:
         if not path.exists():
             return cls(date=today)
         try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
+            raw = json.loads(path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError:
             return cls(date=today)
         if raw.get("date") != today:

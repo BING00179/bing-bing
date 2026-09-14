@@ -115,3 +115,44 @@ def test_빈_목록이면_판정하지_않는다():
     결과 = uni.check(pd.DataFrame())
     assert 결과.total == 0
     assert "볼 목록이 없습니다" in uni.report(결과)
+
+
+# ────────── 우리가 쓴 파일을 우리가 못 읽으면 안 됩니다 ──────────
+
+def test_우리가_만든_목록을_그대로_다시_읽을_수_있다(tmp_path, capsys):
+    """2026-09-14 실제로 걸린 문제입니다.
+
+    --write-clean 으로 만든 목록을 slice-kr 에 넣었더니
+    "형식이 맞지 않아 건너뛴 줄 1개: ﻿" 가 나왔습니다. 메모장에서
+    안 깨지라고 맨 앞에 붙인 BOM 이 첫 줄에 달라붙은 것이었습니다.
+    """
+    from src.cli import _write_text
+    from src.data_kr import read_universe_kr
+
+    경로 = _write_text(tmp_path / "목록.txt",
+                     "# 기업만 남긴 목록\n005930  삼성전자\n032820  우리기술\n")
+    assert 경로.read_bytes().startswith(b"\xef\xbb\xbf")   # BOM 은 그대로 둡니다
+    assert read_universe_kr(경로) == ["005930", "032820"]
+
+    # 건너뛴 줄이 하나도 없어야 합니다. 코드가 다 읽혔어도 BOM 한 줄이
+    # 조용히 버려지고 있으면, 그건 다음에 첫 줄이 주석이 아닐 때 터집니다.
+    assert "건너뛴 줄" not in capsys.readouterr().out
+
+
+def test_첫_줄이_종목코드여도_BOM_때문에_잃지_않는다(tmp_path):
+    """첫 줄이 주석이면 BOM 이 주석에 묻혀 티가 안 납니다.
+
+    첫 줄이 바로 종목코드면 그 종목을 통째로 잃습니다. 그게 진짜 위험한
+    경우라 여기서 막습니다.
+    """
+    from src.data_kr import read_universe_kr
+    경로 = tmp_path / "목록.txt"
+    경로.write_text("005930  삼성전자\n032820  우리기술\n", encoding="utf-8-sig")
+    assert read_universe_kr(경로) == ["005930", "032820"]
+
+
+def test_BOM_없는_파일도_읽는다(tmp_path):
+    from src.data_kr import read_universe_kr
+    경로 = tmp_path / "목록.txt"
+    경로.write_text("005930  삼성전자\n", encoding="utf-8")
+    assert read_universe_kr(경로) == ["005930"]

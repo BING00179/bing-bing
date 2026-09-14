@@ -127,7 +127,7 @@ def read_universe(path: str | Path) -> list[str]:
     if not path.exists():
         raise DataUnavailable(f"티커 목록 파일이 없습니다: {path}")
     tickers = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.split("#", 1)[0].strip().upper()
         if line:
             tickers.append(line)
