@@ -695,7 +695,8 @@ def _frames_for(
             print(f"  {info.as_line()}")
 
     frames: dict[str, pd.DataFrame] = {}
-    fetched = reused = 0
+    fetched = reused = failed = 0
+    첫오류: str | None = None
 
     for code in codes:
         daily = None
@@ -707,9 +708,14 @@ def _frames_for(
         if daily is None:
             try:
                 daily = fetch_daily_kr(code, years=years, pause=쉬는간격)
-            except DataUnavailable:
-                continue
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                # 한 종목이 실패해도 나머지는 계속 받습니다. 다만 조용히 넘기지는
+                # 않습니다 — 2026-09-01 에 호출 인자가 바뀌어 매 종목 TypeError 가
+                # 났는데 여기서 삼켜져 "시세 확보 0종목" 만 찍혔고, 시험은 2주 동안
+                # 이유 없이 빨간 채였습니다. 몇 종목이 왜 실패했는지 아래에서 찍습니다.
+                failed += 1
+                if 첫오류 is None:
+                    첫오류 = f"{type(exc).__name__}: {exc}"
                 continue
             fetched += 1
             if cache:
@@ -729,6 +735,8 @@ def _frames_for(
 
     print(f"  시세 확보 {len(frames):,}종목 "
           f"(새로 받음 {fetched:,} · 저장분 사용 {reused:,})")
+    if failed:
+        print(f"  ⚠️ 시세 실패 {failed:,}종목 — 첫 오류: {첫오류}")
 
     # 저장된 시세는 --years 와 상관없이 있는 그대로 읽힙니다. 자르지 않으면
     # "최근 3년" 이라고 찍어 놓고 5년치로 계산하게 됩니다. 화면과 실제가
