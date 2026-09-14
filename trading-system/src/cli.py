@@ -34,6 +34,7 @@ from . import monthly as mo_module
 from . import quality as qual_module
 from . import value_kr as val_module
 from . import quality as qa_module
+from . import universe as uni_module
 from . import diagnose as dg_module
 from . import slices as sl_module
 from . import exits as ex_module
@@ -1431,6 +1432,65 @@ def cmd_diagnose_kr(args: argparse.Namespace) -> int:
     out = _output_dir(cfg)
     signals.to_csv(out / "kr_signal_forward.csv", index=False, encoding="utf-8-sig")
     print(f"\n신호별 원자료 저장: {out}/kr_signal_forward.csv")
+    return 0
+
+
+def cmd_universe_check(args: argparse.Namespace) -> int:
+    """종목 목록에 기업이 아닌 것이 섞여 있는지 봅니다.
+
+    ETF·ETN·리츠·스팩은 회사가 아닙니다. 재무제표가 없어서 "매출이 늘고
+    있나" 를 물을 수 없습니다. 그것들이 섞인 채로 잰 숫자는 흔들립니다.
+    """
+    cfg = Config.load(args.config)
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+    print("=" * 78)
+    print(f"목록 파일 {path} · {len(codes):,}종목")
+    print("=" * 78)
+
+    print("\n종목 이름을 맞춰봅니다 (시장 목록 2번만 조회합니다)...")
+    이름표: dict[str, str] = {}
+    for 시장 in ("KOSPI", "KOSDAQ"):
+        try:
+            목록 = list_market(시장)
+        except DataUnavailable as exc:
+            print(f"  {시장} 목록 조회 실패 — {exc}")
+            continue
+        for r in 목록.itertuples():
+            이름표[str(r.code)] = str(r.name)
+        print(f"  {시장} {len(목록):,}종목")
+
+    if not 이름표:
+        print("\n종목 이름을 하나도 못 받았습니다. 판정할 수 없습니다.")
+        return 1
+
+    표 = pd.DataFrame({"code": codes})
+    표["name"] = [이름표.get(c, "") for c in codes]
+    이름없음 = int((표["name"] == "").sum())
+
+    결과 = uni_module.check(표[표["name"] != ""])
+    print()
+    print(uni_module.report(결과, missing_names=이름없음))
+
+    out = _output_dir(cfg)
+    if len(결과.flagged):
+        결과.flagged.to_csv(out / "kr_universe_flagged.csv",
+                          index=False, encoding="utf-8-sig")
+        print(f"\n걸린 종목 전체: {out}/kr_universe_flagged.csv")
+
+    if args.write_clean:
+        남은것 = uni_module.clean_codes(표[표["name"] != ""])
+        줄 = [f"# 기업만 남긴 목록 ({len(남은것):,}종목)",
+              f"# 원본: {path} ({len(codes):,}종목)",
+              f"# 만든 날: {_timestamp_kr()}",
+              "# ⚠️ 종목 이름으로 거른 것입니다. 공식 구분이 아닙니다.",
+              ""]
+        줄 += [f"{c}  {이름표.get(c, '')}" for c in 남은것]
+        저장 = _write_text(_resolve(args.write_clean), "\n".join(줄) + "\n")
+        print(f"기업만 남긴 목록 저장: {저장}")
+        print("   (원래 목록은 그대로 둡니다. 지우지 않습니다.)")
+    else:
+        print("\n걸러낸 목록을 만들려면 --write-clean 경로 를 붙이세요.")
     return 0
 
 
@@ -3029,6 +3089,16 @@ def build_parser() -> argparse.ArgumentParser:
                           "빈칸은 제한 없음")
     slk.add_argument("--out", help="보고서를 저장할 경로 (기본 output/kr_slices.txt)")
     slk.set_defaults(func=cmd_slice_kr)
+
+    uc = sub.add_parser(
+        "universe-check",
+        help="[국내] 종목 목록에 기업이 아닌 것(ETF·ETN·스팩·리츠)이 섞였나",
+    )
+    uc.add_argument("--universe", help="검사할 종목코드 목록 파일")
+    uc.add_argument("--write-clean", metavar="경로",
+                    help="기업만 남긴 목록을 이 경로에 새로 씁니다 "
+                         "(원본은 건드리지 않습니다)")
+    uc.set_defaults(func=cmd_universe_check)
 
     dd = sub.add_parser(
         "dart-dashboard",

@@ -355,7 +355,31 @@
     · 무효선 -20%, 분할 매도 +10/+20/+35 — 장부 v1 에 넣음 (12번)
     · 저평가 쪽 합격선 — 미리 적어 둠 (7번). 매달 10종목 자동 기록 중
 
-**멈춰 있는 곳 — 여기서부터 하면 됩니다**
+**먼저 확인할 것이 하나 생겼습니다 (2026-09-14)**
+
+사장님이 카페에서 한국투자증권 종목 마스터 글을 찾아주셔서 우리 구멍이
+드러났습니다. `list_market()` 은 **code·name 두 칸만** 가져옵니다.
+그래서 **ETF·ETN·스팩·리츠가 1,822종목에 섞여 있을 수 있습니다.**
+그것들은 회사가 아니라 재무제표가 없고, "매출이 늘고 있나" 를 물을 수
+없습니다. 섞인 채로 잰 숫자는 흔들립니다 — 특히 slice-kr 의 "거래대금
+작은 쪽이 좋다" 는 결과가 그렇습니다.
+
+    python -m src.cli universe-check --universe data/universe_cache.txt
+
+**이것부터 돌리고, 섞여 있으면 목록을 정리한 뒤 slice-kr 을 다시
+돌려야 합니다.** 찜찜한 채로 다음으로 가지 않습니다.
+
+⚠️ universe-check 는 **종목 이름으로 하는 짐작**입니다. 제대로 된 길은
+한국투자증권이 매일 올리는 종목 마스터 파일입니다 (로그인 없이 받을 수
+있음). 거기에는 `stkgrp_code`(주권/ETF/ETN/리츠), `isAcquisition`(스팩),
+`isManagement`(관리종목), `market_warning_code`(투자주의·경고·위험) 가
+공식으로 들어 있습니다. **이름으로는 관리종목·투자경고를 알 수 없습니다.**
+4번의 "공시 위험" 축이 실제로는 비어 있다는 뜻이기도 합니다.
+
+    https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip
+    https://new.real.download.dws.co.kr/common/master/kosdaq_code.mst.zip
+
+**멈춰 있는 곳 — 위를 확인한 뒤 여기로**
 
 breakout 을 조각내니 조건을 겹친 자리에서 숫자가 나왔습니다.
 
