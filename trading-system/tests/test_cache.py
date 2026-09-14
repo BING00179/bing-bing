@@ -265,3 +265,65 @@ def test_종목마다_길이가_다르면_짧은_것도_알려준다(tmp_path):
     잰것 = cache_module.measure(cache)
     assert 잰것.min_rows == 100 and 잰것.max_rows == 735
     assert "제일 짧은 것 100일" in 잰것.as_line()
+
+
+# ────────── --years 가 말한 대로 자르는가 ──────────
+#
+# 저장된 시세는 --years 와 상관없이 있는 그대로 읽힙니다. 그래서
+# "최근 3.0년" 이라고 찍어 놓고 실제로는 5년치로 계산했습니다
+# (2026-09-14). 화면과 실제가 다르면 그 결과는 쓸모가 없습니다.
+
+def test_요청한_기간으로_실제로_자른다():
+    from src import cache as cache_module
+    frames = {f"{i:06d}": _frame_days(1242, start="2021-08-02") for i in range(5)}
+    잘린것, 처음, 끝 = cache_module.trim_to_years(frames, 3.0)
+    남은일수 = len(next(iter(잘린것.values())))
+    assert 700 < 남은일수 < 800          # 3년이면 거래일 약 735일
+    assert 처음 > "2023-01-01"
+
+
+def test_자르지_않으면_검사가_깨진다():
+    """이 검사의 뜻 — 안 자르면 1,242일이 그대로 남습니다."""
+    from src import cache as cache_module
+    frames = {"000001": _frame_days(1242, start="2021-08-02")}
+    assert len(frames["000001"]) == 1242
+    잘린것, _, _ = cache_module.trim_to_years(frames, 3.0)
+    assert len(잘린것["000001"]) < 1242
+
+
+def test_기준은_오늘이_아니라_자료의_마지막_날이다():
+    """저장된 시세가 오래됐다고 창이 밀리면, 같은 명령이 날마다 다른
+    답을 냅니다."""
+    from src import cache as cache_module
+    frames = {"000001": _frame_days(1242, start="2021-08-02")}
+    _, 처음1, 끝1 = cache_module.trim_to_years(frames, 3.0)
+    _, 처음2, 끝2 = cache_module.trim_to_years(frames, 3.0)
+    assert (처음1, 끝1) == (처음2, 끝2)
+    assert 끝1 == str(frames["000001"].index.max().date())
+
+
+def test_모든_종목을_같은_기간으로_자른다():
+    """종목마다 다른 창으로 자르면 비교가 안 됩니다."""
+    from src import cache as cache_module
+    frames = {
+        "000001": _frame_days(1242, start="2021-08-02"),
+        "000002": _frame_days(1242, start="2021-08-02"),
+    }
+    잘린것, _, _ = cache_module.trim_to_years(frames, 3.0)
+    assert len(잘린것["000001"]) == len(잘린것["000002"])
+
+
+def test_기간을_안_주면_그대로_둔다():
+    from src import cache as cache_module
+    frames = {"000001": _frame_days(1242)}
+    잘린것, 처음, 끝 = cache_module.trim_to_years(frames, 0)
+    assert len(잘린것["000001"]) == 1242
+    assert 처음 == "" and 끝 == ""
+
+
+def test_자르고_나서_남는_게_없으면_원래대로_둡니다():
+    """빈 표를 돌려주면 '자료가 없다' 로 오해합니다."""
+    from src import cache as cache_module
+    frames = {"000001": _frame_days(30, start="2020-01-02")}
+    잘린것, _, _ = cache_module.trim_to_years(frames, 0.01)
+    assert len(잘린것) == 1

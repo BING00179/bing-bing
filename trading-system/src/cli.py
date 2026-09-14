@@ -728,6 +728,16 @@ def _frames_for(
 
     print(f"  시세 확보 {len(frames):,}종목 "
           f"(새로 받음 {fetched:,} · 저장분 사용 {reused:,})")
+
+    # 저장된 시세는 --years 와 상관없이 있는 그대로 읽힙니다. 자르지 않으면
+    # "최근 3년" 이라고 찍어 놓고 5년치로 계산하게 됩니다. 화면과 실제가
+    # 다르면 그 결과는 쓸모가 없습니다.
+    frames, 처음, 끝 = cache_module.trim_to_years(frames, years)
+    if 처음:
+        길이들 = sorted(len(f) for f in frames.values())
+        가운데 = 길이들[len(길이들) // 2] if 길이들 else 0
+        print(f"  실제 기간 {처음} ~ {끝} · {len(frames):,}종목 · "
+              f"종목당 거래일 {가운데:,}일 (가운데 값)")
     return frames
 
 
