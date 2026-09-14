@@ -205,3 +205,76 @@ class PriceCache:
         if meta.exists():
             meta.unlink()
         return removed
+
+
+# ─────────────── 이름표 말고 실제를 잽니다 ───────────────
+#
+# info() 가 돌려주는 것은 **저장할 때 적어둔 말**입니다. 파일을 열어본
+# 것이 아닙니다. 그래서 짧은 기간으로 한 번 돌리면 이름표만 짧아지고,
+# 안에 든 자료는 그대로일 수 있습니다. 반대도 마찬가지입니다.
+#
+# 2026-09-14 실제로 그랬습니다 — 사무실 이름표는 "3.0년치", 집 이름표는
+# "1.2년치" 인데 둘 다 같은 방식으로 받은 자료였습니다. 어느 쪽이 맞는지
+# 이름표로는 알 수 없습니다. 그래서 몇 개를 열어서 직접 셉니다.
+
+@dataclass
+class Measured:
+    """실제로 열어본 결과. 이름표가 아니라 자료입니다."""
+    sampled: int
+    first: str                 # 제일 이른 날 (표본 전체에서)
+    last: str                  # 제일 늦은 날
+    median_rows: int           # 종목당 거래일 수 (가운데 값)
+    min_rows: int
+    max_rows: int
+
+    @property
+    def years(self) -> float:
+        """거래일 수로 환산한 햇수. 1년 = 거래일 약 245일."""
+        return round(self.median_rows / 245.0, 2)
+
+    def as_line(self) -> str:
+        return (f"실제로 열어본 {self.sampled}종목 · {self.first} ~ {self.last} · "
+                f"종목당 거래일 {self.median_rows:,}일 (약 {self.years:g}년치) · "
+                f"제일 짧은 것 {self.min_rows:,}일 / 긴 것 {self.max_rows:,}일")
+
+
+def measure(cache: "PriceCache", sample: int = 30) -> Measured | None:
+    """저장된 파일 몇 개를 실제로 열어 기간을 셉니다."""
+    codes = cache.stored_codes()
+    if not codes:
+        return None
+    # 앞·가운데·뒤에서 골고루 뽑습니다. 앞에서만 뽑으면 한쪽만 봅니다.
+    걸음 = max(len(codes) // sample, 1)
+    고른것 = codes[::걸음][:sample]
+
+    처음들, 마지막들, 줄수들 = [], [], []
+    for code in 고른것:
+        frame = cache.get(code)
+        if frame is None or frame.empty:
+            continue
+        처음들.append(str(frame.index.min().date()))
+        마지막들.append(str(frame.index.max().date()))
+        줄수들.append(len(frame))
+
+    if not 줄수들:
+        return None
+    줄수들.sort()
+    return Measured(
+        sampled=len(줄수들),
+        first=min(처음들), last=max(마지막들),
+        median_rows=줄수들[len(줄수들) // 2],
+        min_rows=줄수들[0], max_rows=줄수들[-1],
+    )
+
+
+def disagreement(info: CacheInfo | None, real: Measured | None) -> str:
+    """이름표와 실제가 어긋나면 그렇게 말합니다. 맞으면 빈 문자열."""
+    if info is None or real is None:
+        return ""
+    # 반년 넘게 차이나면 이름표를 믿지 말라고 합니다.
+    if abs(info.years_min - real.years) >= 0.5:
+        return (f"⚠️ 이름표는 {info.years_min:g}년치라는데 실제로 열어보니 "
+                f"약 {real.years:g}년치입니다. **실제 쪽을 믿으십시오.** "
+                "이름표는 저장할 때 적어둔 말이라 짧은 기간으로 한 번 "
+                "돌리면 그것만 남습니다.")
+    return ""

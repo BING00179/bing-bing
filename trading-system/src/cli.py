@@ -41,6 +41,7 @@ from . import exits as ex_module
 from . import market_filter as mf_module
 from . import notify_policy
 from . import analyze
+from . import cache as cache_module
 from .cache import PriceCache
 from . import walkforward as wf_module
 from . import factor_data, factors
@@ -862,6 +863,14 @@ def cmd_cache(args: argparse.Namespace) -> int:
         return 0
 
     print(f"{info.as_line()}" if info else f"파일 {len(codes):,}개")
+
+    # 이름표 말고 실제를 잽니다. 파일 몇 개를 직접 열어 봅니다.
+    잰것 = cache_module.measure(cache)
+    if 잰것 is not None:
+        print(f"{잰것.as_line()}")
+        어긋남 = cache_module.disagreement(info, 잰것)
+        if 어긋남:
+            print(f"\n{어긋남}\n")
     total = sum(
         path.stat().st_size
         for path in (cache.path_for(c) for c in codes)
