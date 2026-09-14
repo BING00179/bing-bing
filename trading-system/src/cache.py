@@ -278,3 +278,33 @@ def disagreement(info: CacheInfo | None, real: Measured | None) -> str:
                 "이름표는 저장할 때 적어둔 말이라 짧은 기간으로 한 번 "
                 "돌리면 그것만 남습니다.")
     return ""
+
+
+def trim_to_years(frames: dict, years: float) -> tuple[dict, str, str]:
+    """모든 종목을 같은 기간으로 자릅니다. 자른 기간을 같이 돌려줍니다.
+
+    저장된 시세는 `--years` 와 상관없이 있는 그대로 읽힙니다. 그래서
+    "최근 3년" 이라고 찍어 놓고 실제로는 5년치로 계산하는 일이 생겼습니다
+    (2026-09-14 실제로 그랬습니다). 화면과 실제가 다르면 그 결과는
+    쓸모가 없습니다.
+
+    기준은 **오늘이 아니라 자료의 마지막 날** 입니다. 저장된 시세가
+    2주 오래됐다고 창이 2주 밀리면, 같은 명령이 날마다 다른 답을 냅니다.
+    """
+    if not frames or years is None or years <= 0:
+        return frames, "", ""
+
+    마지막날 = max(f.index.max() for f in frames.values() if len(f))
+    자를날 = 마지막날 - pd.Timedelta(days=round(years * 365.25))
+
+    잘린것 = {}
+    for code, frame in frames.items():
+        조각 = frame[frame.index > 자를날]
+        if len(조각):
+            잘린것[code] = 조각
+    if not 잘린것:
+        return frames, "", ""
+
+    처음 = min(f.index.min() for f in 잘린것.values())
+    끝 = max(f.index.max() for f in 잘린것.values())
+    return 잘린것, str(처음.date()), str(끝.date())
