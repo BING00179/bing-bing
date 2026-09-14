@@ -202,3 +202,66 @@ def test_옛_형식_이름표도_읽는다(tmp_path):
     assert info.years_min == info.years_max == 3.0
     assert info.first_on == info.last_on == "2026-08-01"
     assert not info.mixed
+
+
+# ────────── 이름표 말고 실제를 재는가 ──────────
+#
+# info() 는 저장할 때 적어둔 말입니다. 파일을 열어본 것이 아닙니다.
+# 2026-09-14 실제로 사무실 이름표는 "3.0년치", 집 이름표는 "1.2년치"
+# 였는데 어느 쪽이 맞는지 이름표로는 알 수 없었습니다.
+
+def _frame_days(n, start="2024-01-02"):
+    idx = pd.bdate_range(start, periods=n)
+    return pd.DataFrame(
+        {"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1},
+        index=idx,
+    )
+
+
+def test_실제로_열어서_기간을_센다(tmp_path):
+    cache = PriceCache(tmp_path)
+    for i in range(10):
+        cache.put(f"{i:06d}", _frame_days(500))
+    from src import cache as cache_module
+    잰것 = cache_module.measure(cache)
+    assert 잰것 is not None
+    assert 잰것.median_rows == 500
+    assert 1.9 < 잰것.years < 2.2          # 500 거래일이면 대략 2년
+
+
+def test_이름표와_실제가_어긋나면_말해_준다(tmp_path):
+    """이름표만 믿으면 7개월치를 18개월치로 알고 판단하게 됩니다."""
+    from src import cache as cache_module
+    cache = PriceCache(tmp_path)
+    for i in range(10):
+        cache.put(f"{i:06d}", _frame_days(300))     # 약 1.2년치
+    cache.save_meta(codes=10, years=3.0)            # 이름표만 3년
+
+    말 = cache_module.disagreement(cache.info(), cache_module.measure(cache))
+    assert "이름표는 3년치라는데" in 말
+    assert "실제 쪽을 믿으십시오" in 말
+
+
+def test_이름표와_실제가_맞으면_잔소리하지_않는다(tmp_path):
+    from src import cache as cache_module
+    cache = PriceCache(tmp_path)
+    for i in range(10):
+        cache.put(f"{i:06d}", _frame_days(735))     # 약 3년치
+    cache.save_meta(codes=10, years=3.0)
+    assert cache_module.disagreement(cache.info(), cache_module.measure(cache)) == ""
+
+
+def test_저장된_게_없으면_재지_않는다(tmp_path):
+    from src import cache as cache_module
+    assert cache_module.measure(PriceCache(tmp_path)) is None
+    assert cache_module.disagreement(None, None) == ""
+
+
+def test_종목마다_길이가_다르면_짧은_것도_알려준다(tmp_path):
+    from src import cache as cache_module
+    cache = PriceCache(tmp_path)
+    for i, n in enumerate((100, 300, 500, 700, 735)):
+        cache.put(f"{i:06d}", _frame_days(n))
+    잰것 = cache_module.measure(cache)
+    assert 잰것.min_rows == 100 and 잰것.max_rows == 735
+    assert "제일 짧은 것 100일" in 잰것.as_line()
