@@ -36,6 +36,7 @@ from . import value_kr as val_module
 from . import quality as qa_module
 from . import universe as uni_module
 from . import diagnose as dg_module
+from . import avoid as av_module
 from . import slices as sl_module
 from . import exits as ex_module
 from . import market_filter as mf_module
@@ -1510,6 +1511,96 @@ def cmd_universe_check(args: argparse.Namespace) -> int:
         print("   (원래 목록은 그대로 둡니다. 지우지 않습니다.)")
     else:
         print("\n걸러낸 목록을 만들려면 --write-clean 경로 를 붙이세요.")
+    return 0
+
+
+def cmd_avoid_kr(args: argparse.Namespace) -> int:
+    """피할 것 — 제외되는 쪽이 정말 나쁜가를 여러 창에서 봅니다.
+
+    사는 조건은 틀리면 돈을 잃고, 거르는 조건은 틀려도 안 사는 것뿐입니다.
+    그래서 위험이 작고, 그래서 먼저 봅니다.
+    """
+    cfg = Config.load(args.config)
+    path = _resolve(args.universe or cfg.universe_file_kr)
+    codes = read_universe_kr(path)
+    창들 = tuple(float(x) for x in args.windows.split(",") if x.strip())
+    bar = av_module.bar_for(len(av_module.CANDIDATES))
+
+    print("=" * 78)
+    print(f"대상 {len(codes):,}종목 · 조건 {args.setup} · "
+          f"{args.horizon}일 초과수익 · 창 {창들} 년")
+    print("=" * 78)
+    print(f"\n미리 정해 둔 것 — 후보 {len(av_module.CANDIDATES)}개, "
+          f"통과선 t ≤ -{bar:.2f} (모든 창에서), "
+          f"남는 신호 {av_module.MIN_KEPT_PCT:g}% 이상, "
+          f"제외된 것 {av_module.MIN_EXCLUDED}건 이상")
+    print("결과를 보고 합격선을 만들지 않기 위해 먼저 적어 둡니다.\n")
+
+    setup = bo_module.Setup()
+    모은것: dict[str, list] = {}
+    for 햇수 in 창들:
+        print(f"── {햇수:g}년 창 ──")
+        frames = _frames_for(
+            codes, 햇수, cfg.scanner_b.sma_slow + 30,
+            _resolve(args.cache_dir) if args.cache_dir else None,
+            refresh=args.refresh,
+        )
+        if len(frames) < 30:
+            print("  시세를 받은 종목이 너무 적습니다. 이 창은 건너뜁니다.")
+            continue
+
+        market = dg_module.market_forward(frames, horizons=(args.horizon,))
+        parts = []
+        for code, daily in frames.items():
+            if args.setup == "breakout":
+                dates = bo_module.signal_dates(daily, setup)
+            else:
+                rows = bt_module.signal_rows(code, daily, cfg.scanner_b, None)
+                dates = rows.index if not rows.empty else pd.DatetimeIndex([])
+            if not len(dates):
+                continue
+            조각 = dg_module.signal_forward(code, daily, dates,
+                                          horizons=(args.horizon,))
+            if 조각.empty:
+                continue
+            parts.append(_attach_traits(조각, daily, setup))
+        if not parts:
+            print("  신호가 하나도 없습니다. 이 창은 건너뜁니다.")
+            continue
+        signals = pd.concat(parts, ignore_index=True)
+        print(f"  신호 {len(signals):,}건\n")
+
+        이름 = f"{햇수:g}년"
+        for 규칙 in av_module.CANDIDATES:
+            결과 = av_module.evaluate(signals, market, args.horizon, 규칙, 이름)
+            if 결과 is not None:
+                모은것.setdefault(규칙.name, []).append(결과)
+
+    if not 모은것:
+        print("잴 수 있는 것이 없습니다.")
+        return 1
+
+    글 = av_module.report(모은것, bar, args.horizon)
+    print(글)
+
+    out = _output_dir(cfg)
+    줄들 = []
+    for 이름, 결과들 in 모은것.items():
+        for r in 결과들:
+            줄들.append({
+                "조건": 이름, "기준": r.rule.as_text(), "창": r.window,
+                "제외건수": r.excluded.count, "제외초과%": round(r.excluded.excess, 3),
+                "제외t": round(r.excluded.t_stat, 3),
+                "남은건수": r.kept.count, "남은초과%": round(r.kept.excess, 3),
+                "남은t": round(r.kept.t_stat, 3),
+                "남는비율%": round(r.kept_pct, 1),
+                "거르기전%": round(r.base_excess, 3),
+            })
+    pd.DataFrame(줄들).to_csv(out / "kr_avoid.csv", index=False,
+                             encoding="utf-8-sig")
+    저장 = _write_text(args.out or (out / "kr_avoid.txt"), 글)
+    print(f"\n조건별 원자료: {out}/kr_avoid.csv")
+    print(f"보고서 저장: {저장}  (메모장으로 열어도 안 깨집니다)")
     return 0
 
 
@@ -3118,6 +3209,21 @@ def build_parser() -> argparse.ArgumentParser:
                     help="기업만 남긴 목록을 이 경로에 새로 씁니다 "
                          "(원본은 건드리지 않습니다)")
     uc.set_defaults(func=cmd_universe_check)
+
+    avk = sub.add_parser(
+        "avoid-kr",
+        help="[국내] 피할 것 — 제외되는 쪽이 정말 나쁜지 여러 창에서 확인",
+    )
+    avk.add_argument("--universe", help="종목코드 목록 파일")
+    avk.add_argument("--windows", default="3,5",
+                     help="몇 년 창으로 볼지 (쉼표). 모든 창에서 버텨야 통과")
+    avk.add_argument("--setup", default="breakout",
+                     choices=["trendjoin", "breakout"], help="어떤 신호를 볼지")
+    avk.add_argument("--horizon", type=int, default=20, help="며칠 뒤로 잴지")
+    avk.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    avk.add_argument("--refresh", action="store_true", help="시세를 새로 받기")
+    avk.add_argument("--out", help="보고서 저장 경로 (기본 output/kr_avoid.txt)")
+    avk.set_defaults(func=cmd_avoid_kr)
 
     dd = sub.add_parser(
         "dart-dashboard",
