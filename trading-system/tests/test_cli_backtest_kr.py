@@ -43,13 +43,19 @@ def fake_market(monkeypatch, tmp_path):
     universe.write_text("005930 삼성전자\n", encoding="utf-8")
 
     monkeypatch.setattr(cli, "fetch_index", lambda code: index)
-    monkeypatch.setattr(cli, "fetch_daily_kr", lambda code, years=3.0: daily)
+    # _frames_for 는 pause= 를 붙여 부릅니다(2026-09-01). 인자를 안 받으면 TypeError 가
+    # 나는데 _frames_for 가 그것을 삼켜 종목 0개가 되고, 시험은 이유를 모른 채 떨어집니다.
+    monkeypatch.setattr(cli, "fetch_daily_kr", lambda code, years=3.0, pause=0.0: daily)
     monkeypatch.setattr(cli, "_output_dir", lambda cfg: tmp_path)
     return universe
 
 
 def _run(universe, *, market_filter: bool) -> pd.DataFrame:
-    argv = ["backtest-kr", "--universe", str(universe)]
+    # 기본 --cache-dir 은 data/cache, 즉 진짜 시세 저장고입니다. 시험이 그걸 읽으면
+    # 저장된 종목이 있는 PC 에서만 통과하고(가짜 시세 대신 진짜를 읽음), 없는 PC(CI)에선
+    # 떨어집니다. 시험은 자기 임시 폴더만 씁니다.
+    argv = ["backtest-kr", "--universe", str(universe),
+            "--cache-dir", str(universe.parent / "cache")]
     if market_filter:
         argv.append("--market-filter")
     assert cli.main(argv) == 0
@@ -132,13 +138,15 @@ def many_stocks(monkeypatch, tmp_path):
     universe.write_text("\n".join(frames), encoding="utf-8")
 
     monkeypatch.setattr(cli, "fetch_index", lambda code: index)
-    monkeypatch.setattr(cli, "fetch_daily_kr", lambda code, years=3.0: frames[code])
+    monkeypatch.setattr(cli, "fetch_daily_kr",
+                        lambda code, years=3.0, pause=0.0: frames[code])
     monkeypatch.setattr(cli, "_output_dir", lambda cfg: tmp_path)
     return universe
 
 
 def _run_top(universe, top_n: int) -> pd.DataFrame:
-    argv = ["backtest-kr", "--universe", str(universe)]
+    argv = ["backtest-kr", "--universe", str(universe),
+            "--cache-dir", str(universe.parent / "cache")]
     suffix = ""
     if top_n:
         argv += ["--top-n", str(top_n)]
@@ -180,6 +188,7 @@ def test_min_score_can_drop_everything(many_stocks, capsys):
     """도달 불가능한 점수를 걸면 매매가 없어야 합니다."""
     assert cli.main([
         "backtest-kr", "--universe", str(many_stocks),
+        "--cache-dir", str(many_stocks.parent / "cache"),
         "--top-n", "3", "--min-score", "999",
     ]) == 0
     frame = pd.read_csv(many_stocks.parent / "kr_backtest_trades_top3.csv")
