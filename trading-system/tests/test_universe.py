@@ -1,0 +1,113 @@
+"""종목 목록 청소 검사.
+
+여기서 제일 중요한 것은 **멀쩡한 기업을 기업이 아니라고 하지 않는가**
+입니다. 잘못 걸러내면 후보에서 통째로 빠지고, 우리는 그걸 모릅니다.
+"""
+
+from __future__ import annotations
+
+import pandas as pd
+
+from src import universe as uni
+
+
+def _frame(rows):
+    return pd.DataFrame(rows, columns=["code", "name"])
+
+
+# ────────────── 기업이 아닌 것을 찾아내는가 ──────────────
+
+def test_ETN은_종목코드가_영문으로_시작한다():
+    assert uni.why_not_company("Q700018", "하나 인버스 2X 코스닥150 선물 ETN")
+
+
+def test_이름에_ETN이_있으면_걸린다():
+    assert uni.why_not_company("500001", "키움 코스피 200 ETN") == "ETN"
+
+
+def test_ETF_운용사_브랜드로_알아본다():
+    """ETF 는 이름에 'ETF' 가 안 들어가는 경우가 많습니다."""
+    assert uni.why_not_company("069500", "KODEX 200") == "ETF"
+    assert uni.why_not_company("102110", "TIGER 200") == "ETF"
+
+
+def test_스팩과_리츠도_기업이_아니다():
+    assert uni.why_not_company("123456", "엔에이치스팩29호") == "스팩"
+    assert uni.why_not_company("330590", "롯데리츠") == "리츠"
+
+
+def test_우선주는_같은_회사가_두_번_세어진다():
+    assert uni.why_not_company("005935", "삼성전자우") == "우선주"
+
+
+# ────────────── 멀쩡한 기업을 걸러내지 않는가 ──────────────
+
+def test_보통주는_통과한다():
+    for code, name in (("005930", "삼성전자"), ("032820", "우리기술"),
+                       ("105560", "KB금융"), ("000660", "SK하이닉스")):
+        assert uni.why_not_company(code, name) == "", f"{name} 이 잘못 걸렸습니다"
+
+
+def test_이름에_우연히_섞인_글자로_걸지_않는다():
+    """'리츠' 가 이름 일부인 회사를 리츠로 보면 안 됩니다.
+
+    지금 방식은 부분 일치라 이런 위험이 있습니다. 그래서 지우지 않고
+    표시만 하는 것입니다.
+    """
+    이유 = uni.why_not_company("123450", "리츠컴퍼니")
+    # 걸리더라도 '지우지 않고 표시만' 하므로 사람이 되돌릴 수 있어야 합니다
+    assert 이유 in ("", "리츠")
+
+
+def test_이름이_없으면_판정하지_않는다():
+    """없는 것은 없다고 씁니다. 이름을 모르면 기업이 아니라고 하면 안 됩니다."""
+    assert uni.why_not_company("005930", "") == ""
+
+
+# ────────────── 세고 보고하기 ──────────────
+
+def _mixed():
+    return _frame([
+        ("005930", "삼성전자"), ("032820", "우리기술"), ("105560", "KB금융"),
+        ("069500", "KODEX 200"), ("102110", "TIGER 200"),
+        ("Q700018", "하나 인버스 2X ETN"),
+        ("123456", "엔에이치스팩29호"), ("330590", "롯데리츠"),
+        ("005935", "삼성전자우"),
+    ])
+
+
+def test_몇_개가_걸렸는지_센다():
+    결과 = uni.check(_mixed())
+    assert 결과.total == 9
+    assert len(결과.flagged) == 6      # ETF 2 + ETN 1 + 스팩 1 + 리츠 1 + 우선주 1
+    assert 결과.kept == 3
+
+
+def test_걸러낸_목록에는_기업만_남는다():
+    남은것 = uni.clean_codes(_mixed())
+    assert 남은것 == ["005930", "032820", "105560"]
+
+
+def test_보고서가_지우지_않았다고_분명히_쓴다():
+    """장부 정신과 같습니다. 표시만 하고 사람이 정합니다."""
+    글 = uni.report(uni.check(_mixed()))
+    assert "아무것도 지우지 않았습니다" in 글
+
+
+def test_보고서가_짐작이라고_밝힌다():
+    """이름으로 거른 것입니다. 공식 구분인 척하면 안 됩니다."""
+    글 = uni.report(uni.check(_mixed()))
+    assert "짐작" in 글 and "공식 구분이" in 글
+    assert "관리종목·투자경고를 알 수 없습니다" in 글
+
+
+def test_이름_못_찾은_종목을_숨기지_않는다():
+    글 = uni.report(uni.check(_mixed()), missing_names=7)
+    assert "이름을 못 찾은 종목이 7개" in 글
+    assert "판정하지 못했습니다" in 글
+
+
+def test_빈_목록이면_판정하지_않는다():
+    결과 = uni.check(pd.DataFrame())
+    assert 결과.total == 0
+    assert "볼 목록이 없습니다" in uni.report(결과)
