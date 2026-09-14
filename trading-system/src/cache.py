@@ -177,7 +177,7 @@ class PriceCache:
         if not path.exists():
             return None
         try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
+            raw = json.loads(path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError:
             return None
         # 옛 형식(years / fetched_on 하나씩)도 읽을 수 있게 합니다.

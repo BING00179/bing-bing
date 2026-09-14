@@ -251,7 +251,7 @@ class Config:
         path = Path(path) if path else DEFAULT_CONFIG_PATH
         if not path.exists():
             return cls()
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8-sig"))
         return cls(
             scanner_a=ScannerAConfig(**raw.get("scanner_a", {})),
             scanner_b=ScannerBConfig(**raw.get("scanner_b", {})),

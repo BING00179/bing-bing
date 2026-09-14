@@ -193,6 +193,11 @@ def read_universe_kr(path) -> list[str]:
 
     '005930  삼성전자' 처럼 코드 뒤에 이름을 적어둬도 됩니다.
     앞쪽 코드만 읽고 나머지는 무시합니다. # 뒤는 주석입니다.
+
+    utf-8-sig 로 읽습니다. 우리가 만드는 파일은 메모장에서 안 깨지도록
+    맨 앞에 BOM 을 붙여 쓰는데, 그냥 utf-8 로 읽으면 그 BOM 이 첫 줄에
+    달라붙어 "형식이 맞지 않아 건너뛴 줄" 로 나옵니다. 실제로 그랬습니다
+    (2026-09-14, universe-check --write-clean 으로 만든 목록).
     """
     from pathlib import Path  # noqa: PLC0415
 
@@ -202,7 +207,7 @@ def read_universe_kr(path) -> list[str]:
 
     codes: list[str] = []
     bad: list[str] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.split("#", 1)[0].strip()
         if not line:
             continue

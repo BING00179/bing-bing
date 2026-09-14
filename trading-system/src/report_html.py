@@ -34,7 +34,7 @@ def load_history(path: Path) -> list[dict]:
     if not path.exists():
         return []
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError:
         return []
     return data if isinstance(data, list) else []

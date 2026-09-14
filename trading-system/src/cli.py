@@ -288,7 +288,7 @@ def _names_for(codes: list[str], path: Path) -> dict[str, str]:
     names: dict[str, str] = {}
     if not path.exists():
         return names
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.split("#", 1)[0].strip()
         parts = line.split(None, 1)
         if len(parts) == 2 and parts[0].isdigit():
@@ -564,7 +564,7 @@ def cmd_daily_summary(args: argparse.Namespace) -> int:
     watch_path = web_dir / "watchlist.json"
     if watch_path.exists():
         try:
-            watch = json.loads(watch_path.read_text(encoding="utf-8"))
+            watch = json.loads(watch_path.read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError:
             watch = {}
         if watch.get("date") == today and watch.get("items"):
