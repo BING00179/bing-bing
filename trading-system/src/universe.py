@@ -36,10 +36,17 @@ NAME_MARKS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("ETN", ("ETN",)),
     ("ETF", ("ETF",)),
     ("스팩", ("스팩", "기업인수목적")),
-    ("리츠", ("리츠",)),
     ("선박투자", ("선박투자",)),
     ("인프라펀드", ("맥쿼리인프라", "인프라투융자", "인프라펀드")),
 )
+
+# 리츠는 **이름 끝에** 붙습니다 (롯데리츠, 신한알파리츠, ESR켄달스퀘어리츠).
+# 가운데에 들어간 것은 글자가 우연히 겹친 것입니다.
+#
+# 2026-09-14, 실제로 걸렸습니다 — 블리츠웨이엔터테인먼트(369370) 를
+# 리츠로 판정했습니다. 리츠가 아니라 '블리츠웨이' 입니다. 부분 일치의
+# 위험이 그대로 나온 경우라, 끝에 붙은 것만 보도록 고쳤습니다.
+REIT_TAIL = ("리츠",)
 
 # ETF 는 이름에 'ETF' 가 안 들어가고 상품 이름만 붙는 경우가 많습니다.
 # 운용사 브랜드로 알아봅니다.
@@ -91,6 +98,8 @@ def why_not_company(code: str, name: str) -> str:
             return 이름
     if any(브랜드.upper() in 위 for 브랜드 in ETF_BRANDS):
         return "ETF"
+    if any(name.endswith(꼬리) for 꼬리 in REIT_TAIL):
+        return "리츠"
 
     # 우선주 — 6자리 숫자이고 끝자리가 5·7·9
     if len(code) == 6 and code.isdigit() and code[-1] in PREFERRED_TAIL:
