@@ -54,6 +54,7 @@ from . import scanner_a, scanner_b, scanner_kr
 from .config import Config
 from .data import NY, DataUnavailable, fetch_daily, load_csv, read_universe
 from . import data_kr as data_kr_module
+from . import ledger_split as lsp_module
 from .data_kr import fetch_index
 from .data_kr import fetch_daily as fetch_daily_kr
 from .data_kr import list_market, read_universe_kr
@@ -2613,6 +2614,45 @@ def cmd_ledger_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ledger_split(args: argparse.Namespace) -> int:
+    """장부를 avoid-kr 의 세 조건으로 갈라 본다 — 조건을 넣지 않고.
+
+    2026-09-15 결정: 거래량 12배·거래대금 144억·아침 갭 +1.2% 는 장부 규칙에
+    넣지 않는다(순환논리, 시계 멈춤). 대신 장부에 이미 적힌 값으로 앞으로의
+    기록을 갈라 본다. 합격선은 ledger_split 모듈 맨 위에 미리 적어 두었다.
+    """
+    기록 = lt_module.load(_resolve(args.file))
+    if 기록.empty:
+        print("장부가 비어 있습니다. 갈라 볼 것이 없습니다.")
+        return 0
+
+    codes = sorted({str(c) for c in 기록["code"]})
+    print(f"기록 {len(기록):,}건 · {len(codes):,}종목의 시세를 확인합니다...")
+    frames = _frames_for(
+        codes, args.years, 0,
+        _resolve(args.cache_dir) if args.cache_dir else None,
+        refresh=args.refresh,
+    )
+    try:
+        index = fetch_index(args.index, years=args.years)
+    except DataUnavailable as exc:
+        print(f"지수를 못 받았습니다: {exc}")
+        return 1
+
+    today = pd.Timestamp(args.today) if args.today else None
+    scored = lt_module.score_rows(기록, frames, index, horizon=args.horizon,
+                                  only_bought=True, today=today)
+    print(f"채점 {len(scored):,}건 (기간이 찬 '산 것' 만)")
+    print()
+    table = lsp_module.attach(_scored_frame(scored), 기록)
+    rows = []
+    for rule in lsp_module.pre_registered_rules():
+        result = lsp_module.evaluate(table, rule)
+        rows.append((rule, result, lsp_module.judge(result)))
+    print(lsp_module.report(rows, horizon=args.horizon))
+    return 0
+
+
 def cmd_screen_kr(args: argparse.Namespace) -> int:
     """두 축으로 봅니다 — 좋은 기업인가, 값이 괜찮은가.
 
@@ -2987,6 +3027,20 @@ def build_parser() -> argparse.ArgumentParser:
     lsh.add_argument("--limit", type=int, default=20, help="최근 몇 줄")
     lsh.add_argument("--file", default="data/livetest.csv", help="장부 파일")
     lsh.set_defaults(func=cmd_ledger_show)
+
+    lsp = sub.add_parser(
+        "ledger-split",
+        help="[국내] 장부를 avoid-kr 세 조건으로 갈라 보기 — 조건은 넣지 않은 채",
+    )
+    lsp.add_argument("--file", default="data/livetest.csv", help="장부 파일")
+    lsp.add_argument("--horizon", type=int, default=20, help="보유 거래일 (기본 20)")
+    lsp.add_argument("--years", type=float, default=1.0, help="시세 기간(년)")
+    lsp.add_argument("--index", default="KQ11", help="비교 지수 (기본 코스닥)")
+    lsp.add_argument("--cache-dir", default="data/cache", help="시세 저장 폴더")
+    lsp.add_argument("--refresh", action="store_true",
+                     help="저장분을 무시하고 새로 받기 (사무실에서는 쓰지 말 것)")
+    lsp.add_argument("--today", help="채점 기준일 YYYY-MM-DD (시험용)")
+    lsp.set_defaults(func=cmd_ledger_split)
 
     le = sub.add_parser(
         "ledger-export",
