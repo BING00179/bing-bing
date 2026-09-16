@@ -252,20 +252,20 @@
   "count": 0
  },
  {
-  "when": "2026-09-16 12:08 KST",
+  "when": "2026-09-16 12:40 KST",
   "date": "2026-09-16",
   "market": {
    "index_name": "코스피",
-   "close": 6627.26,
-   "sma_slow": 6162.55,
+   "close": 6657.15,
+   "sma_slow": 6176.57,
    "above_sma_slow": true,
-   "rsi": 45.6,
-   "drawdown_pct": 27.29,
-   "volatility_pct": 43.48,
+   "rsi": 46.4,
+   "drawdown_pct": 26.96,
+   "volatility_pct": 38.01,
    "verdict": "위험",
    "reasons": [
-    "고점대비 -27.3%",
-    "변동성 43.5%"
+    "고점대비 -27.0%",
+    "변동성 38.0%"
    ],
    "tradable": false
   },
