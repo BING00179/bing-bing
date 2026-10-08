@@ -2324,23 +2324,37 @@ def cmd_livetest_record(args: argparse.Namespace) -> int:
 
 def virtual_candidates(candidates_path: Path, ledger: pd.DataFrame
                        ) -> tuple[list[tuple[str, str, float]], set[str] | None]:
-    """이번 달 후보(점수 오름차순)와 '근거 유지' 집합.
+    """최근 월말 후보(점수 오름차순)와 '근거 유지' 집합.
 
     후보 전체 파일(value-record --candidates-out)이 있으면 그것을, 없으면
     장부의 value 줄(상위 10개)을 씁니다. 장부만 있을 때는 '근거 사라짐' 을
     판단하지 않습니다(11등이 된 것을 사라졌다고 오판하므로) → None.
+
+    후보 파일에 basis 열이 있으면:
+      · 매수 목록에는 basis == "후보" 인 줄만 넣습니다.
+      · 근거 유지 집합에는 "후보" 와 "판단보류" 를 넣습니다 — 자료가 모자라 점수를
+        못 낸 것은 근거가 사라진 것이 아닙니다(§9).
+      · 최신 달 줄은 있는데 "후보" 가 한 줄도 없으면 판정 자체가 비정상일 수 있으니
+        근거 사라짐을 판단하지 않습니다(None) — 보유 전 종목이 한꺼번에 정리되는 것을 막습니다.
     """
     if candidates_path.exists():
         c = pd.read_csv(candidates_path, dtype={"code": str}, keep_default_na=False)
         if not c.empty:
             달 = str(c["month"].astype(str).max())
             이번달 = c[c["month"].astype(str) == 달].copy()
-            if "basis" in 이번달.columns:   # --all-verdicts 로 비후보가 섞여 있어도 '후보' 줄만 씁니다
-                이번달 = 이번달[이번달["basis"].astype(str) == "후보"]
+            유지줄 = 이번달
+            if "basis" in 이번달.columns:
+                basis = 이번달["basis"].astype(str)
+                유지줄 = 이번달[basis.isin(["후보", "판단보류"])]
+                이번달 = 이번달[basis == "후보"].copy()
+                if 이번달.empty:
+                    print(f"  ⚠️ {달} 후보 파일에 '후보' 판정이 한 줄도 없습니다 — "
+                          "근거 사라짐을 판단하지 않고, 새로 사지도 않습니다.")
+                    return [], None
             이번달["score"] = pd.to_numeric(이번달["score"], errors="coerce").fillna(1e9)
             이번달 = 이번달.sort_values("score")
             return ([(str(r["code"]), str(r["name"]), float(r["score"])) for _, r in 이번달.iterrows()],
-                    set(이번달["code"].astype(str)))
+                    set(유지줄["code"].astype(str)))
     v = lt_module.active(ledger)
     v = v[v["setup"].astype(str) == "value"] if not v.empty else v
     if v.empty:
@@ -2350,6 +2364,30 @@ def virtual_candidates(candidates_path: Path, ledger: pd.DataFrame
     이번달["score"] = pd.to_numeric(이번달["score"], errors="coerce").fillna(1e9)
     이번달 = 이번달.sort_values("score")
     return [(str(r["code"]), str(r["name"]), float(r["score"])) for _, r in 이번달.iterrows()], None
+
+
+def _bar_on(frame: pd.DataFrame | None, day: str) -> pd.Series | None:
+    """day 날짜의 봉. 인덱스에 시각이 섞여 있어도 날짜로 비교하고, 중복이면 마지막 줄."""
+    if frame is None or frame.empty:
+        return None
+    idx = pd.DatetimeIndex(frame.index)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    mask = idx.normalize() == pd.Timestamp(day)
+    return frame[mask].iloc[-1] if mask.any() else None
+
+
+def _last_close_before(frame: pd.DataFrame | None, day: str) -> tuple[str, float] | None:
+    """day 보다 앞선 마지막 종가 (날짜, 값). 미래 값은 쓰지 않습니다."""
+    if frame is None or frame.empty:
+        return None
+    idx = pd.DatetimeIndex(frame.index)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    before = frame[idx.normalize() < pd.Timestamp(day)]
+    if before.empty:
+        return None
+    return str(pd.DatetimeIndex(before.index)[-1].date()), float(before.iloc[-1]["close"])
 
 
 def cmd_virtual_update(args: argparse.Namespace) -> int:
@@ -2369,23 +2407,45 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
             return 0
         오늘 = str(now.date())
 
+    # 지난 날짜를 다시 돌리면 그 뒤의 체결이 과거 스냅샷에 섞입니다 — 기록은 지우지 않습니다(§12).
+    trades = store.load_trades()
+    기록날짜 = [str(x) for df in (store.load_daily(), trades, store.load_log())
+                for x in df["date"] if str(x)]
+    if 기록날짜 and 오늘 < max(기록날짜):
+        print(f"지난 날짜는 다시 쓰지 않습니다 (기록은 지우지 않음) — 마지막 기록 {max(기록날짜)}.")
+        return 0
+
     ledger = lt_module.load(_resolve(args.file))
     candidates, 유지집합 = virtual_candidates(_resolve(args.candidates), ledger)
-    trades = store.load_trades()
     positions, cash = va_module.replay(trades, rules)
     pending = store.pending_orders(오늘)
+
+    # 코스닥 지수를 먼저 받습니다 — 휴장 판정에도 쓰고, 종목이 하나도 없는 날에도 휴장을 가려야 합니다.
+    try:
+        kq = fetch_index("KQ11", years=0.5)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️ 코스닥 지수 실패: {exc}")
+        kq = None
+    kq_bar = _bar_on(kq, 오늘)
+    kq_close = float(kq_bar["close"]) if kq_bar is not None else float("nan")
 
     codes = sorted({*positions, *(c for c, _, _ in candidates), *(o.code for o in pending)})
     names = {**{c: n for c, n, _ in candidates}, **{c: p.name for c, p in positions.items()},
              **{o.code: o.name for o in pending}}
     frames: dict[str, pd.DataFrame] = {}
+    실패 = 0
     for code in codes:
         try:
             frames[code] = fetch_daily_kr(code, years=0.5, pause=0.0)
         except Exception as exc:  # noqa: BLE001
+            실패 += 1
             print(f"  ⚠️ {code} 시세 실패: {exc}")
-    오늘봉 = {c: f.loc[pd.Timestamp(오늘)] for c, f in frames.items() if pd.Timestamp(오늘) in f.index}
-    if codes and not 오늘봉:
+    if codes and not frames:
+        msg = f"가상 계좌 {오늘}: 시세 실패 {실패}종목 — 시세를 하나도 받지 못해 아무것도 하지 않습니다."
+        _notify(msg, not args.no_telegram)
+        return 0
+    오늘봉 = {c: b for c, f in frames.items() if (b := _bar_on(f, 오늘)) is not None}
+    if kq_bar is None and not 오늘봉:
         print(f"{오늘} 의 오늘 봉이 없습니다 (휴장이거나 아직 안 나옴). 아무것도 하지 않습니다.")
         return 0
     opens = {c: float(b["open"]) for c, b in 오늘봉.items()}
@@ -2397,40 +2457,59 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
     if fills:
         positions, cash = va_module.replay(store.load_trades(), rules)
 
-    # ② 평가 · 스냅샷 · 한도
-    pv = va_module.value_of(positions, closes)
+    # ② 평가 · 스냅샷 · 한도. 오늘 종가가 없는 보유 종목은 직전 종가(없으면 평단)로 평가하고 그 사실을 남깁니다.
+    평가종가 = dict(closes)
+    평가결정: list[va_module.Decision] = []
+    for code, p in positions.items():
+        if code in closes:
+            continue
+        직전 = _last_close_before(frames.get(code), 오늘)
+        if 직전:
+            평가종가[code] = 직전[1]
+            쓴값 = f"{직전[0]} 종가 {직전[1]:,.0f}원"
+        else:
+            평가종가[code] = p.avg_price
+            쓴값 = f"평단 {p.avg_price:,.0f}원"
+        평가결정.append(va_module.Decision(오늘, code, p.name, "보류", "조건",
+                                       f"오늘 종가 없음 — 평가에는 {쓴값}을 썼습니다"))
+    pv = va_module.value_of(positions, 평가종가)
     equity = cash + pv
     prev = store.last_daily_before(오늘)
     prev_eq = prev["equity"] if prev else None
+    if prev_eq is not None and not pd.notna(prev_eq):
+        prev_eq = None
     halted = va_module.is_halted(prev_eq, equity, rules)
-    try:
-        kq = fetch_index("KQ11", years=0.5)
-        kq_close = float(kq.loc[pd.Timestamp(오늘)]["close"]) if pd.Timestamp(오늘) in kq.index else float("nan")
-    except Exception:  # noqa: BLE001
-        kq_close = float("nan")
     store.upsert_daily({"date": 오늘, "cash": round(cash, 2), "positions_value": round(pv, 2),
                         "equity": round(equity, 2),
                         "day_pnl": round(equity - prev_eq, 2) if prev_eq else 0.0,
                         "day_pnl_pct": round((equity / prev_eq - 1) * 100, 3) if prev_eq else 0.0,
                         "halted": bool(halted), "n_positions": len(positions), "kosdaq_close": kq_close})
 
-    # ③ 오늘 종가 → 내일 주문
+    # ③ 오늘 종가 → 내일 주문 (판단에는 오늘 종가만 씁니다)
+    근거결정: list[va_module.Decision] = []
+    if 유지집합 is None:
+        근거결정 = [va_module.Decision(오늘, code, p.name, "보류", "조건",
+                                    "최근 월말 후보 판정 없음 — 근거 사라짐을 판단하지 않습니다")
+                    for code, p in positions.items()]
     sells, 매도결정 = va_module.decide_sells(positions, closes, rules, 오늘, 유지집합)
     buys, 매수결정 = va_module.decide_buys(positions, closes, candidates, rules, 오늘, cash, halted,
                                            selling={o.code for o in sells})   # 같은 날 매도 종목은 사지 않음
     orders = {(o.code, o.side, o.tranche): o for o in [*sells, *buys]}
-    n_log = store.append_decisions([*체결결정, *매도결정, *매수결정], orders)
+    전체결정 = [*체결결정, *평가결정, *근거결정, *매도결정, *매수결정]
+    store.append_decisions(전체결정, orders)
 
     막힘 = [d for d in [*매수결정, *매도결정] if d.action in ("보류", "건너뜀", "살 수 없음")]
     요약 = (f"💼 가상 계좌 {오늘} — 평가액 {equity:,.0f}원 (현금 {cash:,.0f}) · "
           f"보유 {len(positions)}/{rules.max_positions} · 체결 {n_fill}건 · 내일 주문 {len(orders)}건 · 막힘 {len(막힘)}건"
+          + (f" · 평가 대체 {len(평가결정)}종목" if 평가결정 else "")
+          + (f" · 시세 실패 {실패}종목" if 실패 else "")
           + (" · ⚠️ 일일 손실 한도 발동" if halted else ""))
     print(요약)
-    for d in [*체결결정, *매도결정, *매수결정][:20]:
+    for d in 전체결정[:20]:
         print(f"   [{d.gate}] {d.action} {d.name}({d.code}) — {d.detail}")
 
     if args.web:
-        from . import virtual_html  # Task 6 에서 만듭니다
+        from . import virtual_html  # Task 6 에서 만듭니다 (이 블록만 지역 import)
         out = _resolve(args.web_dir)
         virtual_html.write_json(out / "virtual.json", store, rules, closes, names, 오늘)
         report_html.rerender(out)
@@ -3279,7 +3358,8 @@ def build_parser() -> argparse.ArgumentParser:
     vu.add_argument("--web", action="store_true")
     vu.add_argument("--web-dir", default="../stocks")
     vu.add_argument("--no-telegram", action="store_true")
-    vu.add_argument("--force", action="store_true")
+    vu.add_argument("--force", action="store_true",
+                    help="16:00 전이라도 실행 — 장중 값으로 낸 주문이 그대로 고정됨(권장 안 함)")
     vu.set_defaults(func=cmd_virtual_update)
 
     ls = sub.add_parser(

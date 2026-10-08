@@ -1,8 +1,6 @@
 """virtual-update 한 바퀴 — 가짜 시세로 네트워크 없이. 같은 날 두 번 돌리면 두 번째는 변화 0."""
 from __future__ import annotations
 
-import json
-
 import pandas as pd
 import pytest
 
@@ -115,3 +113,138 @@ def test_후보_파일에서_후보가_아닌_줄은_후보로_삼지_않는다(
 def test_후보_파일이_없으면_집합은_None(tmp_path):
     목록, 집합 = cli.virtual_candidates(tmp_path / "없음.csv", pd.DataFrame(columns=list(lt.COLUMNS)))
     assert 목록 == [] and 집합 is None
+
+
+# ---- 검토 반영 (수정 라운드 1) -------------------------------------------------
+
+def _frames():
+    return {
+        "000001": make_daily([1000, 1000, 1000, 1060, 1100, 1120], start="2026-10-01"),
+        "000002": make_daily([300_000] * 6, start="2026-10-01"),
+    }
+
+
+def _set_frames(monkeypatch, frames):
+    monkeypatch.setattr(cli, "fetch_daily_kr", lambda code, years=2.0, pause=0.0: frames[code])
+
+
+def _write_cand(path, rows):
+    pd.DataFrame({"month": ["2026-10"] * len(rows), "code": [r[0] for r in rows], "name": [r[0] for r in rows],
+                  "close": [1000.0] * len(rows), "score": [r[2] for r in rows], "기업점수": [70] * len(rows),
+                  "가격점수": [70] * len(rows), "basis": [r[1] for r in rows]}
+                 ).to_csv(path, index=False, encoding="utf-8-sig")
+
+
+def _bytes(tmp_path):
+    return {n: (tmp_path / n).read_bytes() for n in ("virtual_trades.csv", "virtual_log.csv", "virtual_daily.csv")}
+
+
+def test_지난_날짜를_다시_돌려도_기록을_건드리지_않는다(world, capsys):
+    tmp_path, cand = world
+    _run(tmp_path, cand, "2026-10-01"); _run(tmp_path, cand, "2026-10-02")
+    before = _bytes(tmp_path)
+    capsys.readouterr()
+    assert _run(tmp_path, cand, "2026-10-01") == 0
+    assert _bytes(tmp_path) == before
+    assert "지난 날짜" in capsys.readouterr().out
+    d = vs.Store.default(tmp_path).load_daily()
+    assert float(d[d["date"] == "2026-10-01"].iloc[0]["cash"]) == 5_000_000.0
+
+
+def test_오늘_봉이_없는_보유_종목은_직전_종가로_평가하고_그_사실을_남긴다(world, monkeypatch):
+    tmp_path, cand = world
+    for d in ("2026-10-01", "2026-10-02", "2026-10-05"):
+        _run(tmp_path, cand, d)
+    frames = _frames()
+    frames["000001"] = frames["000001"].drop(pd.Timestamp("2026-10-06"))
+    _set_frames(monkeypatch, frames)
+    _run(tmp_path, cand, "2026-10-06")
+    s = vs.Store.default(tmp_path)
+    row = s.load_daily().iloc[-1]
+    assert row["date"] == "2026-10-06" and float(row["positions_value"]) == 224 * 1000.0   # 10-05 종가, 평단 아님
+    log = s.load_log()
+    대체 = log[(log["date"] == "2026-10-06") & (log["action"] == "보류") & log["detail"].str.contains("평가")]
+    assert len(대체) == 1 and "2026-10-05" in 대체.iloc[0]["detail"]
+    assert len(log[(log["date"] == "2026-10-06") & (log["action"] == "주문")]) == 0   # 판단에는 오늘 종가만
+
+
+def test_시각이_섞인_인덱스에서도_오늘_봉을_찾는다(world, monkeypatch):
+    tmp_path, cand = world
+    frames = _frames()
+    for f in frames.values():
+        f.index = f.index + pd.Timedelta(hours=15, minutes=30)
+    _set_frames(monkeypatch, frames)
+    monkeypatch.setattr(cli, "fetch_index", lambda code="KS11", years=3.0: frames["000001"])
+    _run(tmp_path, cand, "2026-10-01"); _run(tmp_path, cand, "2026-10-02")
+    s = vs.Store.default(tmp_path)
+    assert list(s.load_trades()["code"]) == ["000001"]
+    assert float(s.load_daily().iloc[-1]["kosdaq_close"]) == 1000.0
+
+
+def test_그달_후보_판정이_0건이면_근거_사라짐을_판단하지_않는다(world, capsys):
+    tmp_path, cand = world
+    _run(tmp_path, cand, "2026-10-01"); _run(tmp_path, cand, "2026-10-02")
+    _write_cand(cand, [("000001", "비쌈", 1.0), ("000002", "제외", 2.0)])
+    capsys.readouterr()
+    _run(tmp_path, cand, "2026-10-05")
+    log = vs.Store.default(tmp_path).load_log()
+    오늘 = log[log["date"] == "2026-10-05"]
+    assert len(오늘[오늘["action"] == "주문"]) == 0
+    assert 오늘["detail"].str.contains("판정 없음").any()
+    assert "'후보' 판정이 한 줄도 없습니다" in capsys.readouterr().out
+
+
+def test_후보에서_빠진_보유_종목은_근거_사라짐으로_매도_주문이_난다(world):
+    """위 시험의 대조군 — 배선을 끊으면 이쪽이 깨집니다."""
+    tmp_path, cand = world
+    _run(tmp_path, cand, "2026-10-01"); _run(tmp_path, cand, "2026-10-02")
+    _write_cand(cand, [("000002", "후보", 2.0)])
+    _run(tmp_path, cand, "2026-10-05")
+    log = vs.Store.default(tmp_path).load_log()
+    오늘 = log[log["date"] == "2026-10-05"]
+    assert "000001" in set(오늘[오늘["action"] == "주문"]["code"])
+
+
+def test_판단보류_종목은_근거가_사라진_것이_아니고_새로_사지도_않는다(world):
+    tmp_path, cand = world
+    _run(tmp_path, cand, "2026-10-01"); _run(tmp_path, cand, "2026-10-02")
+    _write_cand(cand, [("000001", "판단보류", 1.0), ("000002", "후보", 2.0)])
+    목록, 집합 = cli.virtual_candidates(cand, pd.DataFrame(columns=list(lt.COLUMNS)))
+    assert [c for c, _, _ in 목록] == ["000002"] and 집합 == {"000001", "000002"}
+    _run(tmp_path, cand, "2026-10-05")
+    log = vs.Store.default(tmp_path).load_log()
+    오늘 = log[log["date"] == "2026-10-05"]
+    assert "000001" not in set(오늘[오늘["action"] == "주문"]["code"])
+
+
+def test_시세를_하나도_못_받으면_휴장과_가르고_알린다(world, monkeypatch, capsys):
+    tmp_path, cand = world
+    알림 = []
+    monkeypatch.setattr(cli, "_notify", lambda text, enabled: 알림.append(text))
+
+    def boom(code, years=2.0, pause=0.0):
+        raise RuntimeError("연결 안 됨")
+    monkeypatch.setattr(cli, "fetch_daily_kr", boom)
+    assert _run(tmp_path, cand, "2026-10-01") == 0
+    assert vs.Store.default(tmp_path).load_daily().empty
+    assert len(알림) == 1 and "시세 실패 2종목" in 알림[0]
+
+
+def test_종목이_없는_휴장일에는_스냅샷이_쌓이지_않는다(world, tmp_path_factory):
+    tmp_path, _ = world
+    없음 = tmp_path / "없는파일.csv"
+    assert _run(tmp_path, 없음, "2026-10-03") == 0           # 토요일: 지수 봉도 없음
+    assert vs.Store.default(tmp_path).load_daily().empty
+    assert _run(tmp_path, 없음, "2026-10-02") == 0           # 평일: 종목은 없어도 현금 스냅샷은 남김
+    assert list(vs.Store.default(tmp_path).load_daily()["date"]) == ["2026-10-02"]
+
+
+def test_지수_조회가_실패해도_종목_봉으로_계속하고_한_줄_알린다(world, monkeypatch, capsys):
+    tmp_path, cand = world
+
+    def boom(code="KS11", years=3.0):
+        raise RuntimeError("지수 서버 오류")
+    monkeypatch.setattr(cli, "fetch_index", boom)
+    assert _run(tmp_path, cand, "2026-10-01") == 0
+    assert "코스닥 지수 실패" in capsys.readouterr().out
+    assert len(vs.Store.default(tmp_path).load_daily()) == 1
