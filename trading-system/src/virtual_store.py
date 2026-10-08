@@ -11,7 +11,6 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -51,6 +50,14 @@ def _save(frame: pd.DataFrame, path: Path, columns: tuple, key: str) -> None:
     frame[list(columns)].to_csv(path, index=False, encoding="utf-8-sig")
 
 
+def _concat(frame: pd.DataFrame, rows: list[dict]) -> pd.DataFrame:
+    """빈 프레임과 이어 붙일 때의 pandas 경고를 피합니다."""
+    new = pd.DataFrame(rows)
+    if frame.empty:
+        return new
+    return pd.concat([frame, new], ignore_index=True)
+
+
 def _row_id(*parts: str) -> str:
     return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:10]
 
@@ -82,11 +89,12 @@ class Store:
         for f in fills:
             if f.order_id in 있는것:
                 continue
+            있는것.add(f.order_id)
             row = asdict(f)
             row.update(row_id=_row_id("fill", f.order_id), version=VIRTUAL_VERSION)
             새것.append(row)
         if 새것:
-            frame = pd.concat([frame, pd.DataFrame(새것)], ignore_index=True)
+            frame = _concat(frame, 새것)
             _save(frame, self.trades_path, TRADES_COLUMNS, key="row_id")
         return len(새것)
 
@@ -94,6 +102,8 @@ class Store:
                          orders: dict[tuple[str, str, str], Order]) -> int:
         frame = self.load_log()
         있는것 = set(frame["row_id"].astype(str))
+        # 주문은 order_id 로 한 번만 남깁니다 — 같은 날 다시 돌려 reason 문구가 달라져도 한 줄.
+        있는주문 = set(frame.loc[frame["action"].astype(str) == "주문", "order_id"].astype(str)) - {""}
         새것 = []
         for d in decisions:
             order = None
@@ -101,14 +111,19 @@ class Store:
                 order = next((o for o in orders.values() if o.code == d.code and o.reason == d.detail), None)
             order_id = order.order_id if order else ""
             rid = _row_id("log", d.date, d.code, d.action, d.gate, d.detail, order_id)
-            if rid in 있는것:
+            if order_id:
+                if order_id in 있는주문:
+                    continue
+                있는주문.add(order_id)
+            elif rid in 있는것:
                 continue
+            있는것.add(rid)
             row = asdict(d)
             row.update(row_id=rid, version=VIRTUAL_VERSION, order_id=order_id,
                        order_json=json.dumps(asdict(order), ensure_ascii=False) if order else "")
             새것.append(row)
         if 새것:
-            frame = pd.concat([frame, pd.DataFrame(새것)], ignore_index=True)
+            frame = _concat(frame, 새것)
             _save(frame, self.log_path, LOG_COLUMNS, key="row_id")
         return len(새것)
 
@@ -124,22 +139,21 @@ class Store:
         # 주문은 '다음 거래일' 용입니다. 가장 최근 주문일 묶음만 체결 대상이고,
         # 그보다 오래된 미체결(살 수 없었던 것 등)은 다시 시도하지 않습니다.
         마지막날 = str(주문들["date"].astype(str).max())
+        마지막묶음: dict[str, str] = {}   # order_id -> order_json (같은 order_id 면 마지막 줄)
         for _, r in 주문들[주문들["date"].astype(str) == 마지막날].iterrows():
-            if str(r["order_id"]) in 체결된:
+            마지막묶음[str(r["order_id"])] = str(r["order_json"])
+        for order_id, order_json in 마지막묶음.items():
+            if order_id in 체결된:
                 continue
-            out.append(Order(**json.loads(str(r["order_json"]))))
+            out.append(Order(**json.loads(order_json)))
         return out
 
     def upsert_daily(self, row: dict) -> None:
         frame = self.load_daily()
         row = dict(row, version=VIRTUAL_VERSION)
         frame = frame[frame["date"].astype(str) != str(row["date"])]
-        frame = pd.concat([frame, pd.DataFrame([row])], ignore_index=True).sort_values("date")
-        기존 = _load(self.daily_path, DAILY_COLUMNS)
-        if len(frame) < len(기존):
-            raise StoreShrank("virtual_daily.csv 가 줄어듭니다")
-        self.daily_path.parent.mkdir(parents=True, exist_ok=True)
-        frame[list(DAILY_COLUMNS)].to_csv(self.daily_path, index=False, encoding="utf-8-sig")
+        frame = _concat(frame, [row]).sort_values("date")
+        _save(frame, self.daily_path, DAILY_COLUMNS, key="date")
 
     def last_daily_before(self, as_of: str) -> dict | None:
         d = self.load_daily()
