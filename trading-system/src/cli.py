@@ -17,7 +17,7 @@ import argparse
 import json
 from dataclasses import replace
 import sys
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -284,6 +284,31 @@ def _market_state(cfg: Config):
         return state, ""
     except (DataUnavailable, ValueError) as exc:
         return None, f"⚠️ 시장 상태를 판정하지 못했습니다: {exc}"
+
+
+def is_last_weekday_of_month(day: date) -> bool:
+    """그날이 그 달의 마지막 평일인가. 공휴일은 모릅니다(평일 기준).
+
+    말일이 주말이면 "내일이 1일" 로는 월말 단계가 아예 안 돕니다
+    (2026-11-30 일요일). 그래서 마지막 평일을 직접 셉니다.
+    """
+    if day.weekday() >= 5:
+        return False
+    import calendar
+    last = date(day.year, day.month, calendar.monthrange(day.year, day.month)[1])
+    while last.weekday() >= 5:
+        last = last - timedelta(days=1)
+    return day == last
+
+
+def cmd_month_end_check(args: argparse.Namespace) -> int:
+    """워크플로가 '오늘 월말 단계를 돌릴까' 를 묻는 자리. 0 이면 돌립니다."""
+    오늘 = date.fromisoformat(args.date) if args.date else now_kst().date()
+    if is_last_weekday_of_month(오늘):
+        print(f"{오늘} 은 이 달의 마지막 평일입니다 → 월말 단계를 돌립니다")
+        return 0
+    print(f"{오늘} 은 마지막 평일이 아닙니다 → 월말 단계를 건너뜁니다")
+    return 1
 
 
 def _names_for(codes: list[str], path: Path) -> dict[str, str]:
@@ -2340,20 +2365,13 @@ def _scored_frame(scored: list) -> pd.DataFrame:
     return pd.DataFrame([s.__dict__ for s in scored])
 
 
-def cmd_value_record(args: argparse.Namespace) -> int:
-    """오늘 저평가 후보를 기록해 둡니다. 나중에 성적을 매기려고."""
-    path = _resolve(args.fin)
-    if not path.exists():
-        print(f"재무 파일이 없습니다: {path}")
-        print("  python -m src.cli value-fetch --market KOSDAQ")
-        return 1
+def _value_screen_pipeline(args: argparse.Namespace, fin: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+    """재무표 → 스크린 → 두 축 판정. (통과 표, 조건 글) 을 돌려줍니다.
 
-    fin = pd.read_csv(path, dtype={"code": str, "rcept_dt": str})
-    try:
-        listing = val_module.listing_with_cap(args.market)
-    except DataUnavailable as exc:
-        print(f"실패: {exc}")
-        return 1
+    cmd_value_record 에서 뽑아낸 순수 분리입니다. 시세 목록을 못 받으면
+    DataUnavailable 이 그대로 올라갑니다.
+    """
+    listing = val_module.listing_with_cap(args.market)
 
     rule = val_module.Screen(
         max_pbr=args.max_pbr, max_per=args.max_per,
@@ -2384,9 +2402,53 @@ def cmd_value_record(args: argparse.Namespace) -> int:
             조건 += (f"/기업{qa_module.GOOD_BUSINESS:g}"
                      f"/가격{qa_module.GOOD_PRICE:g}")
 
+    return 통과, 조건
+
+
+def _save_candidates(path: Path, 통과: pd.DataFrame) -> None:
+    """판정 '후보' 전체를 달 단위로 남깁니다. 가상 계좌가 '근거 유지' 를 볼 때 씁니다."""
+    달 = now_kst().strftime("%Y-%m")
+    통과 = 통과.reset_index(drop=True)
+    빈칸 = pd.Series([""] * len(통과))
+    새것 = pd.DataFrame({
+        "month": 달,
+        "code": 통과["code"].astype(str) if "code" in 통과 else 빈칸,
+        "name": 통과.get("name", 빈칸).astype(str),
+        "close": pd.to_numeric(통과.get("close"), errors="coerce"),
+        "score": pd.to_numeric(통과.get("저평가점수"), errors="coerce"),
+        "기업점수": pd.to_numeric(통과.get("기업점수"), errors="coerce"),
+        "가격점수": pd.to_numeric(통과.get("가격점수"), errors="coerce"),
+        "basis": 통과.get("판정", 빈칸).astype(str),
+    })
+    기존 = pd.DataFrame()
+    if path.exists():
+        기존 = pd.read_csv(path, dtype={"code": str}, keep_default_na=False)
+        기존 = 기존[기존["month"].astype(str) != 달]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.concat([기존, 새것], ignore_index=True).to_csv(path, index=False, encoding="utf-8-sig")
+
+
+def cmd_value_record(args: argparse.Namespace) -> int:
+    """오늘 저평가 후보를 기록해 둡니다. 나중에 성적을 매기려고."""
+    path = _resolve(args.fin)
+    if not path.exists():
+        print(f"재무 파일이 없습니다: {path}")
+        print("  python -m src.cli value-fetch --market KOSDAQ")
+        return 1
+
+    fin = pd.read_csv(path, dtype={"code": str, "rcept_dt": str})
+    try:
+        통과, 조건 = _value_screen_pipeline(args, fin)
+    except DataUnavailable as exc:
+        print(f"실패: {exc}")
+        return 1
+
     기록 = lt_module.load(_resolve(args.file))
     기록, 새것 = lt_module.add_value_picks(기록, 통과, 조건, top=args.top)
     저장 = lt_module.save(기록, _resolve(args.file))
+
+    if getattr(args, "candidates_out", None):
+        _save_candidates(_resolve(args.candidates_out), 통과)
 
     print(f"저평가 후보 {len(통과):,}종목 중 상위 {args.top}개를 기록했습니다 "
           f"(새로 적은 것 {새것}건) → {저장}")
@@ -3008,7 +3070,13 @@ def build_parser() -> argparse.ArgumentParser:
     vr.add_argument("--top", type=int, default=10,
                     help="상위 몇 종목을 기록할지. 많으면 버려지는 것만 늘어납니다")
     vr.add_argument("--file", default="data/livetest.csv", help="기록 파일")
+    vr.add_argument("--candidates-out", help="판정 '후보' 전체를 달별로 남길 파일 (가상 계좌용)")
     vr.set_defaults(func=cmd_value_record)
+
+    me = sub.add_parser("month-end-check",
+                        help="[워크플로] 오늘이 이 달 마지막 평일이면 0")
+    me.add_argument("--date", help="시험·재현용 YYYY-MM-DD (기본: 오늘 KST)")
+    me.set_defaults(func=cmd_month_end_check)
 
     lf = sub.add_parser(
         "ledger-fix",

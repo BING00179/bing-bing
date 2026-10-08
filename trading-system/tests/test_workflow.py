@@ -133,3 +133,48 @@ def test_장부_단계는_15시40분에_창을_닫지_않는다():
         "장부 단계가 15:40 에 창을 닫습니다. 예약 실행이 15:41 에 뜨면 그날은 "
         "장부가 비게 됩니다 — 2026-10-01·10-06·10-07 이 그랬습니다."
     )
+
+
+# ── 2026-10-08 추가 (셋째) — 다섯 번째 벽 ───────────────────────────
+# 월말 `value-record` 는 DART 재무 파일(data/fin_kr.csv)이 있어야 하는데
+# 러너에는 없고 만드는 단계도 없었습니다. 2026-10-31 에도 "재무 파일이
+# 없습니다" 로 끝날 상태였습니다. 그리고 말일이 주말이면 아예 안 돌고,
+# 15:20~15:40 창을 비켜가면 또 안 돌았습니다.
+
+def _monthly_step() -> dict:
+    (단계,) = [s for s in _steps() if "value-record" in (s.get("run") or "")]
+    return 단계
+
+
+def test_월말_단계는_재무를_먼저_받는다():
+    글 = _monthly_step().get("run") or ""
+    assert "value-fetch" in 글, "value-fetch 없이 value-record 는 '재무 파일이 없습니다' 로 끝납니다"
+    assert 글.index("value-fetch") < 글.index("value-record")
+
+
+def test_월말_단계는_DART_키를_받는다():
+    env = _monthly_step().get("env") or {}
+    assert "DART_API_KEY" in env, "secrets.DART_API_KEY 가 단계 env 에 없습니다"
+
+
+def test_월말_단계는_마지막_평일_판정을_명령에_맡긴다():
+    글 = _monthly_step().get("run") or ""
+    assert "month-end-check" in 글
+    assert 'TOMORROW" = "01"' not in 글, "내일이 1일 로만 보면 말일이 주말인 달은 안 돕니다"
+    assert '"$MIN" -le 40' not in 글, "15:40 에 창을 닫으면 예약이 늦게 뜬 날은 못 돕니다"
+
+
+def test_월말_브리핑은_한_달에_한_번만():
+    글 = _monthly_step().get("run") or ""
+    assert "monthly_review_" in 글 and ".done" in 글, "표시 파일 없이는 두 번 돌면 텔레그램이 두 번 갑니다"
+
+
+def test_월말_단계는_후보_전체를_남긴다():
+    assert "--candidates-out data/value_candidates.csv" in (_monthly_step().get("run") or "")
+
+
+def test_커밋_단계가_새_파일들을_올린다():
+    글 = WORKFLOW.read_text(encoding="utf-8")
+    for 파일 in ("trading-system/data/value_candidates.csv",
+                "trading-system/data/monthly_review_"):
+        assert 파일 in 글, f"{파일} 를 커밋하지 않으면 다음 실행에서 사라집니다"
