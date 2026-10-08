@@ -262,3 +262,29 @@ def test_web_을_켜면_virtual_json_과_가상_계좌_탭이_생긴다(world):
     page = (web / "index.html").read_text(encoding="utf-8")
     assert 'data-panel="virtual"' in page and "가상 계좌" in page and "2026-10-02 종가 기준" in page
     assert "살 수 없음" in page                                  # 못 산 결정도 화면에 보임
+
+
+def test_첫날_오늘_손익은_0이_아니라_모름으로_남는다(world):
+    tmp_path, cand = world
+    _run(tmp_path, cand, "2026-10-01")
+    d = vs.Store.default(tmp_path).load_daily()
+    assert str(d.iloc[0]["day_pnl"]) == "" and str(d.iloc[0]["day_pnl_pct"]) == ""
+    _run(tmp_path, cand, "2026-10-02")
+    assert str(vs.Store.default(tmp_path).load_daily().iloc[-1]["day_pnl"]) != ""     # 둘째 날부터는 숫자
+
+
+def test_web_오늘_종가_없는_보유_종목은_무엇으로_평가했는지_화면에_적는다(world, monkeypatch):
+    tmp_path, cand = world
+    web = tmp_path / "stocks"
+    for d in ("2026-10-01", "2026-10-02", "2026-10-05"):
+        _run(tmp_path, cand, d)
+    full = {"000001": make_daily([1000, 1000, 1000, 1060, 1100, 1120], start="2026-10-01"),
+            "000002": make_daily([300_000] * 6, start="2026-10-01")}
+    full["000001"] = full["000001"].drop(full["000001"].index[3])            # 10-06 봉이 없다
+    monkeypatch.setattr(cli, "fetch_daily_kr", lambda code, years=2.0, pause=0.0: full[code])
+    assert _run(tmp_path, cand, "2026-10-06", extra=("--web", "--web-dir", str(web))) == 0
+    data = json.loads((web / "virtual.json").read_text(encoding="utf-8"))
+    assert data["positions"][0]["close_note"] == "2026-10-05 종가"
+    assert data["summary"]["valued_on"] == "2026-10-06"
+    page = (web / "index.html").read_text(encoding="utf-8")
+    assert "오늘 종가 없음 — 2026-10-05 종가 로 평가" in page

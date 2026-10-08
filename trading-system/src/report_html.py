@@ -194,6 +194,7 @@ details[open] summary::before{content:"\25be  "}
 .tbl{overflow-x:auto}.tbl table{border-collapse:collapse;width:100%;font-size:13px;min-width:560px}
 .tbl th,.tbl td{text-align:left;padding:6px 8px;border-top:1px solid var(--line);white-space:nowrap}
 .tbl th{color:var(--muted);font-weight:600;border-top:0}
+.vnum{white-space:nowrap}
 """
 
 # dashboard.SCRIPT 와 같은 내용 (dashboard 를 import 하지 않으려고 복사)

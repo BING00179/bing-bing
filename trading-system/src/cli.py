@@ -2459,6 +2459,7 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
 
     # ② 평가 · 스냅샷 · 한도. 오늘 종가가 없는 보유 종목은 직전 종가(없으면 평단)로 평가하고 그 사실을 남깁니다.
     평가종가 = dict(closes)
+    대체: dict[str, str] = {}      # 화면에 "무엇으로 평가했나"를 보이려고 모아 둠
     평가결정: list[va_module.Decision] = []
     for code, p in positions.items():
         if code in closes:
@@ -2467,9 +2468,11 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
         if 직전:
             평가종가[code] = 직전[1]
             쓴값 = f"{직전[0]} 종가 {직전[1]:,.0f}원"
+            대체[code] = f"{직전[0]} 종가"
         else:
             평가종가[code] = p.avg_price
             쓴값 = f"평단 {p.avg_price:,.0f}원"
+            대체[code] = "평단"
         평가결정.append(va_module.Decision(오늘, code, p.name, "보류", "조건",
                                        f"오늘 종가 없음 — 평가에는 {쓴값}을 썼습니다"))
     pv = va_module.value_of(positions, 평가종가)
@@ -2481,8 +2484,9 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
     halted = va_module.is_halted(prev_eq, equity, rules)
     store.upsert_daily({"date": 오늘, "cash": round(cash, 2), "positions_value": round(pv, 2),
                         "equity": round(equity, 2),
-                        "day_pnl": round(equity - prev_eq, 2) if prev_eq else 0.0,
-                        "day_pnl_pct": round((equity / prev_eq - 1) * 100, 3) if prev_eq else 0.0,
+                        # 이전 스냅샷이 없으면 오늘 손익은 '모름' — 0 으로 채우지 않습니다 (§9)
+                        "day_pnl": round(equity - prev_eq, 2) if prev_eq else "",
+                        "day_pnl_pct": round((equity / prev_eq - 1) * 100, 3) if prev_eq else "",
                         "halted": bool(halted), "n_positions": len(positions), "kosdaq_close": kq_close})
 
     # ③ 오늘 종가 → 내일 주문 (판단에는 오늘 종가만 씁니다)
@@ -2509,9 +2513,9 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
         print(f"   [{d.gate}] {d.action} {d.name}({d.code}) — {d.detail}")
 
     if args.web:
-        from . import virtual_html  # Task 6 에서 만듭니다 (이 블록만 지역 import)
+        from . import virtual_html  # --web 일 때만 쓰는 화면 모듈 (지역 import)
         out = _resolve(args.web_dir)
-        virtual_html.write_json(out / "virtual.json", store, rules, closes, names, 오늘)
+        virtual_html.write_json(out / "virtual.json", store, rules, 평가종가, names, 오늘, substituted=대체)
         report_html.rerender(out)
         print(f"웹페이지 갱신: {out / 'index.html'}")
     _notify(요약, not args.no_telegram)

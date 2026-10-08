@@ -75,9 +75,9 @@ def test_없는_값은_0이_아니라_없음으로_보인다(tmp_path):
     data = virtual_html.write_json(tmp_path / "v.json", s, R, {}, {}, "2026-10-05")   # 시세도 없음
     assert data["summary"]["halted"] is True                       # CSV 에서 읽힌 값이 무엇이든 불리언
     assert data["curve"][-1]["kosdaq_close"] is None
-    assert data["positions"][0]["close_missing"] is True
+    assert data["positions"][0]["close_note"] == "평단"
     html = virtual_html.render_tab(data)
-    assert "시세 없음" in html and "일일 손실 한도 발동" in html
+    assert "오늘 종가 없음 — 평단 로 평가" in html and "일일 손실 한도 발동" in html
     assert "NaN" not in html and "nan" not in html
 
 
@@ -87,3 +87,69 @@ def test_화면에_들어가는_글자는_이스케이프된다(tmp_path):
     data = virtual_html.write_json(tmp_path / "v.json", s, R, {}, {}, "2026-10-02")
     html = virtual_html.render_tab(data)
     assert "<script>alert" not in html and "&lt;script&gt;" in html
+
+
+def test_대체한_종가는_무엇으로_평가했는지_표에_적힌다(tmp_path):
+    data = virtual_html.write_json(tmp_path / "v.json", _store(tmp_path), R, {"000001": 1000.0}, {}, "2026-10-02",
+                                   substituted={"000001": "2026-10-01 종가"})
+    assert data["positions"][0]["close_note"] == "2026-10-01 종가"
+    assert "오늘 종가 없음 — 2026-10-01 종가 로 평가" in virtual_html.render_tab(data)
+    정상 = virtual_html.write_json(tmp_path / "v2.json", _store(tmp_path), R, {"000001": 1100.0}, {}, "2026-10-02")
+    assert 정상["positions"][0]["close_note"] is None and "오늘 종가 없음" not in virtual_html.render_tab(정상)
+
+
+def test_코스닥_기간은_값이_있는_첫날과_마지막날이고_카드에_적힌다(tmp_path):
+    s = vs.Store.default(tmp_path)
+    s.upsert_daily({"date": "2026-10-01", "cash": 5e6, "positions_value": 0.0, "equity": 5e6, "day_pnl": "", "day_pnl_pct": "",
+                    "halted": False, "n_positions": 0, "kosdaq_close": float("nan")})
+    s.upsert_daily({"date": "2026-10-02", "cash": 5e6, "positions_value": 0.0, "equity": 5e6, "day_pnl": 0.0, "day_pnl_pct": 0.0,
+                    "halted": False, "n_positions": 0, "kosdaq_close": 800.0})
+    s.upsert_daily({"date": "2026-10-05", "cash": 5e6, "positions_value": 0.0, "equity": 5e6, "day_pnl": 0.0, "day_pnl_pct": 0.0,
+                    "halted": False, "n_positions": 0, "kosdaq_close": 808.0})
+    data = virtual_html.write_json(tmp_path / "v.json", s, R, {}, {}, "2026-10-05")
+    sm = data["summary"]
+    assert sm["kosdaq_from"] == "2026-10-02" and sm["kosdaq_to"] == "2026-10-05" and sm["kosdaq_return_pct"] == 1.0
+    assert sm["day_pnl"] == 0.0 and data["curve"][0]["equity"] == 5e6
+    assert "코스닥 같은 기간 (10-02~10-05)" in virtual_html.render_tab(data)
+
+
+def test_오늘_스냅샷이_없으면_평가한_날을_기준일로_적고_경고한다(tmp_path):
+    data = virtual_html.write_json(tmp_path / "v.json", _store(tmp_path), R, {"000001": 1100.0}, {}, "2026-10-06")
+    assert data["summary"]["valued_on"] == "2026-10-02"
+    html = virtual_html.render_tab(data)
+    assert "오늘(2026-10-06) 스냅샷 없음 — 2026-10-02 평가" in html
+    assert "2026-10-02 종가 기준" in html
+    같은날 = virtual_html.render_tab(virtual_html.write_json(tmp_path / "v2.json", _store(tmp_path), R, {}, {}, "2026-10-02"))
+    assert "스냅샷 없음" not in 같은날
+
+
+def test_목표를_넘었으면_음수_거리_대신_도달이라고_적는다(tmp_path):
+    s = _store(tmp_path)
+    data = virtual_html.write_json(tmp_path / "v.json", s, R, {"000001": 1130.0}, {}, "2026-10-02")   # 평단≈1002 → +12.8% (10% 넘음)
+    assert data["positions"][0]["to_target_pct"] < 0
+    html = virtual_html.render_tab(data)
+    assert "도달 — 내일 매도 주문" in html and "+-" not in html
+
+
+def test_숫자_카드는_줄바꿈되지_않는다(tmp_path):
+    data = virtual_html.write_json(tmp_path / "v.json", _store(tmp_path), R, {}, {}, "2026-10-02")
+    assert 'class="v vnum"' in virtual_html.render_tab(data)
+    assert ".vnum{white-space:nowrap}" in report_html.STYLE
+
+
+def test_halted_가_대문자_문자열이어도_발동으로_읽는다(tmp_path):
+    s = _store(tmp_path)
+    frame = s.load_daily().astype({"halted": object})
+    frame.loc[frame.index[-1], "halted"] = "TRUE"
+    s.load_daily = lambda: frame
+    data = virtual_html.write_json(tmp_path / "v.json", s, R, {}, {}, "2026-10-02")
+    assert data["summary"]["halted"] is True and "일일 손실 한도 발동" in virtual_html.render_tab(data)
+
+
+def test_보유와_체결_표의_이름도_이스케이프된다(tmp_path):
+    s = vs.Store.default(tmp_path)
+    s.append_fills([va.Fill("o1", "2026-10-02", "000001", "<u>체결</u>", "매수", "1차", 10, 1000.0, 1.0, 0.0, 15.0, 10_016.0, "<i>r</i>")])
+    data = virtual_html.write_json(tmp_path / "v.json", s, R, {"000001": 1000.0}, {"000001": "<b>보유</b>"}, "2026-10-02")
+    html = virtual_html.render_tab(data)
+    assert "<b>보유</b>" not in html and "&lt;b&gt;보유&lt;/b&gt;" in html
+    assert "<u>체결</u>" not in html and "&lt;u&gt;체결&lt;/u&gt;" in html

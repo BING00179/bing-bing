@@ -43,7 +43,10 @@ def _truthy(x) -> bool:
 
 
 def write_json(path: Path, store: Store, rules: Rules, closes: dict[str, float],
-               names: dict[str, str], as_of: str) -> dict:
+               names: dict[str, str], as_of: str, substituted: dict[str, str] | None = None) -> dict:
+    """substituted[code] — 오늘 종가가 없어 대신 쓴 값의 설명 ("2026-10-05 종가" 또는 "평단").
+    closes 는 평가에 실제로 쓴 값이어야 합니다 (대체된 값 포함)."""
+    substituted = substituted or {}
     trades = store.load_trades()
     positions, cash = replay(trades, rules)
     daily = store.load_daily().sort_values("date")
@@ -52,21 +55,26 @@ def write_json(path: Path, store: Store, rules: Rules, closes: dict[str, float],
     equity = _f(last.get("equity")) if last else float("nan")
     if equity != equity:
         equity = cash + value_of(positions, closes)
-    kqs = [_f(v) for v in daily["kosdaq_close"]] if not daily.empty else []
-    kqs = [v for v in kqs if v == v and v]
-    kq_ret = round((kqs[-1] / kqs[0] - 1) * 100, 2) if len(kqs) >= 2 else None
+    # 코스닥 "같은 기간" — 값이 있는 첫날~마지막 날. 양 끝 날짜를 같이 남겨 기준일을 숨기지 않습니다.
+    kq_pts = [(str(r["date"]), _f(r["kosdaq_close"])) for r in daily.to_dict("records")]
+    kq_pts = [(d, v) for d, v in kq_pts if v == v and v]
+    kq_ret = round((kq_pts[-1][1] / kq_pts[0][1] - 1) * 100, 2) if len(kq_pts) >= 2 else None
+    kq_from = kq_pts[0][0] if len(kq_pts) >= 2 else None
+    kq_to = kq_pts[-1][0] if len(kq_pts) >= 2 else None
+    valued_on = str(last["date"]) if last else None
 
     pos_rows = []
     for code, p in sorted(positions.items()):
         close = closes.get(code)
-        fallback = close is None or close != close
-        if fallback:
-            close = p.avg_price      # 시세를 못 받은 종목 — 평단으로 대체하고 화면에 표시
+        note = substituted.get(code)
+        if close is None or close != close:
+            close = p.avg_price      # 평가 종가를 못 받았다 — 평단으로 대체하고 화면에 표시
+            note = note or "평단"
         ret = (close / p.avg_price - 1) * 100 if p.avg_price else 0.0
         next_target = (rules.sell_tranches[p.sells_done][0] if p.sells_done < len(rules.sell_tranches) else None)
         pos_rows.append({
             "code": code, "name": names.get(code, p.name), "shares": p.shares,
-            "avg_price": round(p.avg_price, 2), "close": close, "close_missing": fallback,
+            "avg_price": round(p.avg_price, 2), "close": close, "close_note": note,
             "return_pct": round(ret, 2),
             "tranche_done": p.tranche_done, "sells_done": p.sells_done, "cost": round(p.cost, 2),
             "to_target_pct": round(next_target - ret, 2) if next_target is not None else None,
@@ -86,8 +94,9 @@ def write_json(path: Path, store: Store, rules: Rules, closes: dict[str, float],
             "day_pnl": _n(last.get("day_pnl")) if last else None,
             "day_pnl_pct": _n(last.get("day_pnl_pct")) if last else None,
             "halted": _truthy(last.get("halted", "")) if last else False,
+            "valued_on": valued_on,
             "n_positions": len(positions), "max_positions": rules.max_positions,
-            "kosdaq_return_pct": kq_ret,
+            "kosdaq_return_pct": kq_ret, "kosdaq_from": kq_from, "kosdaq_to": kq_to,
         },
         "curve": [{"date": str(r["date"]), "equity": _n(r["equity"]), "kosdaq_close": _n(r["kosdaq_close"])}
                   for r in daily.to_dict("records")],
@@ -148,29 +157,46 @@ def _num(v, spec: str = ",.0f", suffix: str = "") -> str:
     return f"{v:{spec}}{suffix}" if _ok(v) else "-"
 
 
-_대체 = ' <span class="sub">(시세 없음, 평단 대체)</span>'
+def _md(day) -> str:
+    return str(day)[5:] if day else "?"
+
+
+def _대체(p: dict) -> str:
+    note = p.get("close_note")
+    return f' <span class="sub">(오늘 종가 없음 — {_esc(note)} 로 평가)</span>' if note else ""
+
+
+def _목표(v) -> str:
+    if v is None:
+        return "완료"
+    return "도달 — 내일 매도 주문" if v <= 0 else f"{v:+.1f}%p"
 
 
 def render_tab(d: dict) -> str:
     s, r, as_of = d["summary"], d["rules"], d["as_of"]
+    valued_on = s.get("valued_on")
     기준 = f"{as_of} 종가 기준"
+    카드기준 = f"{valued_on} 종가 기준" if valued_on else f"{as_of} 기준 — 아직 스냅샷 없음"
+    경고 = (f'<div class="sub warn">⚠️ 오늘({_esc(as_of)}) 스냅샷 없음 — {_esc(valued_on)} 평가</div>'
+          if valued_on and valued_on != as_of else "")
+    kq기간 = (f' ({_md(s.get("kosdaq_from"))}~{_md(s.get("kosdaq_to"))})' if s.get("kosdaq_from") else "")
     일손익 = f'{_num(s["day_pnl"], "+,.0f")}원 ({_num(s["day_pnl_pct"], "+.2f")}%)' if _ok(s.get("day_pnl")) else "-"
     카드 = (f'<div class="card"><div class="state {"warn" if s["halted"] else "ok"}"><span class="dot"></span>'
           f'가상 계좌 · 돈 0원 · {"⚠️ 일일 손실 한도 발동" if s["halted"] else "정상"}</div>'
-          f'<div class="sub">{_esc(기준)}</div><div class="metrics">'
-          + "".join(f'<div class="metric"><div class="k">{k}</div><div class="v">{v}</div></div>' for k, v in [
+          f'<div class="sub">{_esc(카드기준)}</div>{경고}<div class="metrics">'
+          + "".join(f'<div class="metric"><div class="k">{k}</div><div class="v vnum">{v}</div></div>' for k, v in [
               ("원금", _won(s["capital"])), ("평가액", _won(s["equity"])), ("현금", _won(s["cash"])),
               ("누적 수익률", _num(s["total_return_pct"], "+.2f", "%")), ("오늘 손익", 일손익),
               ("보유", f'{s["n_positions"]}/{s["max_positions"]}'),
-              ("코스닥 같은 기간", _num(s["kosdaq_return_pct"], "+.2f", "%"))])
+              (f"코스닥 같은 기간{kq기간}", _num(s["kosdaq_return_pct"], "+.2f", "%"))])
           + "</div></div>")
     곡선 = f'<h2>자산 곡선</h2><div class="card">{svg_curve(d["curve"], s["capital"])}</div>'
     보유 = "".join(
         f'<tr><td>{_esc(p["name"])}<div class="sub">{_esc(p["code"])}</div></td><td>{p["tranche_done"]}차 / 매도 {p["sells_done"]}</td>'
         f'<td>{p["shares"]:,}</td><td>{p["avg_price"]:,.0f}</td>'
-        f'<td>{p["close"]:,.0f}{_대체 if p.get("close_missing") else ""}</td>'
+        f'<td>{p["close"]:,.0f}{_대체(p)}</td>'
         f'<td class="{"ok" if p["return_pct"] >= 0 else "bad"}">{p["return_pct"]:+.2f}%</td>'
-        f'<td>{("+%.1f%%p" % p["to_target_pct"]) if p["to_target_pct"] is not None else "완료"} / {p["to_invalid_pct"]:+.1f}%p</td></tr>'
+        f'<td>{_목표(p["to_target_pct"])} / {p["to_invalid_pct"]:+.1f}%p</td></tr>'
         for p in d["positions"]) or '<tr><td colspan="7" class="empty">보유 종목이 없습니다 — 현금만 들고 기다리는 것도 기록입니다.</td></tr>'
     보유표 = (f'<h2>보유 종목 <span class="sub">({_esc(기준)})</span></h2><div class="card tbl"><table>'
             '<tr><th>종목</th><th>단계</th><th>주 수</th><th>평단</th><th>현재가</th><th>수익률</th><th>다음 목표 / 무효선까지</th></tr>'
