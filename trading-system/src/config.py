@@ -232,6 +232,34 @@ class BacktestKrConfig(BacktestConfig):
 
 
 @dataclass
+class VirtualAccountConfig:
+    """가상 계좌 — 사장님이 정하신 값 (2026-09-14 / 10-08). 돈은 0원.
+
+    숫자를 바꾸면 src/virtual_account.py 의 VIRTUAL_VERSION 을 올립니다.
+    수량·금액 상한은 여기 한 곳에만 둡니다 (주문 때와 체결 때 두 번 검사).
+    """
+    capital: float = 5_000_000.0
+    max_positions: int = 6
+    position_cap_pct: float = 15.0          # 종목당 배정 = 75만
+    cash_reserve: float = 500_000.0         # 늘 남기는 현금
+    buy_tranches_pct: tuple = (30, 30, 40)  # 분할 매수 30·30·40
+    tranche2_trigger_pct: float = 5.0       # [가정] 1차가 +5% 마감 → 2차
+    tranche3_trigger_pct: float = -10.0     # [가정] 2차 뒤 1차가 -10% 마감 → 3차
+    sell_tranches: tuple = ((10.0, 30), (20.0, 40), (35.0, 30))
+    invalid_pct: float = -20.0
+    daily_loss_halt_pct: float = -3.0
+    slippage_pct: float = 0.15              # 가정
+    fee_buy_pct: float = 0.0137             # 확인됨 (§6)
+    fee_sell_pct: float = 0.0140            # 확인됨
+    tax_pct: float = 0.1998                 # 확인됨
+    run_after_kst: str = "16:00"
+
+    def __post_init__(self) -> None:
+        self.buy_tranches_pct = tuple(int(x) for x in self.buy_tranches_pct)
+        self.sell_tranches = tuple((float(p), int(w)) for p, w in self.sell_tranches)
+
+
+@dataclass
 class Config:
     scanner_a: ScannerAConfig = field(default_factory=ScannerAConfig)
     scanner_b: ScannerBConfig = field(default_factory=ScannerBConfig)
@@ -242,6 +270,7 @@ class Config:
     watchlist: WatchlistConfig = field(default_factory=WatchlistConfig)
     backtest: BacktestConfig = field(default_factory=BacktestConfig)
     backtest_kr: BacktestKrConfig = field(default_factory=BacktestKrConfig)
+    virtual_account: VirtualAccountConfig = field(default_factory=VirtualAccountConfig)
     universe_file: str = "data/universe.txt"
     universe_file_kr: str = "data/universe_kr.txt"
     output_dir: str = "output"
@@ -262,6 +291,7 @@ class Config:
             watchlist=WatchlistConfig(**raw.get("watchlist", {})),
             backtest=BacktestConfig(**raw.get("backtest", {})),
             backtest_kr=BacktestKrConfig(**raw.get("backtest_kr", {})),
+            virtual_account=VirtualAccountConfig(**raw.get("virtual_account", {})),
             universe_file=raw.get("universe_file", "data/universe.txt"),
             universe_file_kr=raw.get("universe_file_kr", "data/universe_kr.txt"),
             output_dir=raw.get("output_dir", "output"),
