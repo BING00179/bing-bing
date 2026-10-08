@@ -188,6 +188,26 @@ details[open] summary::before{content:"\25be  "}
   border-bottom:1px solid var(--line);font-size:13px}
 .hist:last-child{border-bottom:0}
 .hist .d{color:var(--muted);font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:6px;margin:0 0 14px}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tbl{overflow-x:auto}.tbl table{border-collapse:collapse;width:100%;font-size:13px;min-width:560px}
+.tbl th,.tbl td{text-align:left;padding:6px 8px;border-top:1px solid var(--line);white-space:nowrap}
+.tbl th{color:var(--muted);font-weight:600;border-top:0}
+"""
+
+# dashboard.SCRIPT 와 같은 내용 (dashboard 를 import 하지 않으려고 복사)
+TAB_SCRIPT = """
+document.querySelectorAll('.tab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.tab').forEach(function(b){
+      b.setAttribute('aria-selected', String(b === btn));
+    });
+    document.querySelectorAll('.panel').forEach(function(p){
+      p.hidden = (p.id !== btn.dataset.panel);
+    });
+  });
+});
 """
 
 
@@ -428,9 +448,35 @@ def _history_section(entries: list[dict]) -> str:
     return f'<h2>지난 기록</h2><div class="card">{rows}</div>'
 
 
-def render(entries: list[dict]) -> str:
+def render(entries: list[dict], virtual: dict | None = None) -> str:
+    from . import virtual_html  # 지역 import — 순환 방지
+
     entry = entries[-1] if entries else {"when": "", "signals": [], "market": None}
     when = entry.get("when", "")
+    scan_body = f"""{_market_card(entry.get("market"))}
+  {_signals_section(entry)}
+  {_history_section(entries)}
+  <div class="note">
+    각 종목의 <b>선정 근거 전체 보기</b>를 누르면 5가지 조건의 실제 비교값,
+    사용한 모든 숫자, 점수 계산 과정, 기업 정보를 확인할 수 있습니다.<br>
+    점수는 같은 조건을 통과한 종목들 중 상대적으로 뚜렷한 쪽을 고르는 장치입니다.
+    점수가 높다고 더 오른다는 근거는 없습니다.<br>
+    여기 표시되는 것은 매수 신호 후보일 뿐 매매 권유가 아닙니다.
+    최종 판단은 본인 기준으로 내리시기 바랍니다.<br>
+    한국시간(KST) 기준이며 평일 장중에 자동 갱신됩니다.
+  </div>"""
+    if virtual is None:
+        body = f"  {scan_body}"
+        script = ""
+    else:
+        body = (
+            '  <div class="tabs">'
+            '<button class="tab" data-panel="scan" aria-selected="true">스캔</button>'
+            '<button class="tab" data-panel="virtual" aria-selected="false">가상 계좌</button></div>\n'
+            f'  <div class="panel" id="scan">\n  {scan_body}\n  </div>\n'
+            f'  <div class="panel" id="virtual" hidden>{virtual_html.render_tab(virtual)}</div>'
+        )
+        script = f"\n<script>{TAB_SCRIPT}</script>"
     return f"""<!doctype html>
 <html lang="ko"><head>
 <meta charset="utf-8">
@@ -443,20 +489,28 @@ def render(entries: list[dict]) -> str:
     <h1>종목 스캐너</h1>
     <div class="sub">{_esc(when) or '아직 스캔 기록이 없습니다'} &middot; Trend Join Long</div>
   </header>
-  {_market_card(entry.get("market"))}
-  {_signals_section(entry)}
-  {_history_section(entries)}
-  <div class="note">
-    각 종목의 <b>선정 근거 전체 보기</b>를 누르면 5가지 조건의 실제 비교값,
-    사용한 모든 숫자, 점수 계산 과정, 기업 정보를 확인할 수 있습니다.<br>
-    점수는 같은 조건을 통과한 종목들 중 상대적으로 뚜렷한 쪽을 고르는 장치입니다.
-    점수가 높다고 더 오른다는 근거는 없습니다.<br>
-    여기 표시되는 것은 매수 신호 후보일 뿐 매매 권유가 아닙니다.
-    최종 판단은 본인 기준으로 내리시기 바랍니다.<br>
-    한국시간(KST) 기준이며 평일 장중에 자동 갱신됩니다.
-  </div>
-</div>
+{body}
+</div>{script}
 </body></html>"""
+
+
+def _load_virtual(out_dir: Path) -> dict | None:
+    p = out_dir / "virtual.json"
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text(encoding="utf-8-sig"))
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def rerender(out_dir: Path) -> Path:
+    """history.json + virtual.json 으로 index.html 을 다시 씁니다 (가상 계좌 갱신 뒤)."""
+    entries = load_history(out_dir / "history.json")
+    page = out_dir / "index.html"
+    page.write_text(render(entries[-HISTORY_LIMIT:], _load_virtual(out_dir)), encoding="utf-8")
+    return page
 
 
 def update(out_dir: Path, when: str, market_state, signals, top_n: int) -> Path:
@@ -470,5 +524,5 @@ def update(out_dir: Path, when: str, market_state, signals, top_n: int) -> Path:
         entries.append(entry)
     save_history(history_path, entries)
     page = out_dir / "index.html"
-    page.write_text(render(entries[-HISTORY_LIMIT:]), encoding="utf-8")
+    page.write_text(render(entries[-HISTORY_LIMIT:], _load_virtual(out_dir)), encoding="utf-8")
     return page

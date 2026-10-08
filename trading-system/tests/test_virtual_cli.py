@@ -1,6 +1,8 @@
 """virtual-update 한 바퀴 — 가짜 시세로 네트워크 없이. 같은 날 두 번 돌리면 두 번째는 변화 0."""
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import pytest
 
@@ -248,3 +250,15 @@ def test_지수_조회가_실패해도_종목_봉으로_계속하고_한_줄_알
     assert _run(tmp_path, cand, "2026-10-01") == 0
     assert "코스닥 지수 실패" in capsys.readouterr().out
     assert len(vs.Store.default(tmp_path).load_daily()) == 1
+
+
+def test_web_을_켜면_virtual_json_과_가상_계좌_탭이_생긴다(world):
+    tmp_path, cand = world
+    web = tmp_path / "stocks"
+    for d in ("2026-10-01", "2026-10-02"):
+        assert _run(tmp_path, cand, d, extra=("--web", "--web-dir", str(web))) == 0
+    data = json.loads((web / "virtual.json").read_text(encoding="utf-8"))
+    assert data["as_of"] == "2026-10-02" and data["positions"][0]["code"] == "000001"
+    page = (web / "index.html").read_text(encoding="utf-8")
+    assert 'data-panel="virtual"' in page and "가상 계좌" in page and "2026-10-02 종가 기준" in page
+    assert "살 수 없음" in page                                  # 못 산 결정도 화면에 보임
