@@ -95,5 +95,14 @@
     "min_turnover": 1000000000.0,
     "min_price": 1000.0,
     "max_results": 10
+  },
+  "virtual_account": {
+    "capital": 5000000, "max_positions": 6, "position_cap_pct": 15.0,
+    "cash_reserve": 500000, "buy_tranches_pct": [30, 30, 40],
+    "tranche2_trigger_pct": 5.0, "tranche3_trigger_pct": -10.0,
+    "sell_tranches": [[10.0, 30], [20.0, 40], [35.0, 30]], "invalid_pct": -20.0,
+    "daily_loss_halt_pct": -3.0, "slippage_pct": 0.15,
+    "fee_buy_pct": 0.0137, "fee_sell_pct": 0.0140, "tax_pct": 0.1998,
+    "run_after_kst": "16:00"
   }
 }
