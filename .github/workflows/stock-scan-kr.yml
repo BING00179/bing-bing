@@ -179,35 +179,49 @@ jobs:
             echo "마감 시각이 아니므로 기록하지 않습니다. (현재 $HOUR:$MIN KST)"
           fi
 
-      # 월말 브리핑 — 매달 마지막 거래일에 한 번.
-      # 지난 기간에 고른 종목이 실제로 어떻게 됐는지 텔레그램으로 보냅니다.
-      - name: 월말 브리핑
-        # 이 단계도 working-directory 가 빠져 있었습니다. 2026-08-31 월말
-        # 브리핑이 조용히 실패했습니다.
+      # ── 월말 ──
+      # 이 달 마지막 평일, 15:20 이후 그날 아무 실행에서나. 표시 파일로 한 달에 한 번만.
+      # ⚠️ 2026-10-08: value-record 는 DART 재무 파일이 있어야 하는데 러너에는 없어
+      #    "재무 파일이 없습니다" 로 끝날 상태였습니다(다섯 번째 벽). value-fetch 를
+      #    먼저 돌립니다(20~40분, DART_API_KEY 필요). 말일이 주말인 달(2026-10 은
+      #    토요일, 2027-01 은 일요일)을 위해 "내일이 1일" 대신 month-end-check 로
+      #    마지막 평일을 셉니다.
+      - name: 월말 — 재무 받기 · 후보 기록 · 브리핑
         continue-on-error: true
         working-directory: trading-system
         env:
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           HOUR=$(TZ=Asia/Seoul date +%H)
           MIN=$(TZ=Asia/Seoul date +%M)
-          TODAY=$(TZ=Asia/Seoul date +%d)
-          TOMORROW=$(TZ=Asia/Seoul date -d "+1 day" +%d)
-          # 내일 날짜가 1 이면 오늘이 그 달의 마지막 날입니다.
-          if [ "$HOUR" = "15" ] && [ "$MIN" -ge 20 ] && [ "$MIN" -le 40 ] \
-             && [ "$TOMORROW" = "01" ]; then
-            python -m src.cli value-record --market KOSDAQ --top 10 \
-              || echo "::error::저평가 후보 기록에 실패했습니다"
-            python -m src.cli monthly-review --days 120 --telegram \
-              || echo "::error::월말 브리핑에 실패했습니다"
-          else
-            echo "월말 마감 시각이 아닙니다. (오늘 $TODAY일, 현재 $HOUR:$MIN KST)"
+          MONTH=$(TZ=Asia/Seoul date +%Y-%m)
+          DONE="data/monthly_review_${MONTH}.done"
+          if ! { [ "$HOUR" -gt 15 ] || { [ "$HOUR" = "15" ] && [ "$MIN" -ge 20 ]; }; }; then
+            echo "마감 전입니다. (현재 $HOUR:$MIN KST)"; exit 0
           fi
+          if ! python -m src.cli month-end-check; then exit 0; fi
+          if [ -f "$DONE" ]; then echo "이 달 월말 단계는 이미 끝났습니다: $DONE"; exit 0; fi
+          if [ -z "$DART_API_KEY" ]; then
+            echo "::error::DART_API_KEY 가 없습니다 — Settings > Secrets > Actions 에 넣어야 월말 후보를 뽑습니다"; exit 0
+          fi
+          python -m src.cli value-fetch --market KOSDAQ \
+            || { echo "::error::재무 받기에 실패했습니다"; exit 0; }
+          # 표시 파일(.done)은 후보 기록(value-record)이 성공했을 때만 씁니다. 실패하면
+          # 다음 실행에서 다시 시도합니다. 브리핑(monthly-review) 실패는 표시에 영향 없음 —
+          # 브리핑 중복 발송보다 후보 파일(가상 계좌가 읽음) 누락이 더 나쁩니다.
+          ok=1
+          python -m src.cli value-record --market KOSDAQ --top 10 \
+              --candidates-out data/value_candidates.csv \
+            || { echo "::error::저평가 후보 기록에 실패했습니다 — 다음 실행에서 다시 시도합니다"; ok=0; }
+          python -m src.cli monthly-review --days 120 --telegram \
+            || echo "::error::월말 브리핑에 실패했습니다"
+          if [ "$ok" = 1 ]; then echo "$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')" > "$DONE"; fi
 
       - name: 웹페이지와 기록 저장소에 올리기
         run: |
-          if [ -z "$(git status --porcelain stocks/ trading-system/data/livetest.csv)" ]; then
+          if [ -z "$(git status --porcelain stocks/ trading-system/data/livetest.csv trading-system/data/value_candidates.csv trading-system/data/monthly_review_*.done)" ]; then
             echo "바뀐 내용이 없어 올리지 않습니다."
             exit 0
           fi
@@ -215,6 +229,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add stocks/          # index.html · history.json · notified.json
           git add trading-system/data/livetest.csv || true   # 실시간 검증 기록
+          git add trading-system/data/value_candidates.csv || true   # 월말 후보 전체
+          git add trading-system/data/monthly_review_*.done || true  # 월말 한 번만 표시
           git commit -m "스캔 결과 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
           # 다른 커밋이 먼저 올라갔을 수 있으므로 한 번 당겨서 합칩니다.
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
