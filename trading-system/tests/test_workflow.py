@@ -75,3 +75,38 @@ def test_장부를_저장소에_올린다():
     """기록해 놓고 안 올리면 다음 실행에서 사라집니다."""
     글 = WORKFLOW.read_text(encoding="utf-8")
     assert "git add trading-system/data/livetest.csv" in 글
+
+
+# ── 2026-10-08 추가 ──────────────────────────────────────────────────
+# 위 두 가지를 고친 뒤에도 장부는 한 건도 안 쌓였습니다. 2026-09-24 부터
+# 10-05 까지 마감 실행 6건이 전부 '취소' 였습니다. 장부 단계가 29.4분을
+# 돌다 **잡 제한 30분**에 걸려 잘렸고, 그 뒤의 '저장소에 올리기' 가
+# 건너뛰어졌습니다. 러너는 매번 새로 시작해 시세 저장고가 없으므로
+# 1,825종목을 종목당 약 1초(네트워크 + 0.2초 쉼)로 전부 새로 받습니다.
+# 일이 30분 넘게 걸리는데 제한이 30분이면 영원히 못 끝납니다.
+
+UNIVERSE = Path(__file__).resolve().parents[1] / "data/universe_kosdaq.txt"
+초당_종목당 = 1.2   # 2026-10-05 실측 0.97초 + 여유
+여유분 = 15        # 라이브러리 설치·스캐너·업로드 등 나머지 단계(분)
+
+
+def _job_timeout_minutes() -> int:
+    문서 = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    (작업,) = 문서["jobs"].values()
+    return int(작업.get("timeout-minutes", 360))
+
+
+def test_잡_제한시간이_장부_기록에_걸리는_시간보다_길다():
+    """장부 단계는 종목 수만큼 시세를 새로 받습니다. 그 시간을 못 덮는
+    제한은 '매일 취소' 와 같습니다."""
+    if not UNIVERSE.exists():
+        pytest.skip(f"종목 목록이 없습니다: {UNIVERSE}")
+    종목수 = sum(1 for 줄 in UNIVERSE.read_text(encoding="utf-8").splitlines()
+             if 줄.strip() and not 줄.lstrip().startswith("#"))
+    필요 = 종목수 * 초당_종목당 / 60 + 여유분
+    제한 = _job_timeout_minutes()
+    assert 제한 >= 필요, (
+        f"timeout-minutes {제한}분 < 필요 {필요:.0f}분 "
+        f"({종목수:,}종목 × {초당_종목당}초 + {여유분}분). "
+        "장부 단계가 매일 잘립니다 — 2026-09-24~10-05 에 그랬습니다."
+    )
