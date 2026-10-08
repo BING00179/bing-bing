@@ -177,4 +177,13 @@ def test_커밋_단계가_새_파일들을_올린다():
     글 = WORKFLOW.read_text(encoding="utf-8")
     for 파일 in ("trading-system/data/value_candidates.csv",
                 "trading-system/data/monthly_review_"):
-        assert 파일 in 글, f"{파일} 를 커밋하지 않으면 다음 실행에서 사라집니다"
+        assert f"git add {파일}" in 글, f"{파일} 를 커밋하지 않으면 다음 실행에서 사라집니다"
+
+
+def test_표시_파일은_후보_기록이_성공했을_때만_쓴다():
+    """value-record 가 실패했는데 .done 이 써지면 그 달은 재시도가 없고 후보 파일이 빕니다."""
+    글 = _monthly_step().get("run") or ""
+    assert "ok=0" in 글, "value-record 실패를 기억하는 자리가 없습니다"
+    assert '[ "$ok" = 1 ]' in 글, ".done 쓰기가 value-record 성공 조건에 걸려 있지 않습니다"
+    assert 글.index('[ "$ok" = 1 ]') < 글.index('> "$DONE"'), ".done 쓰기가 조건 밖에 있습니다"
+    assert 글.index("ok=0") < 글.index("src.cli monthly-review"), "ok=0 은 value-record 실패 처리여야 합니다"

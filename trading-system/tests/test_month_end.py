@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pandas as pd
+
 from src import cli
 
 
@@ -31,9 +33,6 @@ def test_명령은_종료코드로_답한다(capsys):
     assert cli.main(["month-end-check", "--date", "2026-10-29"]) == 1
     out = capsys.readouterr().out
     assert "마지막 평일" in out
-
-
-import pandas as pd
 
 
 def test_value_record_는_후보_전체를_달별_파일에_남긴다(tmp_path, monkeypatch):
@@ -66,4 +65,5 @@ def test_value_record_는_후보_전체를_달별_파일에_남긴다(tmp_path, 
               "--top", "2", "--candidates-out", str(out)])
     again = pd.read_csv(out, dtype={"code": str})
     assert (again["month"] == "2000-01").sum() == 3
+    assert (again["month"] != "2000-01").sum() == 3
     assert len(again) == 6

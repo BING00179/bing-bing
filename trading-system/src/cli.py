@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
 from dataclasses import replace
 import sys
@@ -294,7 +295,6 @@ def is_last_weekday_of_month(day: date) -> bool:
     """
     if day.weekday() >= 5:
         return False
-    import calendar
     last = date(day.year, day.month, calendar.monthrange(day.year, day.month)[1])
     while last.weekday() >= 5:
         last = last - timedelta(days=1)
