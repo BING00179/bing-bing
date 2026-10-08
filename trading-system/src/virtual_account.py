@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -125,7 +125,9 @@ def replay(trades: pd.DataFrame, rules: Rules) -> tuple[dict[str, Position], flo
     cash = float(rules.capital)
     if trades is None or trades.empty:
         return positions, cash
-    rows = trades.sort_values(["date", "side"]).to_dict("records")   # 같은 날은 매도("매도") < 매수("매수")
+    # 같은 날은 매도가 먼저 (문자열 순서에 기대지 않고 키로 명시). stable 정렬이라 나머지는 기록 순서.
+    order_key = (trades["side"] != SIDE_SELL).astype(int)
+    rows = trades.assign(_side_order=order_key).sort_values(["date", "_side_order"], kind="stable").to_dict("records")
     for r in rows:
         code = str(r["code"]); shares = int(r["shares"]); amount = float(r["amount"])
         p = positions.setdefault(code, Position(code=code, name=str(r.get("name", ""))))
@@ -197,8 +199,17 @@ def fill_orders(orders: list[Order], opens: dict[str, float], positions: dict[st
             decisions.append(Decision(date, o.code, o.name, "보류", "체결", "오늘 시가가 없습니다 (휴장·상폐·조회 실패)"))
             continue
         if o.side == SIDE_BUY:
-            amount_cap = min(o.amount, rules.capital)          # 설정 한 곳의 상한을 체결 직전에 다시 검사
-            shares = math.floor(amount_cap / (price * (1 + rules.slippage_pct / 100.0)))
+            # 종목 배정 상한을 체결 직전에 다시 검사 (이미 들고 있는 매입액을 뺀 남은 자리까지만)
+            held = positions.get(o.code)
+            room = rules.allotment() - (held.cost if held else 0.0)
+            if room <= 0:
+                decisions.append(Decision(date, o.code, o.name, "건너뜀", "체결",
+                                          f"종목 배정 {rules.allotment():,.0f}원 초과 — 체결 직전 재검사"))
+                continue
+            amount_cap = min(o.amount, room)
+            # 슬리피지와 수수료까지 얹은 값으로 나눠야 총액이 주문 금액을 넘지 않는다
+            shares = math.floor(amount_cap / (price * (1 + rules.slippage_pct / 100.0)
+                                              * (1 + rules.fee_buy_pct / 100.0)))
             if shares < 1:
                 decisions.append(Decision(date, o.code, o.name, "살 수 없음", "체결",
                                           f"{o.tranche} 금액 {o.amount:,.0f}원으로 1주({price:,.0f}원)도 못 삽니다"))
@@ -230,7 +241,10 @@ def fill_orders(orders: list[Order], opens: dict[str, float], positions: dict[st
 
 def decide_sells(positions: dict[str, Position], closes: dict[str, float], rules: Rules,
                  date: str, candidates_now: set[str] | None) -> tuple[list[Order], list[Decision]]:
-    """오늘 종가로 내일 매도 주문. 평단 기준. 각 단계는 한 번만."""
+    """오늘 종가로 내일 매도 주문. 평단 기준. 각 단계는 한 번만.
+
+    하루에 매도 단계는 하나만 나간다 — 갭상승으로 두 기준을 한꺼번에 넘어도 다음 날 다음 단계.
+    """
     orders: list[Order] = []
     decisions: list[Decision] = []
     for code, p in positions.items():
@@ -255,17 +269,24 @@ def decide_sells(positions: dict[str, Position], closes: dict[str, float], rules
             pct, weight = rules.sell_tranches[p.sells_done]
             if chg >= pct:
                 last = p.sells_done == len(rules.sell_tranches) - 1
-                # 비중은 '처음 보유 주 수' 가 아니라 지금 남은 주 수 기준으로 내림. 마지막은 전부.
-                shares = p.shares if last else max(1, math.floor(p.shares * weight / 100.0))
+                # 비중은 '처음 보유분' 기준 (30·40·30). 처음 수를 따로 저장하지 않으므로
+                # 남은 주 × 이 단계 비중 / 남은 단계 비중의 합 으로 내림 (100주 -> 30·40·30). 마지막은 전부.
+                rest_weight = sum(w for _, w in rules.sell_tranches[p.sells_done:])
+                shares = p.shares if last else min(p.shares, max(1, p.shares * weight // rest_weight))
                 _order(SELL_TRANCHES[p.sells_done], shares,
-                       f"평단 대비 {chg:+.1f}% ≥ +{pct:g}% → {weight}% 매도")
+                       f"평단 대비 {chg:+.1f}% ≥ +{pct:g}% → {shares}주 매도(처음 보유의 {weight}%)")
     return orders, decisions
 
 
 def decide_buys(positions: dict[str, Position], closes: dict[str, float],
                 candidates: list[tuple[str, str, float]], rules: Rules, date: str,
-                cash: float, halted: bool) -> tuple[list[Order], list[Decision]]:
-    """오늘 종가로 내일 매수 주문. 세 관문: 조건 → 포트폴리오 → 리스크.
+                cash: float, halted: bool,
+                selling: "set[str] | frozenset[str]" = frozenset()) -> tuple[list[Order], list[Decision]]:
+    """오늘 종가로 내일 매수 주문. 관문 순서는 코드 그대로:
+    리스크(일일 한도) → 조건(오늘 매도 주문 종목 제외·2차 3차 트리거·1주 살 수 있나)
+    → 포트폴리오(종목 배정·현금 예비금·빈자리).
+
+    selling: 오늘 매도 주문이 나간 종목 코드. 같은 종목을 같은 날 팔고 사지 않는다.
 
     막히면 막힌 이유를 남깁니다. 그것이 '왜 안 샀는지' 입니다.
     """
@@ -275,6 +296,9 @@ def decide_buys(positions: dict[str, Position], closes: dict[str, float],
 
     def _want(code: str, name: str, tranche: str, amount: float, reason: str, cost_so_far: float) -> None:
         nonlocal usable
+        if code in selling:
+            decisions.append(Decision(date, code, name, "건너뜀", "조건", "오늘 매도 주문이 있는 종목"))
+            return
         if halted:
             decisions.append(Decision(date, code, name, "보류", "리스크",
                                       f"일일 손실 한도({rules.daily_loss_halt_pct:g}%) 발동 — 오늘은 매도만"))
@@ -308,7 +332,7 @@ def decide_buys(positions: dict[str, Position], closes: dict[str, float],
                                           f"무효선 아래({avg_chg:+.1f}%)라 3차를 사지 않습니다"))
             else:
                 _want(code, p.name, "3차", rules.tranche_amount(3),
-                      f"1차 매수가 대비 {chg:+.1f}% ≤ {rules.tranche3_trigger_pct:g}% (관찰 구간 하단), 근거 유지", p.cost)
+                      f"1차 매수가 대비 {chg:+.1f}% ≤ {rules.tranche3_trigger_pct:g}% (관찰 구간 하단), 무효선 미도달", p.cost)
 
     # ② 새 종목 — 빈자리만큼 점수순
     slots = rules.max_positions - len(positions)

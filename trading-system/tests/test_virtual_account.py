@@ -64,7 +64,8 @@ def test_체결은_다음날_시가이고_주수는_내림이다():
     fills, decisions, cash = va.fill_orders([order], {"000001": 23_000.0}, {}, R.capital, R, "2026-10-05")
     f = fills[0]
     assert f.date == "2026-10-05" and f.price == 23_000.0
-    assert f.shares == 9                         # 225000 / (23000*1.0015) = 9.77 → 9
+    assert f.shares == 9                         # 225000 / (23000*1.0015*1.000137) = 9.77 → 9
+    assert f.amount <= order.amount              # 수수료까지 합친 총액이 주문 금액을 넘지 않는다
     assert f.slippage == pytest.approx(9 * 23_000 * 0.0015)
     assert cash == pytest.approx(R.capital - f.amount)
     assert any(d.action == "체결" for d in decisions)
@@ -152,6 +153,7 @@ def test_1차가_5퍼센트_위_마감이면_2차_그_뒤_10퍼센트_아래면_
 def test_무효선_아래에서는_3차를_사지_않는다():
     o, d = va.decide_buys(_pos(tranche_done=2, first=1000.0), {"000001": 790.0}, [], R, "2026-10-06", R.capital, False)
     assert o == []
+    assert any(x.action == "건너뜀" and "무효선" in x.detail for x in d)
 
 
 def test_배정_한도를_넘기는_추가_매수는_막힌다():
@@ -180,3 +182,60 @@ def test_경계값은_정확히_걸린다():
     o3, _ = va.decide_buys(_pos(tranche_done=2, first=1000.0), {"000001": 900.0}, [], R, "2026-10-06", R.capital, False)
     assert [x.tranche for x in o3] == ["3차"]
     assert va.is_halted(5_000_000.0, 4_850_000.0, R) is True
+
+
+def test_분할_매도는_처음_보유분_기준_30_40_30_이다():
+    """남은 주 수 x w% 로 계산하면 100주가 30/28/42 로 팔린다."""
+    pos = _pos(shares=100, avg=1000.0)
+    o1, _ = va.decide_sells(pos, {"000001": 1100.0}, R, "2026-10-05", None)
+    assert (o1[0].tranche, o1[0].shares) == ("매도1", 30)
+    pos = _pos(shares=70, avg=1000.0, sells_done=1)
+    o2, d2 = va.decide_sells(pos, {"000001": 1203.0}, R, "2026-10-06", None)
+    assert (o2[0].tranche, o2[0].shares) == ("매도2", 40)
+    assert "40주" in o2[0].reason and "처음 보유의 40%" in o2[0].reason
+    pos = _pos(shares=30, avg=1000.0, sells_done=2)
+    o3, _ = va.decide_sells(pos, {"000001": 1350.0}, R, "2026-10-07", None)
+    assert (o3[0].tranche, o3[0].shares) == ("매도3", 30)
+
+
+def test_체결_직전에도_배정_한도를_다시_검사한다():
+    full = _pos(shares=750, avg=1000.0, tranche_done=2)          # 이미 75만 = 배정 전부
+    order = va.Order("o", "2026-10-05", "000001", "가", "매수", "3차", 0, 300_000.0, "")
+    fills, decisions, cash = va.fill_orders([order], {"000001": 1000.0}, full, R.capital, R, "2026-10-06")
+    assert fills == [] and cash == R.capital
+    assert decisions[0].action == "건너뜀" and decisions[0].gate == "체결" and "재검사" in decisions[0].detail
+    part = _pos(shares=600, avg=1000.0, tranche_done=2)          # 15만 자리만 남음
+    fills2, _, _ = va.fill_orders([order], {"000001": 1000.0}, part, R.capital, R, "2026-10-06")
+    assert fills2 and fills2[0].amount <= R.allotment() - 600_000.0
+
+
+def test_같은_날_매도_주문이_있는_종목은_사지_않는다():
+    pos = _pos(avg=1002.0, first=1000.0, tranche_done=1)
+    closes = {"000001": 1110.0}             # 평단 대비 +10.8% (매도1), 1차가 대비 +11% (2차 조건)
+    sells, _ = va.decide_sells(pos, closes, R, "2026-10-05", None)
+    assert [o.tranche for o in sells] == ["매도1"]
+    buys, d = va.decide_buys(pos, closes, [], R, "2026-10-05", R.capital, False,
+                             selling={o.code for o in sells})
+    assert buys == []
+    assert any(x.action == "건너뜀" and x.gate == "조건" and "매도 주문" in x.detail for x in d)
+    buys2, _ = va.decide_buys(pos, closes, [], R, "2026-10-05", R.capital, False)
+    assert [o.tranche for o in buys2] == ["2차"]       # selling 을 안 넘기면 막히지 않는다 (배선 확인)
+
+
+def test_같은_날_매도_매수는_매도부터_되감는다():
+    """기록 순서가 매수가 먼저여도 같은 날은 매도가 먼저 — 다 팔고 새로 산 것이 된다."""
+    trades = pd.DataFrame([
+        _trade(shares=10, price=1000.0, amount=10016.37),
+        _trade(order_id="b2", date="2026-10-03", side="매수", tranche="1차", shares=5, price=900.0, amount=4510.0),
+        _trade(order_id="s2", date="2026-10-03", side="매도", tranche="무효", shares=10, price=900.0, amount=8980.0),
+    ])
+    positions, cash = va.replay(trades, R)
+    p = positions["000001"]
+    assert p.shares == 5 and p.first_price == 900.0 and p.tranche_done == 1 and p.sells_done == 0
+    assert p.cost == pytest.approx(4510.0)
+    assert cash == pytest.approx(R.capital - 10016.37 + 8980.0 - 4510.0)
+
+
+def test_전날_평가액이_없거나_0이면_한도를_걸지_않는다():
+    assert va.is_halted(None, 1.0, R) is False
+    assert va.is_halted(0, 1.0, R) is False
