@@ -42,7 +42,13 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # ⚠️ 2026-09-24 ~ 10-05 마감 실행이 전부 '취소' 였습니다. 장부 단계
+    #    (livetest-record)가 1,825종목 시세를 종목당 약 1초로 새로 받느라
+    #    29.4분을 쓰다가 30분 제한에 잘렸고, 그 뒤 '저장소에 올리기' 가
+    #    건너뛰어져 장부가 한 건도 안 쌓였습니다. 러너는 매번 새로
+    #    시작하므로 시세 저장고가 없습니다. 제한은 일에 맞춥니다.
+    #    (tests/test_workflow.py 가 종목 수로 이 값을 검사합니다)
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
