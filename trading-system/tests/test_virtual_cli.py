@@ -473,3 +473,22 @@ def test_매도_주문이_나간_날_같은_종목_2차_매수는_없다(many, c
     assert [(o["side"], o["tranche"]) for o in 주문] == [("매도", 매도단계)]
     assert ((log["date"] == "2026-10-05") & (log["code"] == "000001")
             & log["detail"].str.contains("오늘 매도 주문이 있는 종목")).any()
+
+
+def test_첫_실행이_판단_중에_죽으면_같은_날_재실행이_주문을_낸다(many, monkeypatch):
+    """스냅샷을 판단보다 먼저 쓰면, 판단 중에 죽은 날은 재실행이 '이미 끝났다' 고 보고
+    그날 주문이 영영 없습니다 (재검토 2026-10-10). 스냅샷은 판단·로그 뒤에 씁니다."""
+    tmp_path, cand, _ = many
+    _cand_rows(cand, [("000001", "후보", 1.0)])
+    진짜 = cli.va_module.decide_buys
+
+    def 터짐(*a, **k):
+        raise RuntimeError("판단 중 사고")
+    monkeypatch.setattr(cli.va_module, "decide_buys", 터짐)
+    with pytest.raises(RuntimeError):
+        _run(tmp_path, cand, "2026-10-01")
+    monkeypatch.setattr(cli.va_module, "decide_buys", 진짜)
+    assert _run(tmp_path, cand, "2026-10-01") == 0
+    s = vs.Store.default(tmp_path)
+    assert [o["code"] for o in _orders_on(s.load_log(), "2026-10-01")] == ["000001"]
+    assert list(s.load_daily()["date"]) == ["2026-10-01"]

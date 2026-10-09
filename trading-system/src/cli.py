@@ -2550,12 +2550,6 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
     if prev_eq is not None and not pd.notna(prev_eq):
         prev_eq = None
     halted = va_module.is_halted(prev_eq, equity, rules)
-    store.upsert_daily({"date": 오늘, "cash": round(cash, 2), "positions_value": round(pv, 2),
-                        "equity": round(equity, 2),
-                        # 이전 스냅샷이 없으면 오늘 손익은 '모름' — 0 으로 채우지 않습니다 (§9)
-                        "day_pnl": round(equity - prev_eq, 2) if prev_eq else "",
-                        "day_pnl_pct": round((equity / prev_eq - 1) * 100, 3) if prev_eq else "",
-                        "halted": bool(halted), "n_positions": len(positions), "kosdaq_close": kq_close})
 
     # ③ 오늘 종가 → 내일 주문 (판단에는 오늘 종가만 씁니다)
     근거결정: list[va_module.Decision] = []
@@ -2585,6 +2579,14 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
         store.append_decisions([*체결결정, *평가결정, *근거결정, *매도결정, *매수결정], orders)
         n_orders = len(orders)
     전체결정 = [*체결결정, *평가결정, *근거결정, *매도결정, *매수결정]
+    # 스냅샷은 판단·로그를 다 쓴 **뒤에** 씁니다. 같은 날 재실행은 이 줄이 있으면 판단을 건너뛰므로,
+    # 먼저 쓰면 판단 중에 죽은 날은 그날 주문이 영영 없습니다 (재검토 2026-10-10).
+    store.upsert_daily({"date": 오늘, "cash": round(cash, 2), "positions_value": round(pv, 2),
+                        "equity": round(equity, 2),
+                        # 이전 스냅샷이 없으면 오늘 손익은 '모름' — 0 으로 채우지 않습니다 (§9)
+                        "day_pnl": round(equity - prev_eq, 2) if prev_eq else "",
+                        "day_pnl_pct": round((equity / prev_eq - 1) * 100, 3) if prev_eq else "",
+                        "halted": bool(halted), "n_positions": len(positions), "kosdaq_close": kq_close})
 
     막힘 = [d for d in [*매수결정, *매도결정] if d.action in ("보류", "건너뜀", "살 수 없음")]
     요약 = (f"💼 가상 계좌 {오늘} — 평가액 {equity:,.0f}원 (현금 {cash:,.0f}) · "
