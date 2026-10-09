@@ -97,12 +97,19 @@ details[open] summary::before{content:"be  "}
   border-bottom:1px solid var(--line);font-size:13px}
 .hist:last-child{border-bottom:0}
 .hist .d{color:var(--muted);font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:6px;margin:0 0 14px}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tbl{overflow-x:auto}.tbl table{border-collapse:collapse;width:100%;font-size:13px;min-width:560px}
+.tbl th,.tbl td{text-align:left;padding:6px 8px;border-top:1px solid var(--line);white-space:nowrap}
+.tbl th{color:var(--muted);font-weight:600;border-top:0}
+.vnum{white-space:nowrap}
 </style>
 </head><body>
 <div class="wrap">
   <header>
     <h1>종목 스캐너</h1>
-    <div class="sub">2026-10-08 13:25 KST &middot; Trend Join Long</div>
+    <div class="sub">2026-10-09 13:29 KST &middot; Trend Join Long</div>
   </header>
   <div class="card">
   <div class="state bad"><span class="dot"></span>시장 위험</div>
@@ -121,7 +128,7 @@ details[open] summary::before{content:"be  "}
   </div>
 </div>
   <div class="card"><div class="empty">오늘 조건을 통과한 종목이 없습니다.</div></div>
-  <h2>지난 기록</h2><div class="card"><div class="hist"><span class="d">2026-10-07</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-10-06</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-10-05</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-10-02</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-10-01</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-09-30</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-09-29</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div></div>
+  <h2>지난 기록</h2><div class="card"><div class="hist"><span class="d">2026-10-08</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-10-07</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-10-06</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-10-05</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-10-02</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-10-01</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div><div class="hist"><span class="d">2026-09-30</span><span style="flex:1;min-width:0">신호 없음</span><span class="d">위험</span></div></div>
   <div class="note">
     각 종목의 <b>선정 근거 전체 보기</b>를 누르면 5가지 조건의 실제 비교값,
     사용한 모든 숫자, 점수 계산 과정, 기업 정보를 확인할 수 있습니다.<br>
