@@ -190,9 +190,15 @@ def _sell_proceeds(shares: int, price: float, rules: Rules) -> tuple[float, floa
 
 def fill_orders(orders: list[Order], opens: dict[str, float], positions: dict[str, Position],
                 cash: float, rules: Rules, date: str) -> tuple[list[Fill], list[Decision], float]:
-    """어제 낸 주문을 오늘 시가로 체결합니다. 주 수는 내림. 못 사면 이유를 남깁니다."""
+    """어제 낸 주문을 오늘 시가로 체결합니다. 주 수는 내림. 못 사면 이유를 남깁니다.
+
+    매수는 체결 직전에 상한을 다시 셉니다 (설계 §7 "주문 때와 체결 때 두 번 검사"):
+    종목 배정 · 보유 종목 수(이 호출에서 새로 산 종목까지) · 현금 예비금.
+    주문을 낸 뒤 사정이 바뀔 수 있습니다 — 같은 날 재실행으로 주문이 겹치는 등.
+    """
     fills: list[Fill] = []
     decisions: list[Decision] = []
+    새종목: set[str] = set()      # 이 호출에서 새로 들인 종목 — 종목 수 상한에 같이 셉니다
     for o in orders:
         price = opens.get(o.code)
         if price is None or not price > 0:
@@ -201,6 +207,11 @@ def fill_orders(orders: list[Order], opens: dict[str, float], positions: dict[st
         if o.side == SIDE_BUY:
             # 종목 배정 상한을 체결 직전에 다시 검사 (이미 들고 있는 매입액을 뺀 남은 자리까지만)
             held = positions.get(o.code)
+            새것 = (held is None or held.shares <= 0) and o.code not in 새종목
+            if 새것 and len(positions) + len(새종목) >= rules.max_positions:
+                decisions.append(Decision(date, o.code, o.name, "건너뜀", "체결",
+                                          f"보유 종목 수 상한 {rules.max_positions} — 체결 직전 재검사"))
+                continue
             room = rules.allotment() - (held.cost if held else 0.0)
             if room <= 0:
                 decisions.append(Decision(date, o.code, o.name, "건너뜀", "체결",
@@ -219,7 +230,14 @@ def fill_orders(orders: list[Order], opens: dict[str, float], positions: dict[st
                 decisions.append(Decision(date, o.code, o.name, "보류", "체결",
                                           f"현금 {cash:,.0f}원 < 필요 {total:,.0f}원"))
                 continue
+            if cash - total < rules.cash_reserve:
+                decisions.append(Decision(date, o.code, o.name, "건너뜀", "체결",
+                                          f"현금 예비금 {rules.cash_reserve:,.0f}원 침범 — 체결 뒤 "
+                                          f"{cash - total:,.0f}원 (체결 직전 재검사)"))
+                continue
             cash -= total
+            if 새것:
+                새종목.add(o.code)
             fills.append(Fill(o.order_id, date, o.code, o.name, SIDE_BUY, o.tranche, shares, price,
                               round(fee, 2), 0.0, round(slippage, 2), round(total, 2), o.reason))
             decisions.append(Decision(date, o.code, o.name, "체결", "체결",
@@ -240,10 +258,17 @@ def fill_orders(orders: list[Order], opens: dict[str, float], positions: dict[st
 
 
 def decide_sells(positions: dict[str, Position], closes: dict[str, float], rules: Rules,
-                 date: str, candidates_now: set[str] | None) -> tuple[list[Order], list[Decision]]:
+                 date: str, lost: "set[str] | dict[str, str] | None",
+                 kept: "set[str] | None" = None) -> tuple[list[Order], list[Decision]]:
     """오늘 종가로 내일 매도 주문. 평단 기준. 각 단계는 한 번만.
 
     하루에 매도 단계는 하나만 나간다 — 갭상승으로 두 기준을 한꺼번에 넘어도 다음 날 다음 단계.
+
+    lost: 이번 달 판정에서 **명시적으로** 근거가 사라진 종목 (함정?·제외). dict 면 값이 그 판정.
+          None 이면 근거 사라짐을 판단하지 않습니다 (판정 자료가 없음).
+    kept: 이번 달 판정에서 근거가 유지된 종목 (후보·비쌈·판단보류). 주어지면, lost 에도 kept 에도
+          없는 보유 종목(거름망 탈락으로 판정 자체가 없음)은 팔지 않고 그 사실만 남깁니다.
+          [가정, 2026-10-10] 판정이 없는 것을 근거가 사라졌다고 보지 않습니다.
     """
     orders: list[Order] = []
     decisions: list[Decision] = []
@@ -262,9 +287,13 @@ def decide_sells(positions: dict[str, Position], closes: dict[str, float], rules
         if chg <= rules.invalid_pct:
             _order(T_INVALID, p.shares, f"무효선 {rules.invalid_pct:g}% — 평단 {p.avg_price:,.0f} 대비 {chg:+.1f}% 마감")
             continue
-        if candidates_now is not None and code not in candidates_now:
-            _order(T_BASIS, p.shares, "근거 사라짐 — 이번 달 후보 판정에서 빠짐")
+        if lost is not None and code in lost:
+            판정 = lost.get(code, "") if isinstance(lost, dict) else ""
+            _order(T_BASIS, p.shares, f"근거 사라짐 — 이번 달 판정 {판정 or '함정?·제외'}")
             continue
+        if lost is not None and kept is not None and code not in kept:
+            decisions.append(Decision(date, code, p.name, "보류", "조건",
+                                      "이번 달 판정에 없음(거름망 탈락) — 판단하지 않습니다"))
         if p.sells_done < len(rules.sell_tranches):
             pct, weight = rules.sell_tranches[p.sells_done]
             if chg >= pct:
@@ -281,12 +310,15 @@ def decide_sells(positions: dict[str, Position], closes: dict[str, float], rules
 def decide_buys(positions: dict[str, Position], closes: dict[str, float],
                 candidates: list[tuple[str, str, float]], rules: Rules, date: str,
                 cash: float, halted: bool,
-                selling: "set[str] | frozenset[str]" = frozenset()) -> tuple[list[Order], list[Decision]]:
+                selling: "set[str] | frozenset[str]" = frozenset(),
+                blocked: "set[str] | frozenset[str]" = frozenset()) -> tuple[list[Order], list[Decision]]:
     """오늘 종가로 내일 매수 주문. 관문 순서는 코드 그대로:
     리스크(일일 한도) → 조건(오늘 매도 주문 종목 제외·2차 3차 트리거·1주 살 수 있나)
     → 포트폴리오(종목 배정·현금 예비금·빈자리).
 
     selling: 오늘 매도 주문이 나간 종목 코드. 같은 종목을 같은 날 팔고 사지 않는다.
+    blocked: 이번 달 판정 뒤 이미 다 판 종목(무효·근거·매도3). 다음 월말 판정 전까지 새로 사지 않는다.
+             [가정, 2026-10-10] 같은 판정으로 판 종목을 같은 판정으로 다시 사면 무효선이 뜻을 잃습니다.
 
     막히면 막힌 이유를 남깁니다. 그것이 '왜 안 샀는지' 입니다.
     """
@@ -339,12 +371,20 @@ def decide_buys(positions: dict[str, Position], closes: dict[str, float],
     for code, name, score in candidates:
         if code in positions:
             continue
+        if code in blocked:
+            decisions.append(Decision(date, code, name, "건너뜀", "조건",
+                                      "이번 달 이미 정리한 종목 — 다음 월말 판정까지 다시 사지 않음"))
+            continue
         if slots <= 0:
             decisions.append(Decision(date, code, name, "건너뜀", "포트폴리오",
                                       f"보유 종목 수 상한 {rules.max_positions} — 빈자리 없음"))
             continue
         close = closes.get(code)
-        if close is not None and close * (1 + rules.slippage_pct / 100.0) > rules.tranche_amount(1):
+        if close is None:
+            decisions.append(Decision(date, code, name, "보류", "조건",
+                                      "오늘 종가 없음 — 판단은 오늘 종가로만 합니다"))
+            continue
+        if close * (1 + rules.slippage_pct / 100.0) > rules.tranche_amount(1):
             decisions.append(Decision(date, code, name, "살 수 없음", "조건",
                                       f"1차 금액 {rules.tranche_amount(1):,.0f}원으로 1주({close:,.0f}원)도 못 삽니다"))
             continue

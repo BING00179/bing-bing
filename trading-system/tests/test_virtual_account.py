@@ -96,10 +96,28 @@ def test_무효선_마감이면_전량이고_사유가_남는다():
 
 
 def test_근거가_사라지면_전량():
-    orders, _ = va.decide_sells(_pos(), {"000001": 1000.0}, R, "2026-10-31", candidates_now={"000009"})
-    assert orders[0].tranche == "근거"
-    orders2, _ = va.decide_sells(_pos(), {"000001": 1000.0}, R, "2026-10-31", candidates_now={"000001"})
+    """'근거 사라짐' = 이번 달 판정이 명시적으로 함정?·제외 일 때만 (I3, 2026-10-10)."""
+    orders, _ = va.decide_sells(_pos(), {"000001": 1000.0}, R, "2026-10-31", lost={"000001": "함정?"})
+    assert orders[0].tranche == "근거" and orders[0].shares == 30
+    assert "근거 사라짐" in orders[0].reason and "함정?" in orders[0].reason
+    orders2, _ = va.decide_sells(_pos(), {"000001": 1000.0}, R, "2026-10-31", lost={"000009": "제외"},
+                                 kept={"000001"})
     assert orders2 == []
+
+
+def test_이번_달_판정에_없는_보유_종목은_근거로_팔지_않고_이유를_남긴다():
+    """거름망(PBR·PER 등)에서 탈락해 판정 자체가 없는 것은 '근거 사라짐' 이 아닙니다."""
+    orders, d = va.decide_sells(_pos(), {"000001": 1000.0}, R, "2026-10-31", lost={"000009": "제외"},
+                                kept={"000002"})
+    assert orders == []
+    assert any(x.action == "보류" and x.gate == "조건" and "거름망 탈락" in x.detail for x in d)
+
+
+def test_판정에_없어도_가격_규칙은_그대로_돈다():
+    orders, _ = va.decide_sells(_pos(), {"000001": 800.0}, R, "2026-10-31", lost={}, kept=set())
+    assert [o.tranche for o in orders] == ["무효"]
+    orders2, _ = va.decide_sells(_pos(), {"000001": 1100.0}, R, "2026-10-31", lost={}, kept=set())
+    assert [o.tranche for o in orders2] == ["매도1"]
 
 
 def test_종가가_없으면_매도_판단을_하지_않고_이유를_남긴다():
@@ -108,10 +126,11 @@ def test_종가가_없으면_매도_판단을_하지_않고_이유를_남긴다(
 
 
 CANDS = [(f"00000{i}", f"종목{i}", float(i)) for i in range(1, 10)]   # 점수 오름차순
+CLOSES = {c: 1000.0 for c, _, _ in CANDS}                          # 후보 전부 오늘 종가 1,000원
 
 
 def test_빈자리만큼_점수순으로_1차_주문을_낸다():
-    orders, decisions = va.decide_buys({}, {}, CANDS, R, "2026-10-05", R.capital, halted=False)
+    orders, decisions = va.decide_buys({}, CLOSES, CANDS, R, "2026-10-05", R.capital, halted=False)
     assert len(orders) == R.max_positions
     assert [o.code for o in orders] == [c for c, _, _ in CANDS[:6]]
     assert all(o.tranche == "1차" and o.amount == R.tranche_amount(1) for o in orders)
@@ -125,14 +144,14 @@ def test_이미_보유한_종목은_새로_사지_않는다():
 
 
 def test_일일_한도가_걸리면_매수_주문은_0건이고_이유가_남는다():
-    orders, decisions = va.decide_buys({}, {}, CANDS, R, "2026-10-05", R.capital, halted=True)
+    orders, decisions = va.decide_buys({}, CLOSES, CANDS, R, "2026-10-05", R.capital, halted=True)
     assert orders == []
     assert any(d.gate == "리스크" and d.action == "보류" for d in decisions)
 
 
 def test_현금_예비금을_침범하는_주문은_내지_않는다():
     cash = R.cash_reserve + R.tranche_amount(1) * 1.5      # 1건만 가능
-    orders, decisions = va.decide_buys({}, {}, CANDS, R, "2026-10-05", cash, False)
+    orders, decisions = va.decide_buys({}, CLOSES, CANDS, R, "2026-10-05", cash, False)
     assert len(orders) == 1
     assert any("예비" in d.detail for d in decisions if d.gate == "포트폴리오")
 
@@ -169,7 +188,7 @@ def test_1주도_못_사는_후보는_주문_전에_살_수_없음으로_남는�
 
 
 def test_주문_날짜는_판단한_날이다():
-    o, _ = va.decide_buys({}, {}, CANDS[:1], R, "2026-10-05", R.capital, False)
+    o, _ = va.decide_buys({}, CLOSES, CANDS[:1], R, "2026-10-05", R.capital, False)
     assert o[0].date == "2026-10-05"
 
 
@@ -239,3 +258,64 @@ def test_같은_날_매도_매수는_매도부터_되감는다():
 def test_전날_평가액이_없거나_0이면_한도를_걸지_않는다():
     assert va.is_halted(None, 1.0, R) is False
     assert va.is_halted(0, 1.0, R) is False
+
+
+# ---- 최종 검토 반영 (2026-10-10) ----------------------------------------------
+
+def _order(code, tranche="1차", amount=None, side="매수", date="2026-10-01"):
+    return va.Order(va.make_order_id(date, code, side, tranche), date, code, code, side, tranche, 0,
+                    R.tranche_amount(1) if amount is None else amount, "")
+
+
+def test_체결_직전에_보유_종목_수_상한을_다시_센다():
+    """같은 날 1차 주문이 7건 쌓여 있어도(같은 날 재실행 등) 체결은 6종목까지."""
+    orders = [_order(f"00000{i}") for i in range(1, 8)]
+    opens = {o.code: 1000.0 for o in orders}
+    fills, d, _ = va.fill_orders(orders, opens, {}, R.capital, R, "2026-10-02")
+    assert [f.code for f in fills] == [f"00000{i}" for i in range(1, 7)]
+    막힘 = [x for x in d if x.code == "000007"]
+    assert len(막힘) == 1 and 막힘[0].action == "건너뜀" and 막힘[0].gate == "체결"
+    assert "보유 종목 수" in 막힘[0].detail
+
+
+def test_보유_종목_수는_이미_들고_있는_것까지_센다():
+    held = {}
+    for i in range(1, 6):
+        held.update(_pos(code=f"10000{i}", shares=200, avg=1000.0))
+    orders = [_order("000001"), _order("000002")]
+    fills, d, _ = va.fill_orders(orders, {"000001": 1000.0, "000002": 1000.0}, held, R.capital, R, "2026-10-02")
+    assert [f.code for f in fills] == ["000001"]
+    assert any(x.code == "000002" and x.action == "건너뜀" for x in d)
+
+
+def test_보유_종목의_2차는_종목_수_상한에_걸리지_않는다():
+    held = {}
+    for i in range(1, 7):
+        held.update(_pos(code=f"00000{i}", shares=224, avg=1000.0))
+    fills, _, _ = va.fill_orders([_order("000001", "2차", R.tranche_amount(2))], {"000001": 1050.0},
+                                 held, R.capital, R, "2026-10-02")
+    assert [f.tranche for f in fills] == ["2차"]
+
+
+def test_체결_직전에_현금_예비금을_다시_검사한다():
+    cash = R.cash_reserve + 100_000.0          # 1차 22.5만을 사면 예비금 50만을 침범
+    fills, d, left = va.fill_orders([_order("000001")], {"000001": 1000.0}, {}, cash, R, "2026-10-02")
+    assert fills == [] and left == cash
+    assert d[0].action == "건너뜀" and d[0].gate == "체결" and "예비금" in d[0].detail
+    넉넉 = R.cash_reserve + R.tranche_amount(1) + 1_000.0
+    fills2, _, left2 = va.fill_orders([_order("000001")], {"000001": 1000.0}, {}, 넉넉, R, "2026-10-02")
+    assert fills2 and left2 >= R.cash_reserve
+
+
+def test_이번_달_이미_정리한_종목은_다시_사지_않는다():
+    o, d = va.decide_buys({}, CLOSES, CANDS[:2], R, "2026-10-06", R.capital, False, blocked={"000001"})
+    assert [x.code for x in o] == ["000002"]
+    막힘 = [x for x in d if x.code == "000001"]
+    assert 막힘 and 막힘[0].action == "건너뜀" and 막힘[0].gate == "조건"
+    assert "이번 달 이미 정리한 종목" in 막힘[0].detail
+
+
+def test_오늘_종가가_없는_후보는_주문하지_않고_보류한다():
+    o, d = va.decide_buys({}, {}, CANDS[:1], R, "2026-10-05", R.capital, False)
+    assert o == []
+    assert d[0].action == "보류" and d[0].gate == "조건" and "오늘 종가 없음" in d[0].detail
