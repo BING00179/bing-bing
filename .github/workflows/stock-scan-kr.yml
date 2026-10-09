@@ -179,6 +179,27 @@ jobs:
             echo "마감 시각이 아니므로 기록하지 않습니다. (현재 $HOUR:$MIN KST)"
           fi
 
+      # ── 가상 계좌 (자동매매 1단계, 돈 0원) ──
+      # 어제 주문을 오늘 시가로 체결하고, 오늘 종가로 내일 주문을 냅니다.
+      # 명령이 16:00 KST 전이면 스스로 끝납니다(오늘 봉이 바뀔 수 있어서).
+      - name: 가상 계좌 갱신
+        continue-on-error: true
+        working-directory: trading-system
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          HOUR=$(TZ=Asia/Seoul date +%H)
+          MIN=$(TZ=Asia/Seoul date +%M)
+          if [ "$HOUR" -gt 15 ] || { [ "$HOUR" = "15" ] && [ "$MIN" -ge 20 ]; }; then
+            python -m src.cli virtual-update --web               || echo "::error::가상 계좌 갱신에 실패했습니다"
+            for f in data/virtual_trades.csv data/virtual_log.csv data/virtual_daily.csv; do
+              [ -f "$f" ] && echo "$f: $(($(wc -l < "$f") - 1))줄" || echo "$f: 아직 없음"
+            done
+          else
+            echo "마감 전입니다. (현재 $HOUR:$MIN KST)"
+          fi
+
       # ── 월말 ──
       # 이 달 마지막 평일, 15:20 이후 그날 아무 실행에서나. 표시 파일로 한 달에 한 번만.
       # ⚠️ 2026-10-08: value-record 는 DART 재무 파일이 있어야 하는데 러너에는 없어
@@ -221,7 +242,7 @@ jobs:
 
       - name: 웹페이지와 기록 저장소에 올리기
         run: |
-          if [ -z "$(git status --porcelain stocks/ trading-system/data/livetest.csv trading-system/data/value_candidates.csv trading-system/data/monthly_review_*.done)" ]; then
+          if [ -z "$(git status --porcelain stocks/ trading-system/data/livetest.csv trading-system/data/value_candidates.csv trading-system/data/monthly_review_*.done trading-system/data/virtual_*.csv)" ]; then
             echo "바뀐 내용이 없어 올리지 않습니다."
             exit 0
           fi
@@ -231,6 +252,7 @@ jobs:
           git add trading-system/data/livetest.csv || true   # 실시간 검증 기록
           git add trading-system/data/value_candidates.csv || true   # 월말 후보 전체
           git add trading-system/data/monthly_review_*.done || true  # 월말 한 번만 표시
+          git add trading-system/data/virtual_*.csv || true  # 가상 계좌 기록 (체결·로그·일별)
           git commit -m "스캔 결과 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M KST')"
           # 다른 커밋이 먼저 올라갔을 수 있으므로 한 번 당겨서 합칩니다.
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true

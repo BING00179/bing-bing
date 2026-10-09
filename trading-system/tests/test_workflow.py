@@ -187,3 +187,31 @@ def test_표시_파일은_후보_기록이_성공했을_때만_쓴다():
     assert '[ "$ok" = 1 ]' in 글, ".done 쓰기가 value-record 성공 조건에 걸려 있지 않습니다"
     assert 글.index('[ "$ok" = 1 ]') < 글.index('> "$DONE"'), ".done 쓰기가 조건 밖에 있습니다"
     assert 글.index("ok=0") < 글.index("src.cli monthly-review"), "ok=0 은 value-record 실패 처리여야 합니다"
+
+
+# ── 가상 계좌 단계 ──────────────────────────────────────────────────
+def _virtual_step() -> dict:
+    (단계,) = [s for s in _steps() if "virtual-update" in (s.get("run") or "")]
+    return 단계
+
+
+def test_가상_계좌_단계가_있고_웹을_갱신한다():
+    글 = _virtual_step().get("run") or ""
+    assert "virtual-update --web" in 글
+
+
+def test_가상_계좌_단계는_장부_뒤에_온다():
+    이름들 = [s.get("name", "") for s in _steps()]
+    장부 = next(i for i, n in enumerate(이름들) if "실시간 검증" in n)
+    가상 = next(i for i, n in enumerate(이름들) if "가상 계좌" in n)
+    assert 장부 < 가상, "가상 계좌는 그날 장부(후보 추적)가 끝난 뒤에 돕니다"
+
+
+def test_가상_계좌_단계는_창을_닫지_않는다():
+    글 = _virtual_step().get("run") or ""
+    assert '"$HOUR" -gt 15' in 글 and '"$MIN" -le 40' not in 글
+
+
+def test_가상_계좌_기록을_커밋한다():
+    글 = WORKFLOW.read_text(encoding="utf-8")
+    assert "trading-system/data/virtual_" in 글
