@@ -214,4 +214,56 @@ def test_가상_계좌_단계는_창을_닫지_않는다():
 
 def test_가상_계좌_기록을_커밋한다():
     글 = WORKFLOW.read_text(encoding="utf-8")
-    assert "trading-system/data/virtual_" in 글
+    assert "git add trading-system/data/virtual_*.csv" in 글, "가상 계좌 세 CSV 를 커밋하지 않으면 다음 실행에서 사라집니다"
+
+
+# ── 최종 검토 반영 (2026-10-10) ─────────────────────────────────────
+
+def test_월말_단계가_가상_계좌_단계보다_앞이다():
+    """월말 마지막 평일에 새 후보 파일이 먼저 써져야, 같은 실행의 가상 계좌가 그 판정으로
+    '근거 사라짐' 을 보고 새 후보를 삽니다. 거꾸로면 하루 늦고, 그 사이 지난달 판정으로 삽니다."""
+    단계들 = _steps()
+    월말 = next(i for i, s in enumerate(단계들) if "value-record" in (s.get("run") or ""))
+    가상 = next(i for i, s in enumerate(단계들) if "virtual-update" in (s.get("run") or ""))
+    장부 = next(i for i, s in enumerate(단계들) if "livetest-record" in (s.get("run") or ""))
+    assert 장부 < 월말 < 가상, "순서는 장부 → 월말 → 가상 계좌 입니다"
+
+
+def _expand(field: str, lo: int, hi: int) -> list[int]:
+    """cron 한 칸 (*, */n, a-b, a,b) 을 숫자 목록으로."""
+    out: list[int] = []
+    for part in field.split(","):
+        step = 1
+        if "/" in part:
+            part, step_s = part.split("/")
+            step = int(step_s)
+        if part == "*":
+            a, b = lo, hi
+        elif "-" in part:
+            a, b = (int(x) for x in part.split("-"))
+        else:
+            a = b = int(part)
+        out.extend(range(a, b + 1, step))
+    return out
+
+
+def _cron_times_kst() -> list[tuple[int, int]]:
+    문서 = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    on = 문서.get("on", 문서.get(True))        # PyYAML 은 'on' 을 True 로 읽습니다
+    times = []
+    for 항목 in on["schedule"]:
+        분, 시 = 항목["cron"].split()[:2]
+        for h in _expand(시, 0, 23):
+            for m in _expand(분, 0, 59):
+                times.append(((h + 9) % 24, m))
+    return times
+
+
+def test_가상_계좌가_도는_시각_이후에_뜨는_예약이_있다():
+    """가상 계좌는 run_after_kst(16:00) 전이면 스스로 끝납니다. 예약이 전부 15:50 까지면
+    예약 실행으로는 영영 안 돕니다 — 깃허브가 예약을 늦게 띄워 줄 때만 우연히 돕니다."""
+    import json
+    설정 = json.loads((Path(__file__).resolve().parents[1] / "config.json").read_text(encoding="utf-8"))
+    시, 분 = (int(x) for x in 설정["virtual_account"]["run_after_kst"].split(":"))
+    늦은것 = [t for t in _cron_times_kst() if t >= (시, 분)]
+    assert 늦은것, f"{시:02d}:{분:02d} KST 이후에 뜨는 cron 이 없습니다 → {sorted(set(_cron_times_kst()))[-3:]}"

@@ -257,6 +257,13 @@ class VirtualAccountConfig:
     def __post_init__(self) -> None:
         self.buy_tranches_pct = tuple(int(x) for x in self.buy_tranches_pct)
         self.sell_tranches = tuple((float(p), int(w)) for p, w in self.sell_tranches)
+        # 읽을 때 검사합니다 — 30·30·40 이 30·30·30 으로 적히면 배정의 10% 가 조용히 안 쓰입니다.
+        if len(self.buy_tranches_pct) != 3 or sum(self.buy_tranches_pct) != 100:
+            raise ValueError(f"virtual_account.buy_tranches_pct 는 셋이고 합이 100 이어야 합니다: "
+                             f"{list(self.buy_tranches_pct)}")
+        if not self.sell_tranches or sum(w for _, w in self.sell_tranches) != 100:
+            raise ValueError(f"virtual_account.sell_tranches 의 비중 합은 100 이어야 합니다: "
+                             f"{[list(t) for t in self.sell_tranches]}")
 
 
 @dataclass

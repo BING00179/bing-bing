@@ -216,5 +216,7 @@ def render_tab(d: dict) -> str:
           f'분할 매수 {"·".join(str(x) for x in r["buy_tranches_pct"])} (2차 +{r["tranche2_trigger_pct"]:g}%, 3차 {r["tranche3_trigger_pct"]:g}% — 가정)<br>'
           f'분할 매도 {" / ".join(f"+{p:g}%에 {w}%" for p, w in r["sell_tranches"])} · 무효선 {r["invalid_pct"]:g}% · 일일 손실 한도 {r["daily_loss_halt_pct"]:g}%<br>'
           f'비용 매수 {r["fee_buy_pct"]}% · 매도 {r["fee_sell_pct"]}% · 세금 {r["tax_pct"]}% (확인됨) · 슬리피지 {r["slippage_pct"]}% (가정)<br>'
+          '근거 사라짐 = 월말 판정 함정?·제외 (가정) · 그 달 판정 뒤 다 판 종목은 다음 판정까지 다시 사지 않음 (가정) · '
+          '실행을 놓쳐 하루 넘게 묵은 주문은 만료<br>'
           '판단은 그날 종가, 체결은 다음날 시가. 이 화면의 모든 숫자는 가상이며 매매 권유가 아닙니다.</div></div>')
     return 카드 + 곡선 + 보유표 + 로그표 + 체결표 + 규칙

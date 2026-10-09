@@ -2322,48 +2322,68 @@ def cmd_livetest_record(args: argparse.Namespace) -> int:
     return 0
 
 
+# 이번 달 판정 가운데 근거가 유지된 것 / 명시적으로 사라진 것 (I3, 2026-10-10 결정).
+# 판정이 아예 없는 것(PBR·PER 거름망 탈락)은 어느 쪽도 아닙니다 — 판단하지 않습니다.
+근거_유지_판정 = ("후보", "비쌈", "판단보류")
+근거_사라짐_판정 = ("함정?", "제외")
+
+
 def virtual_candidates(candidates_path: Path, ledger: pd.DataFrame
-                       ) -> tuple[list[tuple[str, str, float]], set[str] | None]:
-    """최근 월말 후보(점수 오름차순)와 '근거 유지' 집합.
+                       ) -> tuple[list[tuple[str, str, float]], set[str] | None,
+                                  dict[str, str] | None, str | None]:
+    """최근 월말 판정 → (매수 후보, 근거 유지 집합, 근거 사라짐 {code: 판정}, 기록한 날).
 
     후보 전체 파일(value-record --candidates-out)이 있으면 그것을, 없으면
     장부의 value 줄(상위 10개)을 씁니다. 장부만 있을 때는 '근거 사라짐' 을
-    판단하지 않습니다(11등이 된 것을 사라졌다고 오판하므로) → None.
+    판단하지 않습니다(11등이 된 것을 사라졌다고 오판하므로) → (…, None, None, None).
 
-    후보 파일에 basis 열이 있으면:
-      · 매수 목록에는 basis == "후보" 인 줄만 넣습니다.
-      · 근거 유지 집합에는 "후보" 와 "판단보류" 를 넣습니다 — 자료가 모자라 점수를
-        못 낸 것은 근거가 사라진 것이 아닙니다(§9).
+    후보 파일에서:
+      · 매수 목록 = basis == "후보" 인 줄, 점수 오름차순.
+      · 근거 유지 = 후보 · 비쌈 · 판단보류 — 값이 비싸졌거나 자료가 모자란 것은
+        근거가 사라진 것이 아닙니다(§9).
+      · 근거 사라짐 = 함정? · 제외 — 기업 쪽이 약하다고 **명시적으로** 판정된 것.
+      · 파일에 아예 없는 보유 종목(거름망 탈락)은 둘 다 아닙니다 → decide_sells 가 '판단 안 함' 으로 남김.
       · 최신 달 줄은 있는데 "후보" 가 한 줄도 없으면 판정 자체가 비정상일 수 있으니
-        근거 사라짐을 판단하지 않습니다(None) — 보유 전 종목이 한꺼번에 정리되는 것을 막습니다.
+        근거 사라짐을 판단하지 않습니다(사라짐 None) — 보유 전 종목이 한꺼번에 정리되는 것을 막습니다.
+      · recorded_on = 그 달 판정을 기록한 날 (없는 옛 파일이면 None).
     """
     if candidates_path.exists():
         c = pd.read_csv(candidates_path, dtype={"code": str}, keep_default_na=False)
         if not c.empty:
             달 = str(c["month"].astype(str).max())
             이번달 = c[c["month"].astype(str) == 달].copy()
-            유지줄 = 이번달
+            기록일 = None
+            if "recorded_on" in 이번달.columns:
+                날들 = [str(x) for x in 이번달["recorded_on"] if str(x)]
+                기록일 = max(날들) if 날들 else None
+            codes = 이번달["code"].astype(str)
             if "basis" in 이번달.columns:
                 basis = 이번달["basis"].astype(str)
-                유지줄 = 이번달[basis.isin(["후보", "판단보류"])]
+                유지 = set(codes[basis.isin(근거_유지_판정)])
+                사라짐: dict[str, str] | None = {str(k): str(v) for k, v in
+                                                  zip(codes[basis.isin(근거_사라짐_판정)],
+                                                      basis[basis.isin(근거_사라짐_판정)])}
                 이번달 = 이번달[basis == "후보"].copy()
                 if 이번달.empty:
                     print(f"  ⚠️ {달} 후보 파일에 '후보' 판정이 한 줄도 없습니다 — "
                           "근거 사라짐을 판단하지 않고, 새로 사지도 않습니다.")
-                    return [], None
+                    return [], 유지, None, 기록일
+            else:
+                # basis 가 없는 옛 파일은 '후보' 만 담았습니다 — 사라짐은 판단할 자료가 없음
+                유지, 사라짐 = set(codes), None
             이번달["score"] = pd.to_numeric(이번달["score"], errors="coerce").fillna(1e9)
             이번달 = 이번달.sort_values("score")
             return ([(str(r["code"]), str(r["name"]), float(r["score"])) for _, r in 이번달.iterrows()],
-                    set(유지줄["code"].astype(str)))
+                    유지, 사라짐, 기록일)
     v = lt_module.active(ledger)
     v = v[v["setup"].astype(str) == "value"] if not v.empty else v
     if v.empty:
-        return [], None
+        return [], None, None, None
     달 = str(v["signal_date"].astype(str).max())[:7]
     이번달 = v[v["signal_date"].astype(str).str.startswith(달)].copy()
     이번달["score"] = pd.to_numeric(이번달["score"], errors="coerce").fillna(1e9)
     이번달 = 이번달.sort_values("score")
-    return [(str(r["code"]), str(r["name"]), float(r["score"])) for _, r in 이번달.iterrows()], None
+    return [(str(r["code"]), str(r["name"]), float(r["score"])) for _, r in 이번달.iterrows()], None, None, None
 
 
 def _bar_on(frame: pd.DataFrame | None, day: str) -> pd.Series | None:
@@ -2388,6 +2408,39 @@ def _last_close_before(frame: pd.DataFrame | None, day: str) -> tuple[str, float
     if before.empty:
         return None
     return str(pd.DatetimeIndex(before.index)[-1].date()), float(before.iloc[-1]["close"])
+
+
+def _expiry_detail(order: va_module.Order) -> str:
+    return f"만료 — 주문일 {order.date} 의 다음 거래일이 아님(실행 누락)"
+
+
+def _next_bar_after(frame: pd.DataFrame | None, day: str) -> str | None:
+    """day 다음 봉의 날짜. day 봉이 프레임에 없으면 None (그 프레임으로는 달력을 못 셈)."""
+    if _bar_on(frame, day) is None:
+        return None
+    idx = pd.DatetimeIndex(frame.index)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    뒤 = sorted({d.date() for d in idx.normalize() if d > pd.Timestamp(day)})
+    return str(뒤[0]) if 뒤 else ""
+
+
+def _expired(order: va_module.Order, frame: pd.DataFrame | None, kq: pd.DataFrame | None,
+             today: str) -> bool:
+    """주문일 바로 다음 거래일이 오늘이 아니면 만료 — 실행을 하루 이상 놓친 주문입니다.
+
+    달력은 그 종목 봉과 코스닥 지수 봉 중 주문일 봉이 있는 것으로 셉니다(둘 다 있으면 더 이른
+    다음 날 — 종목이 하루 거래정지였어도 시장이 열린 날을 건너뛰지 않게). 둘 다 주문일 봉이
+    없으면 셀 수 없으니 만료로 봅니다. 다음 봉이 아직 없으면(오늘 봉이 안 나옴) 만료가 아니라
+    체결 단계가 '오늘 시가가 없습니다' 로 남깁니다.
+    """
+    다음들 = [n for f in (frame, kq) if (n := _next_bar_after(f, order.date)) is not None]
+    if not 다음들:
+        return True
+    있는것 = [n for n in 다음들 if n]
+    if not 있는것:
+        return False
+    return min(있는것) != today
 
 
 def cmd_virtual_update(args: argparse.Namespace) -> int:
@@ -2415,10 +2468,20 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
         print(f"지난 날짜는 다시 쓰지 않습니다 (기록은 지우지 않음) — 마지막 기록 {max(기록날짜)}.")
         return 0
 
+    # 같은 날 두 번째 실행이면 판단(새 주문)은 하지 않습니다 — 그 사이 후보 파일이 바뀌면
+    # 첫 실행의 주문과 겹쳐 종목 수 상한을 넘깁니다(최종 검토 C1). 체결·평가·화면은 다시 합니다.
+    이미판단 = 오늘 in set(store.load_daily()["date"].astype(str))
+
     ledger = lt_module.load(_resolve(args.file))
-    candidates, 유지집합 = virtual_candidates(_resolve(args.candidates), ledger)
+    candidates, 유지집합, 사라짐, 기록일 = virtual_candidates(_resolve(args.candidates), ledger)
     positions, cash = va_module.replay(trades, rules)
     pending = store.pending_orders(오늘)
+    # 이미 만료로 적은 주문은 다시 보지 않습니다 (만료 기록은 한 번만).
+    _log = store.load_log()
+    _만료 = _log[(_log["action"].astype(str) == "보류") & (_log["gate"].astype(str) == "체결")
+                & _log["detail"].astype(str).str.startswith("만료 — ")]
+    _만료키 = {(str(r["code"]), str(r["detail"])) for _, r in _만료.iterrows()}
+    pending = [o for o in pending if (o.code, _expiry_detail(o)) not in _만료키]
 
     # 코스닥 지수를 먼저 받습니다 — 휴장 판정에도 쓰고, 종목이 하나도 없는 날에도 휴장을 가려야 합니다.
     try:
@@ -2451,8 +2514,13 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
     opens = {c: float(b["open"]) for c, b in 오늘봉.items()}
     closes = {c: float(b["close"]) for c, b in 오늘봉.items()}
 
-    # ① 어제 주문 → 오늘 시가 체결
-    fills, 체결결정, cash = va_module.fill_orders(pending, opens, positions, cash, rules, 오늘)
+    # ① 어제 주문 → 오늘 시가 체결. 주문일 바로 다음 거래일이 오늘이 아니면 만료(실행 누락).
+    만료결정 = [va_module.Decision(오늘, o.code, o.name, "보류", "체결", _expiry_detail(o))
+              for o in pending if _expired(o, frames.get(o.code), kq, 오늘)]
+    만료코드 = {(d.code, d.detail) for d in 만료결정}
+    살아있는 = [o for o in pending if (o.code, _expiry_detail(o)) not in 만료코드]
+    fills, 체결결정, cash = va_module.fill_orders(살아있는, opens, positions, cash, rules, 오늘)
+    체결결정 = [*만료결정, *체결결정]
     n_fill = store.append_fills(fills)
     if fills:
         positions, cash = va_module.replay(store.load_trades(), rules)
@@ -2491,20 +2559,36 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
 
     # ③ 오늘 종가 → 내일 주문 (판단에는 오늘 종가만 씁니다)
     근거결정: list[va_module.Decision] = []
-    if 유지집합 is None:
-        근거결정 = [va_module.Decision(오늘, code, p.name, "보류", "조건",
-                                    "최근 월말 후보 판정 없음 — 근거 사라짐을 판단하지 않습니다")
-                    for code, p in positions.items()]
-    sells, 매도결정 = va_module.decide_sells(positions, closes, rules, 오늘, 유지집합)
-    buys, 매수결정 = va_module.decide_buys(positions, closes, candidates, rules, 오늘, cash, halted,
-                                           selling={o.code for o in sells})   # 같은 날 매도 종목은 사지 않음
-    orders = {(o.code, o.side, o.tranche): o for o in [*sells, *buys]}
+    매도결정: list[va_module.Decision] = []
+    매수결정: list[va_module.Decision] = []
+    orders: dict = {}
+    if 이미판단:
+        print(f"{오늘} — 오늘 판단은 이미 끝났습니다 — 새 주문은 내지 않습니다 (체결·평가·화면만 갱신).")
+        store.append_decisions([*체결결정, *평가결정], {})
+        오늘주문 = store.load_log()
+        n_orders = int(((오늘주문["date"].astype(str) == 오늘) & (오늘주문["action"].astype(str) == "주문")).sum())
+    else:
+        if 사라짐 is None:
+            근거결정 = [va_module.Decision(오늘, code, p.name, "보류", "조건",
+                                        "최근 월말 후보 판정 없음 — 근거 사라짐을 판단하지 않습니다")
+                        for code, p in positions.items()]
+        sells, 매도결정 = va_module.decide_sells(positions, closes, rules, 오늘, 사라짐, kept=유지집합)
+        # 이번 달 판정 뒤 이미 다 판 종목은 다음 월말 판정까지 다시 사지 않습니다 (I4 [가정]).
+        기준일 = 기록일 or f"{오늘[:7]}-01"
+        t = store.load_trades()
+        정리 = t[t["tranche"].astype(str).isin([va_module.T_INVALID, va_module.T_BASIS, va_module.SELL_TRANCHES[-1]])
+                & (t["date"].astype(str) >= 기준일)]
+        buys, 매수결정 = va_module.decide_buys(positions, closes, candidates, rules, 오늘, cash, halted,
+                                               selling={o.code for o in sells},   # 같은 날 매도 종목은 사지 않음
+                                               blocked=set(정리["code"].astype(str)))
+        orders = {(o.code, o.side, o.tranche): o for o in [*sells, *buys]}
+        store.append_decisions([*체결결정, *평가결정, *근거결정, *매도결정, *매수결정], orders)
+        n_orders = len(orders)
     전체결정 = [*체결결정, *평가결정, *근거결정, *매도결정, *매수결정]
-    store.append_decisions(전체결정, orders)
 
     막힘 = [d for d in [*매수결정, *매도결정] if d.action in ("보류", "건너뜀", "살 수 없음")]
     요약 = (f"💼 가상 계좌 {오늘} — 평가액 {equity:,.0f}원 (현금 {cash:,.0f}) · "
-          f"보유 {len(positions)}/{rules.max_positions} · 체결 {n_fill}건 · 내일 주문 {len(orders)}건 · 막힘 {len(막힘)}건"
+          f"보유 {len(positions)}/{rules.max_positions} · 체결 {n_fill}건 · 내일 주문 {n_orders}건 · 막힘 {len(막힘)}건"
           + (f" · 평가 대체 {len(평가결정)}종목" if 평가결정 else "")
           + (f" · 시세 실패 {실패}종목" if 실패 else "")
           + (" · ⚠️ 일일 손실 한도 발동" if halted else ""))
@@ -2518,7 +2602,10 @@ def cmd_virtual_update(args: argparse.Namespace) -> int:
         virtual_html.write_json(out / "virtual.json", store, rules, 평가종가, names, 오늘, substituted=대체)
         report_html.rerender(out)
         print(f"웹페이지 갱신: {out / 'index.html'}")
-    _notify(요약, not args.no_telegram)
+    if 이미판단 and not n_fill:
+        print("   (같은 날 다시 돈 것이라 텔레그램은 보내지 않습니다)")
+    else:
+        _notify(요약, not args.no_telegram)
     return 0
 
 
@@ -2567,8 +2654,13 @@ def _scored_frame(scored: list) -> pd.DataFrame:
     return pd.DataFrame([s.__dict__ for s in scored])
 
 
-def _value_screen_pipeline(args: argparse.Namespace, fin: pd.DataFrame) -> tuple[pd.DataFrame, str]:
-    """재무표 → 스크린 → 두 축 판정. (통과 표, 조건 글) 을 돌려줍니다.
+def _value_screen_pipeline(args: argparse.Namespace, fin: pd.DataFrame
+                          ) -> tuple[pd.DataFrame, str, pd.DataFrame]:
+    """재무표 → 스크린 → 두 축 판정. (통과 표, 조건 글, 좁히기 전 판정 전체) 를 돌려줍니다.
+
+    통과 표는 장부용입니다 — '후보' 가 하나라도 있으면 '후보' 만. 판정 전체(후보·비쌈·함정?·
+    제외·판단보류)는 후보 파일용입니다 — 가상 계좌가 '근거 사라짐(함정?·제외)' 을 보려면
+    좁히기 전 것이 있어야 합니다.
 
     cmd_value_record 에서 뽑아낸 순수 분리입니다. 시세 목록을 못 받으면
     DataUnavailable 이 그대로 올라갑니다.
@@ -2593,10 +2685,12 @@ def _value_screen_pipeline(args: argparse.Namespace, fin: pd.DataFrame) -> tuple
     # 사장님 원칙은 "싼 주식이 아니라 가치가 유지되는 기업을 합리적인
     # 값에" 입니다. 그래서 기록에도 두 점수를 같이 남깁니다 — 나중에
     # "점수가 높았던 것이 실제로 나았나" 를 물을 수 있어야 합니다.
+    전체 = 통과
     if not 통과.empty:
         평가 = qa_module.evaluate(통과)
         if not 평가.empty:
             통과 = 평가
+            전체 = 평가
             if not args.all_verdicts:
                 후보 = 평가[평가["판정"] == "후보"]
                 if len(후보) >= 1:
@@ -2604,12 +2698,17 @@ def _value_screen_pipeline(args: argparse.Namespace, fin: pd.DataFrame) -> tuple
             조건 += (f"/기업{qa_module.GOOD_BUSINESS:g}"
                      f"/가격{qa_module.GOOD_PRICE:g}")
 
-    return 통과, 조건
+    return 통과, 조건, 전체
 
 
 def _save_candidates(path: Path, 통과: pd.DataFrame) -> None:
-    """판정 '후보' 전체를 달 단위로 남깁니다. 가상 계좌가 '근거 유지' 를 볼 때 씁니다."""
-    달 = now_kst().strftime("%Y-%m")
+    """좁히기 전 판정 전체(후보·비쌈·함정?·제외·판단보류)를 달 단위로 남깁니다.
+
+    가상 계좌가 '근거 유지'(후보·비쌈·판단보류)와 '근거 사라짐'(함정?·제외)을 볼 때 씁니다.
+    recorded_on 은 기록한 날 — 그날 뒤에 다 판 종목은 다음 판정까지 다시 사지 않습니다.
+    """
+    지금 = now_kst()
+    달 = 지금.strftime("%Y-%m")
     통과 = 통과.reset_index(drop=True)
     빈칸 = pd.Series([""] * len(통과))
     새것 = pd.DataFrame({
@@ -2621,6 +2720,7 @@ def _save_candidates(path: Path, 통과: pd.DataFrame) -> None:
         "기업점수": pd.to_numeric(통과.get("기업점수"), errors="coerce"),
         "가격점수": pd.to_numeric(통과.get("가격점수"), errors="coerce"),
         "basis": 통과.get("판정", 빈칸).astype(str),
+        "recorded_on": 지금.strftime("%Y-%m-%d"),
     })
     기존 = pd.DataFrame()
     if path.exists():
@@ -2640,7 +2740,7 @@ def cmd_value_record(args: argparse.Namespace) -> int:
 
     fin = pd.read_csv(path, dtype={"code": str, "rcept_dt": str})
     try:
-        통과, 조건 = _value_screen_pipeline(args, fin)
+        통과, 조건, 전체판정 = _value_screen_pipeline(args, fin)
     except DataUnavailable as exc:
         print(f"실패: {exc}")
         return 1
@@ -2650,7 +2750,7 @@ def cmd_value_record(args: argparse.Namespace) -> int:
     저장 = lt_module.save(기록, _resolve(args.file))
 
     if getattr(args, "candidates_out", None):
-        _save_candidates(_resolve(args.candidates_out), 통과)
+        _save_candidates(_resolve(args.candidates_out), 전체판정)
 
     print(f"저평가 후보 {len(통과):,}종목 중 상위 {args.top}개를 기록했습니다 "
           f"(새로 적은 것 {새것}건) → {저장}")
@@ -3272,7 +3372,8 @@ def build_parser() -> argparse.ArgumentParser:
     vr.add_argument("--top", type=int, default=10,
                     help="상위 몇 종목을 기록할지. 많으면 버려지는 것만 늘어납니다")
     vr.add_argument("--file", default="data/livetest.csv", help="기록 파일")
-    vr.add_argument("--candidates-out", help="판정 '후보' 전체를 달별로 남길 파일 (가상 계좌용)")
+    vr.add_argument("--candidates-out", help="좁히기 전 판정 전체(후보·비쌈·함정?·제외·판단보류)를 "
+                                             "달별로 남길 파일 (가상 계좌용)")
     vr.set_defaults(func=cmd_value_record)
 
     me = sub.add_parser("month-end-check",
