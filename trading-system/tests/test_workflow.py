@@ -267,3 +267,22 @@ def test_가상_계좌가_도는_시각_이후에_뜨는_예약이_있다():
     시, 분 = (int(x) for x in 설정["virtual_account"]["run_after_kst"].split(":"))
     늦은것 = [t for t in _cron_times_kst() if t >= (시, 분)]
     assert 늦은것, f"{시:02d}:{분:02d} KST 이후에 뜨는 cron 이 없습니다 → {sorted(set(_cron_times_kst()))[-3:]}"
+
+
+# ── 2026-10-12 추가 — DART 키 알림 ────────────────────────────────────
+# 월말(10-30) 후보 뽑기는 DART_API_KEY 가 Secrets 에 있어야 돕니다. 사장님이
+# 넣으실 일이라, 키가 비어 있으면 그 전 며칠 동안 텔레그램으로 알립니다.
+
+def _dart_reminder_step() -> dict:
+    (단계,) = [s for s in _steps() if "DART 키 알림" in s.get("name", "")]
+    return 단계
+
+
+def test_DART_키_알림_단계는_키와_텔레그램_env_를_받고_키가_없을_때만_보낸다():
+    s = _dart_reminder_step()
+    env = s.get("env") or {}
+    assert "DART_API_KEY" in env and "TELEGRAM_BOT_TOKEN" in env
+    글 = s.get("run") or ""
+    assert '-z "$DART_API_KEY"' in 글, "키가 있으면 보내지 않아야 합니다"
+    assert "20261028" in 글 and "20261030" in 글, "알림 기간이 적혀 있어야 합니다"
+    assert "notify" in 글 or "send(" in 글
