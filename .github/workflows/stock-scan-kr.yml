@@ -64,6 +64,32 @@ jobs:
         working-directory: trading-system
         run: pip install -r requirements.txt
 
+      # ── DART 키 알림 (2026-10-12) ──
+      # 월말(10-30) 후보 뽑기는 DART_API_KEY 가 Secrets 에 있어야 돕니다. 키가
+      # 비어 있으면 10-28~10-30 에 하루 한 번(14시 전 실행에서) 텔레그램으로 알립니다.
+      # 키를 넣으면 저절로 조용해집니다. 날짜가 지나면 이 단계는 지워도 됩니다.
+      - name: DART 키 알림
+        continue-on-error: true
+        working-directory: trading-system
+        env:
+          DART_API_KEY: ${{ secrets.DART_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          TODAY=$(TZ=Asia/Seoul date +%Y%m%d)
+          HOUR=$(TZ=Asia/Seoul date +%H)
+          if [ -z "$DART_API_KEY" ] && [ "$TODAY" -ge 20261028 ] && [ "$TODAY" -le 20261030 ] && [ "$HOUR" -lt 14 ]; then
+            python - <<'PY' || echo "::error::DART 키 알림 전송 실패"
+          from src.notify import send
+          send("⚠️ DART_API_KEY 가 GitHub Secrets 에 아직 없습니다. "
+               "10월 30일(금) 15:20 전에 넣어야 10월 저평가 후보가 뽑힙니다. "
+               "저장소 Settings → Secrets and variables → Actions → New repository secret, "
+               "이름 DART_API_KEY, 값은 opendart.fss.or.kr 에서 받은 인증키.")
+          PY
+          else
+            echo "DART 키 알림: 보낼 조건 아님 (키 있음이거나 기간·시각 밖)"
+          fi
+
       - name: 시장 상태 확인
         working-directory: trading-system
         env:
