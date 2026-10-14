@@ -1,0 +1,63 @@
+{
+ "as_of": "2026-10-14",
+ "version": "1",
+ "rules": {
+  "capital": 5000000,
+  "max_positions": 6,
+  "position_cap_pct": 15.0,
+  "cash_reserve": 500000,
+  "buy_tranches_pct": [
+   30,
+   30,
+   40
+  ],
+  "tranche2_trigger_pct": 5.0,
+  "tranche3_trigger_pct": -10.0,
+  "sell_tranches": [
+   [
+    10.0,
+    30
+   ],
+   [
+    20.0,
+    40
+   ],
+   [
+    35.0,
+    30
+   ]
+  ],
+  "invalid_pct": -20.0,
+  "daily_loss_halt_pct": -3.0,
+  "slippage_pct": 0.15,
+  "fee_buy_pct": 0.0137,
+  "fee_sell_pct": 0.014,
+  "tax_pct": 0.1998
+ },
+ "summary": {
+  "capital": 5000000,
+  "equity": 5000000.0,
+  "cash": 5000000.0,
+  "positions_value": 0.0,
+  "total_return_pct": 0.0,
+  "day_pnl": null,
+  "day_pnl_pct": null,
+  "halted": false,
+  "valued_on": "2026-10-14",
+  "n_positions": 0,
+  "max_positions": 6,
+  "kosdaq_return_pct": null,
+  "kosdaq_from": null,
+  "kosdaq_to": null
+ },
+ "curve": [
+  {
+   "date": "2026-10-14",
+   "equity": 5000000.0,
+   "kosdaq_close": 823.88
+  }
+ ],
+ "positions": [],
+ "log": [],
+ "trades": []
+}

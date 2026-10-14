@@ -111,6 +111,8 @@ details[open] summary::before{content:"be  "}
     <h1>종목 스캐너</h1>
     <div class="sub">2026-10-14 14:44 KST &middot; Trend Join Long</div>
   </header>
+  <div class="tabs"><button class="tab" data-panel="scan" aria-selected="true">스캔</button><button class="tab" data-panel="virtual" aria-selected="false">가상 계좌</button></div>
+  <div class="panel" id="scan">
   <div class="card">
   <div class="state bad"><span class="dot"></span>시장 위험</div>
   <div class="sub" style="margin-top:8px">지수가 200일선 아래, 고점대비 -32.8%, 변동성 33.9%</div><div class="sub" style="margin-top:6px">신호를 내보내지 않는 상태입니다.</div>
@@ -138,5 +140,19 @@ details[open] summary::before{content:"be  "}
     최종 판단은 본인 기준으로 내리시기 바랍니다.<br>
     한국시간(KST) 기준이며 평일 장중에 자동 갱신됩니다.
   </div>
+  </div>
+  <div class="panel" id="virtual" hidden><div class="card"><div class="state ok"><span class="dot"></span>가상 계좌 · 돈 0원 · 정상</div><div class="sub">2026-10-14 종가 기준</div><div class="metrics"><div class="metric"><div class="k">원금</div><div class="v vnum">5,000,000원</div></div><div class="metric"><div class="k">평가액</div><div class="v vnum">5,000,000원</div></div><div class="metric"><div class="k">현금</div><div class="v vnum">5,000,000원</div></div><div class="metric"><div class="k">누적 수익률</div><div class="v vnum">+0.00%</div></div><div class="metric"><div class="k">오늘 손익</div><div class="v vnum">-</div></div><div class="metric"><div class="k">보유</div><div class="v vnum">0/6</div></div><div class="metric"><div class="k">코스닥 같은 기간</div><div class="v vnum">-</div></div></div></div><h2>자산 곡선</h2><div class="card"><div class="empty">기록이 이틀 이상 쌓이면 곡선이 그려집니다.</div></div><h2>보유 종목 <span class="sub">(2026-10-14 종가 기준)</span></h2><div class="card tbl"><table><tr><th>종목</th><th>단계</th><th>주 수</th><th>평단</th><th>현재가</th><th>수익률</th><th>다음 목표 / 무효선까지</th></tr><tr><td colspan="7" class="empty">보유 종목이 없습니다 — 현금만 들고 기다리는 것도 기록입니다.</td></tr></table></div><h2>결정 로그 — 낸 것도 막힌 것도 (최근 30일)</h2><div class="card tbl"><table><tr><th>날짜</th><th>종목</th><th>행동</th><th>관문</th><th>이유</th></tr><tr><td colspan="5" class="empty">아직 결정 기록이 없습니다.</td></tr></table></div><h2>체결 내역</h2><div class="card tbl"><table><tr><th>날짜</th><th>종목</th><th>구분</th><th>주 수</th><th>가격</th><th>수수료+세금 / 슬리피지(가정)</th></tr><tr><td colspan="6" class="empty">체결이 없습니다.</td></tr></table></div><h2>규칙 (판 v1)</h2><div class="card"><div class="sub">원금 5,000,000원 · 최대 6종목 · 종목당 15% · 현금 예비 500,000원<br>분할 매수 30·30·40 (2차 +5%, 3차 -10% — 가정)<br>분할 매도 +10%에 30% / +20%에 40% / +35%에 30% · 무효선 -20% · 일일 손실 한도 -3%<br>비용 매수 0.0137% · 매도 0.014% · 세금 0.1998% (확인됨) · 슬리피지 0.15% (가정)<br>근거 사라짐 = 월말 판정 함정?·제외 (가정) · 그 달 판정 뒤 다 판 종목은 다음 판정까지 다시 사지 않음 (가정) · 실행을 놓쳐 하루 넘게 묵은 주문은 만료<br>판단은 그날 종가, 체결은 다음날 시가. 이 화면의 모든 숫자는 가상이며 매매 권유가 아닙니다.</div></div></div>
 </div>
+<script>
+document.querySelectorAll('.tab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.tab').forEach(function(b){
+      b.setAttribute('aria-selected', String(b === btn));
+    });
+    document.querySelectorAll('.panel').forEach(function(p){
+      p.hidden = (p.id !== btn.dataset.panel);
+    });
+  });
+});
+</script>
 </body></html>
