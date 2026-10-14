@@ -672,21 +672,21 @@
   "count": 0
  },
  {
-  "when": "2026-10-14 12:28 KST",
+  "when": "2026-10-14 14:44 KST",
   "date": "2026-10-14",
   "market": {
    "index_name": "코스피",
-   "close": 6085.39,
-   "sma_slow": 6395.41,
+   "close": 6128.1,
+   "sma_slow": 6395.62,
    "above_sma_slow": false,
-   "rsi": 31.8,
-   "drawdown_pct": 33.23,
-   "volatility_pct": 33.42,
+   "rsi": 33.3,
+   "drawdown_pct": 32.77,
+   "volatility_pct": 33.94,
    "verdict": "위험",
    "reasons": [
     "지수가 200일선 아래",
-    "고점대비 -33.2%",
-    "변동성 33.4%"
+    "고점대비 -32.8%",
+    "변동성 33.9%"
    ],
    "tradable": false
   },
