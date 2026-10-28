@@ -895,5 +895,27 @@
   },
   "signals": [],
   "count": 0
+ },
+ {
+  "when": "2026-10-28 12:54 KST",
+  "date": "2026-10-28",
+  "market": {
+   "index_name": "코스피",
+   "close": 5638.34,
+   "sma_slow": 6463.61,
+   "above_sma_slow": false,
+   "rsi": 35.9,
+   "drawdown_pct": 38.14,
+   "volatility_pct": 45.5,
+   "verdict": "위험",
+   "reasons": [
+    "지수가 200일선 아래",
+    "고점대비 -38.1%",
+    "변동성 45.5%"
+   ],
+   "tradable": false
+  },
+  "signals": [],
+  "count": 0
  }
 ]
