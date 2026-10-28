@@ -46,7 +46,7 @@
   "valued_on": "2026-10-28",
   "n_positions": 0,
   "max_positions": 6,
-  "kosdaq_return_pct": -7.08,
+  "kosdaq_return_pct": -6.38,
   "kosdaq_from": "2026-10-14",
   "kosdaq_to": "2026-10-28"
  },
@@ -104,7 +104,7 @@
   {
    "date": "2026-10-28",
    "equity": 5000000.0,
-   "kosdaq_close": 765.59
+   "kosdaq_close": 771.28
   }
  ],
  "positions": [],
