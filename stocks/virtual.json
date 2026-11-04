@@ -1,5 +1,5 @@
 {
- "as_of": "2026-11-03",
+ "as_of": "2026-11-04",
  "version": "1",
  "rules": {
   "capital": 5000000,
@@ -43,12 +43,12 @@
   "day_pnl": 0.0,
   "day_pnl_pct": 0.0,
   "halted": false,
-  "valued_on": "2026-11-03",
+  "valued_on": "2026-11-04",
   "n_positions": 0,
   "max_positions": 6,
-  "kosdaq_return_pct": -14.5,
+  "kosdaq_return_pct": -16.46,
   "kosdaq_from": "2026-10-14",
-  "kosdaq_to": "2026-11-03"
+  "kosdaq_to": "2026-11-04"
  },
  "curve": [
   {
@@ -125,6 +125,11 @@
    "date": "2026-11-03",
    "equity": 5000000.0,
    "kosdaq_close": 704.39
+  },
+  {
+   "date": "2026-11-04",
+   "equity": 5000000.0,
+   "kosdaq_close": 688.27
   }
  ],
  "positions": [],
