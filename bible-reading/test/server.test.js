@@ -14,6 +14,15 @@ function makeEnv(todayKST, timeKST) {
   const sheets = {};
   const props = {};
   const triggers = [];
+  // 가짜 시트 화면: 메뉴·입력창·확인창
+  const ui = {
+    menus: [], prompts: [], answers: [], alerts: [],
+    Button: { OK: 'OK', CANCEL: 'CANCEL', YES: 'YES', NO: 'NO' },
+    ButtonSet: { OK_CANCEL: 'OK_CANCEL', YES_NO: 'YES_NO' },
+    createMenu(title) { const m = { title, items: [], addItem(l, f) { m.items.push([l, f]); return m; }, addToUi() { ui.menus.push(m); } }; return m; },
+    prompt(t, msg) { ui.prompts.push(msg); const a = ui.answers.shift(); return { getSelectedButton: () => a[0], getResponseText: () => a[1] }; },
+    alert(t, msg, btns) { ui.alerts.push(msg || t); if (btns) { const a = ui.answers.shift(); return a[0]; } return 'OK'; },
+  };
   const fetched = [];
   let fetchCode = () => 201;
   const clock = new Date(todayKST + 'T' + (timeKST || '07:00') + ':00+09:00');
@@ -24,6 +33,7 @@ function makeEnv(todayKST, timeKST) {
       rows,
       getLastRow: () => rows.length,
       setFrozenRows() {},
+      deleteRow(r) { rows.splice(r - 1, 1); },
       getRange(r, c, nr, nc) {
         return {
           setValues(v) { v.forEach((row, i) => { rows[r - 1 + i] = row.map(String); }); return this; },
@@ -37,7 +47,10 @@ function makeEnv(todayKST, timeKST) {
     return s;
   }
   const g = {
-    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: (n) => sheets[n] || null, insertSheet: Sheet }) },
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => ({ getSheetByName: (n) => sheets[n] || null, insertSheet: Sheet }),
+      getUi: () => ui,
+    },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     Utilities: {
       formatDate(d, tz, fmt) {
@@ -76,7 +89,7 @@ function makeEnv(todayKST, timeKST) {
   vm.runInContext(CODE, g);
   const get = (p) => JSON.parse(g.doGet({ parameter: p || {} }).text);
   const post = (fn, ...args) => JSON.parse(g.doPost({ postData: { contents: JSON.stringify({ fn, args }) } }).text);
-  return { g, sheets, props, triggers, fetched, get, post, setFetch: (f) => { fetchCode = f; } };
+  return { g, sheets, props, triggers, fetched, ui, get, post, setFetch: (f) => { fetchCode = f; } };
 }
 
 const EP1 = 'https://fcm.googleapis.com/fcm/send/aaa';
@@ -218,4 +231,39 @@ test('testPush: 시작 전이라도, 시각과 상관없이 알림 켠 모든 �
   assert.equal(e.g.testPush(), 2);
   assert.deepEqual(e.fetched.map((r) => r.url), [EP1, EP2]);
   assert.equal(e.post('testPush').error, '모르는 요청입니다.');
+});
+
+test('회원 완전 삭제: 시트 메뉴에만 있고, 그 사람의 회원·기록·알림 줄을 전부 지움 (다른 사람 것은 그대로)', () => {
+  const e = makeEnv('2027-01-05', '06:00');
+  e.g.setupPush();
+  e.post('register', '영희'); e.post('register', '철수');
+  e.post('mark', '영희', '2027-01-01', true); e.post('mark', '영희', '2027-01-02', true);
+  e.post('mark', '철수', '2027-01-01', true);
+  e.post('subscribe', '영희', EP1, 6); e.post('unsubscribe', EP1); e.post('subscribe', '영희', EP1, 7);
+  e.post('subscribe', '철수', EP2, 6);
+  e.g.onOpen();
+  assert.deepEqual(e.ui.menus[0].items.map((x) => x[1]), ['deleteMemberMenu']);
+  e.ui.answers.push(['OK', ' 영희 '], ['YES']);
+  e.g.deleteMemberMenu();
+  assert.ok(e.ui.alerts[0].includes('기록 2줄') && e.ui.alerts[0].includes('알림 3줄'), e.ui.alerts[0]);
+  assert.deepEqual(e.sheets['회원'].rows.slice(1).map((r) => r[0]), ['철수']);
+  assert.deepEqual(e.sheets['기록'].rows.slice(1).map((r) => r[1]), ['철수']);
+  assert.deepEqual(e.sheets['알림'].rows.slice(1).map((r) => r[2]), [EP2], '영희 휴대폰 주소의 해제 줄까지');
+  assert.ok(e.ui.alerts[1].includes('삭제 완료'));
+  assert.deepEqual([...e.get().data.members], ['철수']);
+});
+
+test('회원 완전 삭제: 아니오·취소·없는 이름이면 아무것도 안 지움, 화면(링크)에서는 못 부름', () => {
+  const e = makeEnv('2027-01-05');
+  e.post('register', '영희'); e.post('mark', '영희', '2027-01-01', true);
+  e.ui.answers.push(['OK', '영희'], ['NO']);
+  e.g.deleteMemberMenu();
+  e.ui.answers.push(['CANCEL', '영희']);
+  e.g.deleteMemberMenu();
+  e.ui.answers.push(['OK', '없는사람']);
+  e.g.deleteMemberMenu();
+  assert.ok(e.ui.alerts.some((a) => a.includes('없는 이름')));
+  assert.equal(e.sheets['회원'].rows.length, 2);
+  assert.equal(e.sheets['기록'].rows.length, 2);
+  for (const fn of ['deleteMember_', 'deleteMemberMenu', 'onOpen']) assert.equal(e.post(fn, '영희').error, '모르는 요청입니다.');
 });

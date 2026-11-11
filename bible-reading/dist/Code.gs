@@ -602,3 +602,57 @@ function push_(urls) {
   Logger.log('보냄 ' + sent + ' / ' + urls.length + ', 만료 ' + gone.length);
   return sent;
 }
+
+// ── 관리자: 회원 완전 삭제 ─────────────────────────
+// 시트를 열면 위쪽에 '📖 성경통독' 메뉴가 생깁니다. 시트를 편집할 수 있는 사람(회장님)에게만 보이고,
+// 화면(링크)에서는 부를 수 없습니다(doPost 목록에 없음). 회원·기록·알림에서 그 사람 줄을 전부 지웁니다.
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('📖 성경통독').addItem('회원 완전 삭제…', 'deleteMemberMenu').addToUi();
+}
+
+function deleteMemberMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var r = ui.prompt('회원 완전 삭제', '지울 이름을 정확히 적어 주세요.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  var name = Core.validName(r.getResponseText());
+  if (!name || memberNames_().indexOf(name) < 0) { ui.alert('회원 명단에 없는 이름입니다: ' + r.getResponseText()); return; }
+  var c = countMember_(name);
+  var ok = ui.alert('회원 완전 삭제',
+    '「' + name + '」 의 회원 정보, 읽은 기록 ' + c.records + '줄, 알림 ' + c.pushes + '줄을 지웁니다.\n되돌릴 수 없습니다. 지울까요?',
+    ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  var d = deleteMember_(name);
+  ui.alert('삭제 완료: ' + name + ' (회원 ' + d.members + '줄, 기록 ' + d.records + '줄, 알림 ' + d.pushes + '줄)');
+}
+
+// 그 사람이 등록한 휴대폰 알림 주소 — 이름이 비어 있는 해제·만료 줄도 같이 지우려고
+function memberEndpoints_(name) {
+  var eps = {};
+  rows_(pushes_(), 4).forEach(function (r) { if (r[1] === name) eps[r[2]] = true; });
+  return eps;
+}
+function countMember_(name) {
+  var eps = memberEndpoints_(name);
+  return {
+    records: rows_(records_(), 4).filter(function (r) { return r[1] === name; }).length,
+    pushes: rows_(pushes_(), 4).filter(function (r) { return r[1] === name || eps[r[2]]; }).length
+  };
+}
+// 조건에 맞는 줄을 아래에서부터 지움 (위에서 지우면 줄 번호가 밀림)
+function deleteRowsWhere_(sh, cols, test) {
+  var rows = rows_(sh, cols), n = 0;
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (test(rows[i])) { sh.deleteRow(i + 2); n++; }
+  }
+  return n;
+}
+function deleteMember_(name) {
+  return locked_(function () {
+    var eps = memberEndpoints_(name);
+    return {
+      pushes: deleteRowsWhere_(pushes_(), 4, function (r) { return r[1] === name || eps[r[2]]; }),
+      records: deleteRowsWhere_(records_(), 4, function (r) { return r[1] === name; }),
+      members: deleteRowsWhere_(members_(), 1, function (r) { return r[0] === name; })
+    };
+  });
+}
