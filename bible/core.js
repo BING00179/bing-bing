@@ -24,7 +24,7 @@ var Core = (function () {
   var GAE_CODES = ('gen exo lev num deu jos jdg rut 1sa 2sa 1ki 2ki 1ch 2ch ezr neh est job psa pro ' +
     'ecc sng isa jer lam ezk dan hos jol amo oba jon mic nam hab zep hag zec mal mat mrk luk jhn act ' +
     'rom 1co 2co gal eph php col 1th 2th 1ti 2ti tit phm heb jas 1pe 2pe 1jn 2jn 3jn jud rev').split(' ');
-  var START = '2027-01-01';
+  var FIRST_START = '2027-01-01'; // 1기 시작일
   // 화면 주소 (GitHub Pages, 공개). 시트 쪽 주소는 링크 뒤 ?s= 로만 다닙니다.
   var APP_BASE = 'https://bing00179.github.io/bing-bing/bible/';
   var SUNDAY_CHAPTERS = 5;
@@ -42,23 +42,118 @@ var Core = (function () {
   function addDays(d, n) { return fromUTC(toUTC(d) + n * 86400000); }
   function weekday(d) { return new Date(toUTC(d)).getUTCDay(); } // 0 = 주일
 
-  // 날마다 [시작 장, 끝 장] 을 미리 계산
-  var PLAN = {};
-  var END = START;
-  (function () {
-    var at = 0, d = START;
-    while (at < TOTAL) {
-      var n = weekday(d) === 0 ? SUNDAY_CHAPTERS : OTHER_CHAPTERS;
-      var to = Math.min(at + n, TOTAL) - 1;
-      PLAN[d] = { from: at, to: to };
-      END = d;
-      at = to + 1;
-      d = addDays(d, 1);
-    }
-  })();
-  var DAY_COUNT = Object.keys(PLAN).length;
+  // ── 회차별 읽기표 ─────────────────────────────────
+  // 시작일을 넣으면 그날 창세기 1장부터 주일 5장·그 밖 3장으로 끝까지 나눈 읽기표를 만듦.
+  function makePlan(START) {
+    // 날마다 [시작 장, 끝 장] 을 미리 계산
+    var PLAN = {};
+    var END = START;
+    (function () {
+      var at = 0, d = START;
+      while (at < TOTAL) {
+        var n = weekday(d) === 0 ? SUNDAY_CHAPTERS : OTHER_CHAPTERS;
+        var to = Math.min(at + n, TOTAL) - 1;
+        PLAN[d] = { from: at, to: to };
+        END = d;
+        at = to + 1;
+        d = addDays(d, 1);
+      }
+    })();
+    var DAY_COUNT = Object.keys(PLAN).length;
 
-  function portionFor(d) { return PLAN[d] || null; }
+    function portionFor(d) { return PLAN[d] || null; }
+
+    // records: [[이름, 날짜, '완료'|'취소'], ...] 기록 순서대로. 마지막 줄이 그날 상태.
+    function doneSet(records, name) {
+      var last = {};
+      records.forEach(function (r) {
+        if (r[0] === name) last[r[1]] = r[2];
+      });
+      var s = new Set();
+      Object.keys(last).forEach(function (d) {
+        if (last[d] === '완료' && PLAN[d]) s.add(d);
+      });
+      return s;
+    }
+
+    function progress(dates) {
+      var ch = 0;
+      dates.forEach(function (d) {
+        var p = PLAN[d];
+        if (p) ch += p.to - p.from + 1;
+      });
+      return { chapters: ch, percent: Math.floor(ch * 1000 / TOTAL) / 10 };
+    }
+
+    // 시작일부터 어제까지(끝날을 넘지 않게) 중 완료 안 한 날 수. 오늘은 세지 않음.
+    function missedDays(dates, today) {
+      var last = addDays(today, -1);
+      if (last > END) last = END;
+      var n = 0;
+      for (var d = START; d <= last; d = addDays(d, 1)) {
+        if (!dates.has(d)) n++;
+      }
+      return n;
+    }
+
+    function lastReadLabel(dates) {
+      var latest = '';
+      dates.forEach(function (d) { if (d > latest) latest = d; });
+      if (!latest) return '';
+      var c = CHAPTERS[PLAN[latest].to];
+      return BOOKS[c[0]][0] + ' ' + c[1] + '장까지';
+    }
+
+    function icsFor(appUrl, hour) {
+      var H = alarmHour(hour) || DEFAULT_ALARM_HOUR;
+      var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//bible-reading//KO', 'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEscape('함께 읽는 성경')];
+      Object.keys(PLAN).sort().forEach(function (d) {
+        var label = portionLabel(PLAN[d]);
+        var desc = '오늘 읽을 곳: ' + label + '\n읽고 나서 [읽기 완료] 누르기: ' + appUrl;
+        L.push('BEGIN:VEVENT',
+          'UID:bible-' + d.replace(/-/g, '') + '@bible-reading',
+          'DTSTAMP:' + stampUTC(START, 0, 0),
+          'DTSTART:' + stampUTC(d, H, 0),
+          'DTEND:' + stampUTC(d, H, 15),
+          'SUMMARY:' + icsEscape('📖 ' + label),
+          'DESCRIPTION:' + icsEscape(desc),
+          'URL:' + appUrl,
+          'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT0M',
+          'DESCRIPTION:' + icsEscape('📖 ' + label),
+          'END:VALARM', 'END:VEVENT');
+      });
+      L.push('END:VCALENDAR');
+      return L.map(fold).join('\r\n') + '\r\n';
+    }
+    return { START: START, END: END, DAY_COUNT: DAY_COUNT, portionFor: portionFor, doneSet: doneSet,
+      progress: progress, missedDays: missedDays, lastReadLabel: lastReadLabel, icsFor: icsFor };
+  }
+  var cache = {};
+  function planFor(start) { return cache[start] || (cache[start] = makePlan(start)); }
+  var first = planFor(FIRST_START);
+
+  // 회차 목록: [{n: 1, start: '2027-01-01'}, …] (시작일 순). 시트에 없으면 1기만.
+  function termsFrom(rows) {
+    var list = (rows || []).filter(function (r) { return /^\d{4}-\d{2}-\d{2}$/.test(r[1]); })
+      .map(function (r) { return { n: +r[0], start: r[1] }; });
+    if (!list.length) list = [{ n: 1, start: FIRST_START }];
+    list.sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+    return list;
+  }
+  // 오늘 기준 지금 회차(cur: 시작한 것 중 마지막, 없으면 다음 것)와 아직 시작 전인 다음 회차(next)
+  function termsNow(terms, today) {
+    var cur = null, next = null;
+    terms.forEach(function (t) { if (t.start <= today) cur = t; else if (!next) next = t; });
+    return { cur: cur || next, next: cur ? next : null };
+  }
+  // 그 회차 참여자: 1기는 등록한 사람 전부, 2기부터는 '참여' 를 누른 사람 (등록 순서)
+  function participants(term, members, joins) {
+    if (term.n === 1) return members.slice();
+    var set = {};
+    (joins || []).forEach(function (j) { if (+j[1] === term.n) set[j[0]] = true; });
+    return members.filter(function (m) { return set[m]; });
+  }
 
   function chapterIndex(book, ch) {
     for (var i = 0; i < TOTAL; i++) {
@@ -86,47 +181,6 @@ var Core = (function () {
     if (a[0] !== b[0]) return an + ' ' + a[1] + '장 ~ ' + bn + ' ' + b[1] + '장';
     if (a[1] === b[1]) return an + ' ' + a[1] + '장';
     return an + ' ' + a[1] + '~' + b[1] + '장';
-  }
-
-  // records: [[이름, 날짜, '완료'|'취소'], ...] 기록 순서대로. 마지막 줄이 그날 상태.
-  function doneSet(records, name) {
-    var last = {};
-    records.forEach(function (r) {
-      if (r[0] === name) last[r[1]] = r[2];
-    });
-    var s = new Set();
-    Object.keys(last).forEach(function (d) {
-      if (last[d] === '완료' && PLAN[d]) s.add(d);
-    });
-    return s;
-  }
-
-  function progress(dates) {
-    var ch = 0;
-    dates.forEach(function (d) {
-      var p = PLAN[d];
-      if (p) ch += p.to - p.from + 1;
-    });
-    return { chapters: ch, percent: Math.floor(ch * 1000 / TOTAL) / 10 };
-  }
-
-  // 시작일부터 어제까지(끝날을 넘지 않게) 중 완료 안 한 날 수. 오늘은 세지 않음.
-  function missedDays(dates, today) {
-    var last = addDays(today, -1);
-    if (last > END) last = END;
-    var n = 0;
-    for (var d = START; d <= last; d = addDays(d, 1)) {
-      if (!dates.has(d)) n++;
-    }
-    return n;
-  }
-
-  function lastReadLabel(dates) {
-    var latest = '';
-    dates.forEach(function (d) { if (d > latest) latest = d; });
-    if (!latest) return '';
-    var c = CHAPTERS[PLAN[latest].to];
-    return BOOKS[c[0]][0] + ' ' + c[1] + '장까지';
   }
 
   function validName(s) {
@@ -177,36 +231,16 @@ var Core = (function () {
     return new Date(ms).toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
   }
 
-  function icsFor(appUrl, hour) {
-    var H = alarmHour(hour) || DEFAULT_ALARM_HOUR;
-    var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//bible-reading//KO', 'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEscape('함께 읽는 성경')];
-    Object.keys(PLAN).sort().forEach(function (d) {
-      var label = portionLabel(PLAN[d]);
-      var desc = '오늘 읽을 곳: ' + label + '\n읽고 나서 [읽기 완료] 누르기: ' + appUrl;
-      L.push('BEGIN:VEVENT',
-        'UID:bible-' + d.replace(/-/g, '') + '@bible-reading',
-        'DTSTAMP:' + stampUTC(START, 0, 0),
-        'DTSTART:' + stampUTC(d, H, 0),
-        'DTEND:' + stampUTC(d, H, 15),
-        'SUMMARY:' + icsEscape('📖 ' + label),
-        'DESCRIPTION:' + icsEscape(desc),
-        'URL:' + appUrl,
-        'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT0M',
-        'DESCRIPTION:' + icsEscape('📖 ' + label),
-        'END:VALARM', 'END:VEVENT');
-    });
-    L.push('END:VCALENDAR');
-    return L.map(fold).join('\r\n') + '\r\n';
-  }
-
   return {
-    icsFor: icsFor, icsEscape: icsEscape, ALARM_HOURS: ALARM_HOURS, DEFAULT_ALARM_HOUR: DEFAULT_ALARM_HOUR,
+    icsFor: first.icsFor, icsEscape: icsEscape, ALARM_HOURS: ALARM_HOURS, DEFAULT_ALARM_HOUR: DEFAULT_ALARM_HOUR,
     alarmHour: alarmHour, hourLabel: hourLabel,
-    APP_BASE: APP_BASE, BOOKS: BOOKS, TOTAL: TOTAL, START: START, END: END, DAY_COUNT: DAY_COUNT,
-    addDays: addDays, weekday: weekday, portionFor: portionFor, chapterIndex: chapterIndex,
-    portionLabel: portionLabel, chaptersOf: chaptersOf, GAE_CODES: GAE_CODES, doneSet: doneSet, progress: progress,
-    missedDays: missedDays, lastReadLabel: lastReadLabel, validName: validName
+    APP_BASE: APP_BASE, BOOKS: BOOKS, TOTAL: TOTAL, FIRST_START: FIRST_START,
+    makePlan: planFor, termsFrom: termsFrom, termsNow: termsNow, participants: participants,
+    // 1기 읽기표 (예전 이름 그대로 — 시험·호환용)
+    START: first.START, END: first.END, DAY_COUNT: first.DAY_COUNT, portionFor: first.portionFor,
+    doneSet: first.doneSet, progress: first.progress, missedDays: first.missedDays, lastReadLabel: first.lastReadLabel,
+    addDays: addDays, weekday: weekday, chapterIndex: chapterIndex,
+    portionLabel: portionLabel, chaptersOf: chaptersOf, GAE_CODES: GAE_CODES, validName: validName
   };
 })();
 

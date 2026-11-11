@@ -14,6 +14,7 @@ function makeEnv(todayKST, timeKST) {
   const sheets = {};
   const props = {};
   const triggers = [];
+  const who = { email: 'owner@example.com' }; // 지금 메뉴를 누른 사람 (기본: 관리자)
   // 가짜 시트 화면: 메뉴·입력창·확인창
   const ui = {
     menus: [], prompts: [], answers: [], alerts: [],
@@ -48,7 +49,7 @@ function makeEnv(todayKST, timeKST) {
   }
   const g = {
     SpreadsheetApp: {
-      getActiveSpreadsheet: () => ({ getSheetByName: (n) => sheets[n] || null, insertSheet: Sheet }),
+      getActiveSpreadsheet: () => ({ getSheetByName: (n) => sheets[n] || null, insertSheet: Sheet, getOwner: () => ({ getEmail: () => 'owner@example.com' }) }),
       getUi: () => ui,
     },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
@@ -84,12 +85,13 @@ function makeEnv(todayKST, timeKST) {
       return reqs.map((r) => { fetched.push(r); const c = fetchCode(r.url); return { getResponseCode: () => c, getContentText: () => '' }; });
     } },
     Logger: { log() {} },
+    Session: { getEffectiveUser: () => ({ getEmail: () => who.email }) },
   };
   vm.createContext(g);
   vm.runInContext(CODE, g);
   const get = (p) => JSON.parse(g.doGet({ parameter: p || {} }).text);
   const post = (fn, ...args) => JSON.parse(g.doPost({ postData: { contents: JSON.stringify({ fn, args }) } }).text);
-  return { g, sheets, props, triggers, fetched, ui, get, post, setFetch: (f) => { fetchCode = f; } };
+  return { g, sheets, props, triggers, fetched, ui, who, get, post, setFetch: (f) => { fetchCode = f; } };
 }
 
 const EP1 = 'https://fcm.googleapis.com/fcm/send/aaa';
@@ -242,7 +244,7 @@ test('회원 완전 삭제: 시트 메뉴에만 있고, 그 사람의 회원·�
   e.post('subscribe', '영희', EP1, 6); e.post('unsubscribe', EP1); e.post('subscribe', '영희', EP1, 7);
   e.post('subscribe', '철수', EP2, 6);
   e.g.onOpen();
-  assert.deepEqual(e.ui.menus[0].items.map((x) => x[1]), ['deleteMemberMenu']);
+  assert.deepEqual(e.ui.menus[0].items.map((x) => x[1]), ['newTermMenu', 'deleteMemberMenu']);
   e.ui.answers.push(['OK', ' 영희 '], ['YES']);
   e.g.deleteMemberMenu();
   assert.ok(e.ui.alerts[0].includes('기록 2줄') && e.ui.alerts[0].includes('알림 3줄'), e.ui.alerts[0]);
@@ -265,5 +267,68 @@ test('회원 완전 삭제: 아니오·취소·없는 이름이면 아무것도 
   assert.ok(e.ui.alerts.some((a) => a.includes('없는 이름')));
   assert.equal(e.sheets['회원'].rows.length, 2);
   assert.equal(e.sheets['기록'].rows.length, 2);
-  for (const fn of ['deleteMember_', 'deleteMemberMenu', 'onOpen']) assert.equal(e.post(fn, '영희').error, '모르는 요청입니다.');
+  for (const fn of ['deleteMember_', 'deleteMemberMenu', 'onOpen', 'newTermMenu', 'setTerm_']) assert.equal(e.post(fn, '영희').error, '모르는 요청입니다.');
+});
+
+test('리더(편집자)는 회원 완전 삭제를 못 함 — 관리자(시트 주인)만', () => {
+  const e = makeEnv('2027-01-05');
+  e.post('register', '영희');
+  e.who.email = 'leader@example.com';
+  e.g.deleteMemberMenu();
+  assert.ok(e.ui.alerts[0].includes('관리자'));
+  assert.equal(e.ui.prompts.length, 0, '이름도 묻지 않음');
+  assert.equal(e.sheets['회원'].rows.length, 2);
+});
+
+test('새 회차: 리더가 시작일을 정함 → 2기 읽기표, 참여한 사람만 함께 읽기, 진도는 0부터', () => {
+  const e = makeEnv('2027-12-20', '06:00');
+  e.g.setupPush();
+  e.post('register', '영희'); e.post('register', '철수');
+  e.post('mark', '영희', '2027-12-20', true);
+  e.who.email = 'leader@example.com'; // 리더도 할 수 있음
+  e.ui.answers.push(['OK', '2027-12-25']);
+  e.g.newTermMenu();
+  assert.ok(e.ui.alerts.pop().includes('끝납니다'), '1기가 끝나기 전 날짜는 거절');
+  e.ui.answers.push(['OK', '2028-01-03'], ['YES']);
+  e.g.newTermMenu();
+  assert.ok(e.ui.alerts.pop().includes('2기 준비 완료'));
+  let st = e.get().data;
+  assert.deepEqual(st.terms.map((t) => [t.n, t.start]), [[1, '2027-01-01'], [2, '2028-01-03']]);
+  // 2기 시작 전 날짜 고치기 (새 회차를 또 만들지 않음)
+  e.ui.answers.push(['OK', '2028-01-01'], ['YES']);
+  e.g.newTermMenu();
+  st = e.get().data;
+  assert.deepEqual(st.terms.map((t) => [t.n, t.start]), [[1, '2027-01-01'], [2, '2028-01-01']]);
+  // 참여: 영희만, 새로 온 민수는 등록하면 바로 2기
+  assert.ok(e.post('join', '영희').ok);
+  e.post('join', '영희');
+  e.post('register', '민수');
+  st = e.get().data;
+  assert.deepEqual([...st.joins].map((j) => [...j]), [['영희', '2'], ['민수', '2']]);
+  assert.deepEqual([...e.g.Core.participants(st.terms[1], st.members, st.joins)], ['영희', '민수']);
+});
+
+test('2기가 시작되면 알림은 2기 참여자에게만, 기록은 2기 날짜로', () => {
+  const e = makeEnv('2028-01-01', '06:00');
+  e.g.setupPush();
+  e.post('register', '영희'); e.post('register', '철수');
+  e.post('subscribe', '영희', EP1, 6); e.post('subscribe', '철수', EP2, 6);
+  e.ui.answers.push(['OK', '2028-01-01'], ['YES']);
+  e.g.newTermMenu();
+  e.post('join', '영희');
+  assert.equal(e.g.sendMorning(), 1);
+  assert.deepEqual(e.fetched.map((r) => r.url), [EP1]);
+  assert.ok(e.post('mark', '영희', '2028-01-01', true).ok);
+  assert.ok(!e.post('mark', '영희', '2027-12-31', true).ok, '1기와 2기 사이 쉬는 날은 읽기표에 없음');
+});
+
+test('완전 삭제는 참여 기록도 지움', () => {
+  const e = makeEnv('2027-12-30');
+  e.post('register', '영희');
+  e.ui.answers.push(['OK', '2028-01-03'], ['YES']);
+  e.g.newTermMenu();
+  e.post('join', '영희');
+  e.ui.answers.push(['OK', '영희'], ['YES']);
+  e.g.deleteMemberMenu();
+  assert.equal(e.sheets['참여'].rows.length, 1);
 });

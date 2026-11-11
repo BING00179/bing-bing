@@ -35,16 +35,25 @@ var Api = (function () {
     function db() { try { return JSON.parse(localStorage.getItem(K)) || { members: [], records: [] }; } catch (e) { return { members: [], records: [] }; } }
     function put(d) { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) {} }
     function today() { return params.get('today') || new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); }
-    function state(d) { return { today: today(), members: d.members.slice(), records: d.records.slice(), vapidKey: params.get('vapid') || '' }; }
+    // ?term2=2028-01-03 이면 2기가 열린 상태로 미리보기
+    function terms() { var t = [['1', Core.FIRST_START]]; if (params.get('term2')) t.push(['2', params.get('term2')]); return Core.termsFrom(t); }
+    function openTerm() { var tn = Core.termsNow(terms(), today()); return tn.next || tn.cur; }
+    function state(d) { return { today: today(), members: d.members.slice(), records: d.records.slice(), vapidKey: params.get('vapid') || '',
+      terms: terms(), joins: (d.joins || []).slice() }; }
+    function joinTerm(d, name) {
+      var t = openTerm(); d.joins = d.joins || [];
+      if (t.n > 1 && !d.joins.some(function (j) { return j[0] === name && +j[1] === t.n; })) d.joins.push([name, String(t.n)]);
+    }
     var fns = {
       register: function (name) {
         var n = Core.validName(name);
         if (!n) throw new Error('이름은 1~20자로 적어 주세요.');
-        var d = db(); if (d.members.indexOf(n) < 0) d.members.push(n); put(d);
+        var d = db(); if (d.members.indexOf(n) < 0) d.members.push(n); joinTerm(d, n); put(d);
         var st = state(d); st.name = n; return st;
       },
+      join: function (name) { var d = db(); joinTerm(d, name); put(d); return state(d); },
       mark: function (name, date, done) {
-        if (!Core.portionFor(date)) throw new Error('읽기표에 없는 날짜입니다.');
+        if (!terms().some(function (t) { return Core.makePlan(t.start).portionFor(date); })) throw new Error('읽기표에 없는 날짜입니다.');
         if (date > today()) throw new Error('아직 오지 않은 날은 체크할 수 없어요.');
         var d = db();
         if (d.members.indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
@@ -58,7 +67,7 @@ var Api = (function () {
       call: function (fn, args) { return later(function () { return fns[fn].apply(null, args); }); },
       calendarUrl: function (h) {
         var H = Core.alarmHour(h) || Core.DEFAULT_ALARM_HOUR;
-        if (!blobs[H]) blobs[H] = URL.createObjectURL(new Blob([Core.icsFor(Core.APP_BASE + '?s=preview', H)], { type: 'text/calendar' }));
+        if (!blobs[H]) blobs[H] = URL.createObjectURL(new Blob([Core.makePlan(openTerm().start).icsFor(Core.APP_BASE + '?s=preview', H)], { type: 'text/calendar' }));
         return blobs[H];
       }
     };

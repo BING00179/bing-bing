@@ -141,9 +141,31 @@
   }
   function errMsg(e) { return (e && e.message) ? e.message : '연결이 원활하지 않아요. 잠시 뒤 다시 눌러 주세요.'; }
 
+  // ── 회차 ── 지금 회차의 읽기표(P)로 모든 것을 셈. 다음 회차가 열려 있으면 참여 안내.
+  var P = Core.makePlan(Core.FIRST_START), TN = { cur: { n: 1, start: Core.FIRST_START }, next: null };
+  function setState(s) {
+    state = s;
+    var terms = s.terms && s.terms.length ? s.terms : Core.termsFrom([]);
+    TN = Core.termsNow(terms, s.today);
+    P = Core.makePlan(TN.cur.start);
+    // 알림 받는 곳(sw.js)도 지금 회차를 알게 저장
+    try { if (window.caches) caches.open('bible-meta').then(function (c) { c.put('terms', new Response(JSON.stringify(terms))); }); } catch (e) {}
+  }
+  function openTerm() { return TN.next || TN.cur; }
+  function joined(term, name) { return Core.participants(term, state.members, state.joins || []).indexOf(name) >= 0; }
+  function joinHtml() {
+    var t = openTerm();
+    if (!t || joined(t, me)) return '';
+    var p = Core.makePlan(t.start);
+    return '<div class="card"><div class="small">' + (TN.next ? '다음 회차' : '지금 회차') + '</div>' +
+      '<div class="portion" style="margin-top:0">' + t.n + '기 통독</div>' +
+      '<div class="small" style="margin-bottom:12px">' + dateLabel(t.start, true) + ' ~ ' + dateLabel(p.END, true) + '</div>' +
+      '<button class="big" data-act="join">' + t.n + '기 참여</button></div>';
+  }
+
   function mine(name) {
-    var done = Core.doneSet(state.records, name);
-    return { done: done, prog: Core.progress(done), missed: Core.missedDays(done, state.today) };
+    var done = P.doneSet(state.records, name);
+    return { done: done, prog: P.progress(done), missed: P.missedDays(done, state.today) };
   }
   function progressHtml(p) {
     return '<div class="bar"><i style="width:' + p.percent + '%"></i></div>' +
@@ -246,13 +268,13 @@
   }
 
   function todayHtml() {
-    var t = state.today, m = mine(me), p = Core.portionFor(t), h = '';
-    if (t < Core.START) {
+    var t = state.today, m = mine(me), p = P.portionFor(t), h = joinHtml();
+    if (t < P.START) {
       h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div>' +
-        '<div class="small" style="margin-top:6px">시작</div><div class="portion" style="margin-top:0">' + dateLabel(Core.START, true) + '<br>' + Core.portionLabel(Core.portionFor(Core.START)) + '</div>' +
-        '<div class="small">평일·토요일·공휴일 3장, 주일 5장씩 읽어요. ' + dateLabel(Core.END, true) + '에 요한계시록까지 마칩니다.</div></div>';
+        '<div class="small" style="margin-top:6px">시작</div><div class="portion" style="margin-top:0">' + dateLabel(P.START, true) + '<br>' + Core.portionLabel(P.portionFor(P.START)) + '</div>' +
+        '<div class="small">평일·토요일·공휴일 3장, 주일 5장씩 읽어요. ' + dateLabel(P.END, true) + '에 요한계시록까지 마칩니다.</div></div>';
     } else if (!p) {
-      h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div><div class="portion">2027 읽기표 완료</div></div>';
+      h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div><div class="portion">' + TN.cur.n + '기 통독 완료</div>' + (TN.next ? '<div class="small">' + TN.next.n + '기 시작 · ' + dateLabel(TN.next.start, true) + '</div>' : '<div class="small">다음 회차는 리더가 정하면 열려요.</div>') + '</div>';
     } else {
       var done = m.done.has(t);
       h += '<div class="card"><div class="date">오늘 · ' + dateLabel(t) + '</div>' +
@@ -350,12 +372,12 @@
   function openReader(d) {
     readFrom = tab; reading = d; loadErr = '';
     render(); window.scrollTo(0, 0);
-    loadBooks(Core.chaptersOf(Core.portionFor(d))).catch(function () {
+    loadBooks(Core.chaptersOf(P.portionFor(d))).catch(function () {
       loadErr = '말씀을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.';
     }).then(function () { if (reading === d) render(); });
   }
   function readerHtml() {
-    var d = reading, p = Core.portionFor(d), list = Core.chaptersOf(p), m = mine(me), done = m.done.has(d);
+    var d = reading, p = P.portionFor(d), list = Core.chaptersOf(p), m = mine(me), done = m.done.has(d);
     var h = '<div class="reader"><div class="bar2"><button class="linkbtn" data-act="close-read">‹ 돌아가기</button>' +
       '<span class="sizes"><button data-act="font" data-n="-2" aria-label="글씨 작게">가−</button> ' +
       '<button data-act="font" data-n="2" aria-label="글씨 크게">가+</button></span></div>' +
@@ -406,7 +428,7 @@
     // 이름
     h += sect('👤 내 이름', '<div style="margin-bottom:8px">' + esc(me) + '</div><button class="linkbtn" data-act="switch">다른 이름으로 바꾸기</button>');
     // 정보
-    h += sect('ℹ️ 정보', '<div class="small">읽기표: 2027-01-01 창세기 ~ 2027-12-28 요한계시록, 평일·토요일·공휴일 3장, 주일 5장<br>' +
+    h += sect('ℹ️ 정보', '<div class="small">' + TN.cur.n + '기 읽기표: ' + P.START + ' 창세기 ~ ' + P.END + ' 요한계시록, 평일·토요일·공휴일 3장, 주일 5장<br>' +
       '앱 안 말씀: 성경전서 개역한글판 (대한성서공회) · 개역개정은 장마다 링크</div>' +
       '<div class="hint" style="text-align:left;margin-top:10px"><button class="linkbtn" data-act="reset-setup">처음 설정(설치·알림) 다시 하기</button></div>');
     return h;
@@ -414,25 +436,27 @@
 
   function allHtml() {
     var t = state.today;
-    if (!state.members.length) return '<div class="card small">아직 등록한 분이 없어요.</div>';
-    return '<div class="card">' + (Core.portionFor(t) ? '<div class="small" style="margin-bottom:10px">오늘 ' + Core.portionLabel(Core.portionFor(t)) + '</div>' : '') +
-      state.members.map(function (n) {
-        var m = mine(n), last = Core.lastReadLabel(m.done);
+    var list = Core.participants(TN.cur, state.members, state.joins || []);
+    if (!list.length) return joinHtml() + '<div class="card small">' + TN.cur.n + '기 참여자 없음</div>';
+    return joinHtml() + '<div class="card">' + (P.portionFor(t) ? '<div class="small" style="margin-bottom:10px">오늘 ' + Core.portionLabel(P.portionFor(t)) + '</div>' : '') +
+      '<div class="small" style="margin-bottom:6px">' + TN.cur.n + '기 · ' + list.length + '명</div>' +
+      list.map(function (n) {
+        var m = mine(n), last = P.lastReadLabel(m.done);
         return '<div class="row"><div class="top"><span class="name">' + esc(n) + (m.done.has(t) ? ' ✅' : '') + '</span>' +
           (m.missed > 0 ? '<span class="miss">밀린 ' + m.missed + '일</span>' : '') + '</div>' +
-          '<div class="small">' + (last ? esc(last) : '아직 시작 전') + '</div>' + progressHtml(m.prog) + '</div>';
+          '<div class="small">' + (last ? esc(last) : '읽은 곳 없음') + '</div>' + progressHtml(m.prog) + '</div>';
       }).join('') + '</div>';
   }
 
   function pastHtml() {
     var t = state.today;
-    if (t < Core.START) return '<div class="card small">' + dateLabel(Core.START, true) + '부터 시작해요.</div>';
-    var m = mine(me), last = t > Core.END ? Core.END : t, h = '';
+    if (t < P.START) return '<div class="card small">' + dateLabel(P.START, true) + '부터 시작해요.</div>';
+    var m = mine(me), last = t > P.END ? P.END : t, h = '';
     h += '<p class="small">날짜를 누르면 읽음 / 안 읽음이 바뀌어요. 📖 를 누르면 그날 말씀을 읽어요.</p>';
-    for (var d = last; d >= Core.START; d = Core.addDays(d, -1)) {
+    for (var d = last; d >= P.START; d = Core.addDays(d, -1)) {
       var done = m.done.has(d), missed = !done && d < t;
       h += '<div class="dayrow"><button class="day' + (done ? ' done' : missed ? ' missed' : '') + '" data-act="mark" data-date="' + d + '" data-done="' + (done ? 0 : 1) + '">' +
-        '<span class="d">' + dateLabel(d) + '</span><span class="p">' + Core.portionLabel(Core.portionFor(d)) + '</span>' +
+        '<span class="d">' + dateLabel(d) + '</span><span class="p">' + Core.portionLabel(P.portionFor(d)) + '</span>' +
         '<span class="s">' + (done ? '✅ 읽음' : missed ? '안 읽음' : '오늘') + '</span></button>' +
         '<button class="open" data-act="read" data-date="' + d + '" aria-label="' + dateLabel(d) + ' 말씀 읽기">📖</button></div>';
     }
@@ -443,7 +467,7 @@
     if (busy) return;
     busy = true;
     document.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
-    promise.then(function (s) { state = s; if (after) after(s); })
+    promise.then(function (s) { setState(s); if (after) after(s); })
       .catch(function (e) { toast(errMsg(e)); })
       .then(function () { busy = false; render(); });
   }
@@ -461,6 +485,10 @@
     }
     var act = b.dataset.act;
     if (act === 'alarm-none') { setAlarm('none'); render(); return; }
+    if (act === 'join') {
+      run(call('join', me), function () { toast('✅ ' + openTerm().n + '기 참여'); });
+      return;
+    }
     if (act === 'push-toggle') {
       if (alarmChoice() === 'push') {
         run(Push.off().then(function (u) { return u ? call('unsubscribe', u) : Api.state(); }),
@@ -571,7 +599,7 @@
     }
     if ('serviceWorker' in navigator) navigator.serviceWorker.register(Api.sw).catch(function () {});
     Api.state().then(function (s) {
-      state = s;
+      setState(s);
       var saved = load();
       me = saved && s.members.indexOf(saved) >= 0 ? saved : null;
       render();
@@ -590,7 +618,7 @@
         function () { setAlarm('push'); try { localStorage.setItem('bible.setup', 'done'); } catch (e3) {} tab = 'today'; toast('🔔 알림 켜짐 · 매일 ' + Core.hourLabel(myHour())); });
       return;
     }
-    Api.state().then(function (s) { state = s; if (!busy) render(); }).catch(function () {});
+    Api.state().then(function (s) { setState(s); if (!busy) render(); }).catch(function () {});
   });
   start();
 })();

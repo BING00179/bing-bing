@@ -26,7 +26,7 @@ var Core = (function () {
   var GAE_CODES = ('gen exo lev num deu jos jdg rut 1sa 2sa 1ki 2ki 1ch 2ch ezr neh est job psa pro ' +
     'ecc sng isa jer lam ezk dan hos jol amo oba jon mic nam hab zep hag zec mal mat mrk luk jhn act ' +
     'rom 1co 2co gal eph php col 1th 2th 1ti 2ti tit phm heb jas 1pe 2pe 1jn 2jn 3jn jud rev').split(' ');
-  var START = '2027-01-01';
+  var FIRST_START = '2027-01-01'; // 1기 시작일
   // 화면 주소 (GitHub Pages, 공개). 시트 쪽 주소는 링크 뒤 ?s= 로만 다닙니다.
   var APP_BASE = 'https://bing00179.github.io/bing-bing/bible/';
   var SUNDAY_CHAPTERS = 5;
@@ -44,23 +44,118 @@ var Core = (function () {
   function addDays(d, n) { return fromUTC(toUTC(d) + n * 86400000); }
   function weekday(d) { return new Date(toUTC(d)).getUTCDay(); } // 0 = 주일
 
-  // 날마다 [시작 장, 끝 장] 을 미리 계산
-  var PLAN = {};
-  var END = START;
-  (function () {
-    var at = 0, d = START;
-    while (at < TOTAL) {
-      var n = weekday(d) === 0 ? SUNDAY_CHAPTERS : OTHER_CHAPTERS;
-      var to = Math.min(at + n, TOTAL) - 1;
-      PLAN[d] = { from: at, to: to };
-      END = d;
-      at = to + 1;
-      d = addDays(d, 1);
-    }
-  })();
-  var DAY_COUNT = Object.keys(PLAN).length;
+  // ── 회차별 읽기표 ─────────────────────────────────
+  // 시작일을 넣으면 그날 창세기 1장부터 주일 5장·그 밖 3장으로 끝까지 나눈 읽기표를 만듦.
+  function makePlan(START) {
+    // 날마다 [시작 장, 끝 장] 을 미리 계산
+    var PLAN = {};
+    var END = START;
+    (function () {
+      var at = 0, d = START;
+      while (at < TOTAL) {
+        var n = weekday(d) === 0 ? SUNDAY_CHAPTERS : OTHER_CHAPTERS;
+        var to = Math.min(at + n, TOTAL) - 1;
+        PLAN[d] = { from: at, to: to };
+        END = d;
+        at = to + 1;
+        d = addDays(d, 1);
+      }
+    })();
+    var DAY_COUNT = Object.keys(PLAN).length;
 
-  function portionFor(d) { return PLAN[d] || null; }
+    function portionFor(d) { return PLAN[d] || null; }
+
+    // records: [[이름, 날짜, '완료'|'취소'], ...] 기록 순서대로. 마지막 줄이 그날 상태.
+    function doneSet(records, name) {
+      var last = {};
+      records.forEach(function (r) {
+        if (r[0] === name) last[r[1]] = r[2];
+      });
+      var s = new Set();
+      Object.keys(last).forEach(function (d) {
+        if (last[d] === '완료' && PLAN[d]) s.add(d);
+      });
+      return s;
+    }
+
+    function progress(dates) {
+      var ch = 0;
+      dates.forEach(function (d) {
+        var p = PLAN[d];
+        if (p) ch += p.to - p.from + 1;
+      });
+      return { chapters: ch, percent: Math.floor(ch * 1000 / TOTAL) / 10 };
+    }
+
+    // 시작일부터 어제까지(끝날을 넘지 않게) 중 완료 안 한 날 수. 오늘은 세지 않음.
+    function missedDays(dates, today) {
+      var last = addDays(today, -1);
+      if (last > END) last = END;
+      var n = 0;
+      for (var d = START; d <= last; d = addDays(d, 1)) {
+        if (!dates.has(d)) n++;
+      }
+      return n;
+    }
+
+    function lastReadLabel(dates) {
+      var latest = '';
+      dates.forEach(function (d) { if (d > latest) latest = d; });
+      if (!latest) return '';
+      var c = CHAPTERS[PLAN[latest].to];
+      return BOOKS[c[0]][0] + ' ' + c[1] + '장까지';
+    }
+
+    function icsFor(appUrl, hour) {
+      var H = alarmHour(hour) || DEFAULT_ALARM_HOUR;
+      var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//bible-reading//KO', 'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEscape('함께 읽는 성경')];
+      Object.keys(PLAN).sort().forEach(function (d) {
+        var label = portionLabel(PLAN[d]);
+        var desc = '오늘 읽을 곳: ' + label + '\n읽고 나서 [읽기 완료] 누르기: ' + appUrl;
+        L.push('BEGIN:VEVENT',
+          'UID:bible-' + d.replace(/-/g, '') + '@bible-reading',
+          'DTSTAMP:' + stampUTC(START, 0, 0),
+          'DTSTART:' + stampUTC(d, H, 0),
+          'DTEND:' + stampUTC(d, H, 15),
+          'SUMMARY:' + icsEscape('📖 ' + label),
+          'DESCRIPTION:' + icsEscape(desc),
+          'URL:' + appUrl,
+          'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT0M',
+          'DESCRIPTION:' + icsEscape('📖 ' + label),
+          'END:VALARM', 'END:VEVENT');
+      });
+      L.push('END:VCALENDAR');
+      return L.map(fold).join('\r\n') + '\r\n';
+    }
+    return { START: START, END: END, DAY_COUNT: DAY_COUNT, portionFor: portionFor, doneSet: doneSet,
+      progress: progress, missedDays: missedDays, lastReadLabel: lastReadLabel, icsFor: icsFor };
+  }
+  var cache = {};
+  function planFor(start) { return cache[start] || (cache[start] = makePlan(start)); }
+  var first = planFor(FIRST_START);
+
+  // 회차 목록: [{n: 1, start: '2027-01-01'}, …] (시작일 순). 시트에 없으면 1기만.
+  function termsFrom(rows) {
+    var list = (rows || []).filter(function (r) { return /^\d{4}-\d{2}-\d{2}$/.test(r[1]); })
+      .map(function (r) { return { n: +r[0], start: r[1] }; });
+    if (!list.length) list = [{ n: 1, start: FIRST_START }];
+    list.sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+    return list;
+  }
+  // 오늘 기준 지금 회차(cur: 시작한 것 중 마지막, 없으면 다음 것)와 아직 시작 전인 다음 회차(next)
+  function termsNow(terms, today) {
+    var cur = null, next = null;
+    terms.forEach(function (t) { if (t.start <= today) cur = t; else if (!next) next = t; });
+    return { cur: cur || next, next: cur ? next : null };
+  }
+  // 그 회차 참여자: 1기는 등록한 사람 전부, 2기부터는 '참여' 를 누른 사람 (등록 순서)
+  function participants(term, members, joins) {
+    if (term.n === 1) return members.slice();
+    var set = {};
+    (joins || []).forEach(function (j) { if (+j[1] === term.n) set[j[0]] = true; });
+    return members.filter(function (m) { return set[m]; });
+  }
 
   function chapterIndex(book, ch) {
     for (var i = 0; i < TOTAL; i++) {
@@ -88,47 +183,6 @@ var Core = (function () {
     if (a[0] !== b[0]) return an + ' ' + a[1] + '장 ~ ' + bn + ' ' + b[1] + '장';
     if (a[1] === b[1]) return an + ' ' + a[1] + '장';
     return an + ' ' + a[1] + '~' + b[1] + '장';
-  }
-
-  // records: [[이름, 날짜, '완료'|'취소'], ...] 기록 순서대로. 마지막 줄이 그날 상태.
-  function doneSet(records, name) {
-    var last = {};
-    records.forEach(function (r) {
-      if (r[0] === name) last[r[1]] = r[2];
-    });
-    var s = new Set();
-    Object.keys(last).forEach(function (d) {
-      if (last[d] === '완료' && PLAN[d]) s.add(d);
-    });
-    return s;
-  }
-
-  function progress(dates) {
-    var ch = 0;
-    dates.forEach(function (d) {
-      var p = PLAN[d];
-      if (p) ch += p.to - p.from + 1;
-    });
-    return { chapters: ch, percent: Math.floor(ch * 1000 / TOTAL) / 10 };
-  }
-
-  // 시작일부터 어제까지(끝날을 넘지 않게) 중 완료 안 한 날 수. 오늘은 세지 않음.
-  function missedDays(dates, today) {
-    var last = addDays(today, -1);
-    if (last > END) last = END;
-    var n = 0;
-    for (var d = START; d <= last; d = addDays(d, 1)) {
-      if (!dates.has(d)) n++;
-    }
-    return n;
-  }
-
-  function lastReadLabel(dates) {
-    var latest = '';
-    dates.forEach(function (d) { if (d > latest) latest = d; });
-    if (!latest) return '';
-    var c = CHAPTERS[PLAN[latest].to];
-    return BOOKS[c[0]][0] + ' ' + c[1] + '장까지';
   }
 
   function validName(s) {
@@ -179,36 +233,16 @@ var Core = (function () {
     return new Date(ms).toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
   }
 
-  function icsFor(appUrl, hour) {
-    var H = alarmHour(hour) || DEFAULT_ALARM_HOUR;
-    var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//bible-reading//KO', 'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEscape('함께 읽는 성경')];
-    Object.keys(PLAN).sort().forEach(function (d) {
-      var label = portionLabel(PLAN[d]);
-      var desc = '오늘 읽을 곳: ' + label + '\n읽고 나서 [읽기 완료] 누르기: ' + appUrl;
-      L.push('BEGIN:VEVENT',
-        'UID:bible-' + d.replace(/-/g, '') + '@bible-reading',
-        'DTSTAMP:' + stampUTC(START, 0, 0),
-        'DTSTART:' + stampUTC(d, H, 0),
-        'DTEND:' + stampUTC(d, H, 15),
-        'SUMMARY:' + icsEscape('📖 ' + label),
-        'DESCRIPTION:' + icsEscape(desc),
-        'URL:' + appUrl,
-        'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT0M',
-        'DESCRIPTION:' + icsEscape('📖 ' + label),
-        'END:VALARM', 'END:VEVENT');
-    });
-    L.push('END:VCALENDAR');
-    return L.map(fold).join('\r\n') + '\r\n';
-  }
-
   return {
-    icsFor: icsFor, icsEscape: icsEscape, ALARM_HOURS: ALARM_HOURS, DEFAULT_ALARM_HOUR: DEFAULT_ALARM_HOUR,
+    icsFor: first.icsFor, icsEscape: icsEscape, ALARM_HOURS: ALARM_HOURS, DEFAULT_ALARM_HOUR: DEFAULT_ALARM_HOUR,
     alarmHour: alarmHour, hourLabel: hourLabel,
-    APP_BASE: APP_BASE, BOOKS: BOOKS, TOTAL: TOTAL, START: START, END: END, DAY_COUNT: DAY_COUNT,
-    addDays: addDays, weekday: weekday, portionFor: portionFor, chapterIndex: chapterIndex,
-    portionLabel: portionLabel, chaptersOf: chaptersOf, GAE_CODES: GAE_CODES, doneSet: doneSet, progress: progress,
-    missedDays: missedDays, lastReadLabel: lastReadLabel, validName: validName
+    APP_BASE: APP_BASE, BOOKS: BOOKS, TOTAL: TOTAL, FIRST_START: FIRST_START,
+    makePlan: planFor, termsFrom: termsFrom, termsNow: termsNow, participants: participants,
+    // 1기 읽기표 (예전 이름 그대로 — 시험·호환용)
+    START: first.START, END: first.END, DAY_COUNT: first.DAY_COUNT, portionFor: first.portionFor,
+    doneSet: first.doneSet, progress: first.progress, missedDays: first.missedDays, lastReadLabel: first.lastReadLabel,
+    addDays: addDays, weekday: weekday, chapterIndex: chapterIndex,
+    portionLabel: portionLabel, chaptersOf: chaptersOf, GAE_CODES: GAE_CODES, validName: validName
   };
 })();
 
@@ -417,7 +451,7 @@ function doGet(e) {
   var p = (e && e.parameter) || {};
   if (p.cal) {
     // 매일 아침 6시 알림이 들어 있는 달력 파일
-    return ContentService.createTextOutput(Core.icsFor(appLink_(), p.h))
+    return ContentService.createTextOutput(Core.makePlan(openTerm_().start).icsFor(appLink_(), p.h))
       .setMimeType(ContentService.MimeType.ICAL)
       .downloadAsFile('bible-2027.ics');
   }
@@ -428,7 +462,7 @@ function doGet(e) {
 function doPost(e) {
   return json_(function () {
     var req = JSON.parse(e.postData.contents);
-    var fns = { register: register, mark: mark, subscribe: subscribe, unsubscribe: unsubscribe };
+    var fns = { register: register, join: join, mark: mark, subscribe: subscribe, unsubscribe: unsubscribe };
     if (!fns[req.fn]) throw new Error('모르는 요청입니다.');
     return fns[req.fn].apply(null, req.args || []);
   });
@@ -454,6 +488,20 @@ function sheet_(name, header) {
 }
 function members_() { return sheet_('회원', ['이름', '등록 시각']); }
 function records_() { return sheet_('기록', ['시각', '이름', '날짜', '동작']); }
+function termsSheet_() { return sheet_('회차', ['회차', '시작일', '만든 시각']); }
+function joins_() { return sheet_('참여', ['시각', '이름', '회차']); }
+
+// ── 회차 ── 시트 '회차' 가 비어 있으면 1기(2027-01-01)만
+function terms_() { return Core.termsFrom(rows_(termsSheet_(), 2)); }
+function joinRows_() { return rows_(joins_(), 3).map(function (r) { return [r[1], r[2]]; }); }
+// 그 날짜가 들어 있는 회차의 읽기표 (없으면 null)
+function planOf_(date) {
+  var hit = null;
+  terms_().forEach(function (t) { var p = Core.makePlan(t.start); if (p.portionFor(date)) hit = p; });
+  return hit;
+}
+// 새로 등록·참여할 회차: 시작 전인 다음 회차가 있으면 그것, 없으면 지금 회차
+function openTerm_() { var tn = Core.termsNow(terms_(), today_()); return tn.next || tn.cur; }
 function pushes_() {
   var sh = sheet_('알림', ['시각', '이름', '알림 주소', '동작', '알림 시각']);
   // 시각 고르기 전에 만든 시트에는 다섯째 칸 제목이 없음
@@ -491,7 +539,8 @@ function appLink_() { return Core.APP_BASE + '?s=' + deploymentId_(); }
 function getState() {
   var recs = rows_(records_(), 4).map(function (r) { return [r[1], r[2], r[3]]; });
   var pub = PropertiesService.getScriptProperties().getProperty('VAPID_PUBLIC') || '';
-  return { today: today_(), members: memberNames_(), records: recs, vapidKey: pub };
+  return { today: today_(), members: memberNames_(), records: recs, vapidKey: pub,
+    terms: terms_(), joins: joinRows_() };
 }
 
 function register(name) {
@@ -499,14 +548,29 @@ function register(name) {
   if (!n) throw new Error('이름은 1~20자로 적어 주세요.');
   locked_(function () {
     if (memberNames_().indexOf(n) < 0) append_(members_(), [n, now_()]);
+    joinTerm_(n, openTerm_()); // 새로 온 사람은 지금 열려 있는 회차에 바로 참여
   });
   var s = getState();
   s.name = n;
   return s;
 }
 
+// 회차 참여 (2기부터. 1기는 등록한 사람 전부). 이미 참여했으면 그대로.
+function joinTerm_(name, term) {
+  if (!term || term.n === 1) return;
+  var done = joinRows_().some(function (j) { return j[0] === name && +j[1] === term.n; });
+  if (!done) append_(joins_(), [now_(), name, String(term.n)]);
+}
+function join(name) {
+  locked_(function () {
+    if (memberNames_().indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
+    joinTerm_(name, openTerm_());
+  });
+  return getState();
+}
+
 function mark(name, date, done) {
-  if (!Core.portionFor(date)) throw new Error('읽기표에 없는 날짜입니다.');
+  if (!planOf_(date)) throw new Error('읽기표에 없는 날짜입니다.');
   if (date > today_()) throw new Error('아직 오지 않은 날은 체크할 수 없어요.');
   locked_(function () {
     if (memberNames_().indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
@@ -537,7 +601,7 @@ function subscriptions_() {
   var last = {};
   rows_(pushes_(), 5).forEach(function (r) { last[r[2]] = r; });
   return Object.keys(last).filter(function (u) { return last[u][3] === '등록'; }).map(function (u) {
-    return { url: u, hour: Core.alarmHour(last[u][4]) || Core.DEFAULT_ALARM_HOUR };
+    return { url: u, name: last[u][1], hour: Core.alarmHour(last[u][4]) || Core.DEFAULT_ALARM_HOUR };
   });
 }
 function activeEndpoints_() { return subscriptions_().map(function (x) { return x.url; }); }
@@ -562,11 +626,15 @@ function setupPush() {
 
 // 정시마다 트리거가 부릅니다(그 시각을 고른 휴대폰에만). 빈 알림을 보내면 휴대폰이 그날 분량을 계산해 띄웁니다.
 function sendMorning() {
-  if (!Core.portionFor(today_())) return 0; // 시작 전·끝난 뒤
+  var today = today_(), tn = Core.termsNow(terms_(), today);
+  if (!tn.cur || !Core.makePlan(tn.cur.start).portionFor(today)) return 0; // 시작 전·끝난 뒤·회차 사이 쉬는 날
+  // 지금 회차 참여자에게만
+  var who = {};
+  Core.participants(tn.cur, memberNames_(), joinRows_()).forEach(function (m) { who[m] = true; });
   // 트리거는 정시 앞뒤 15분쯤에 돌므로 가장 가까운 정시로 봄 (6:50 → 7시)
   var hm = Utilities.formatDate(new Date(), TZ, 'HH:mm').split(':');
   var hourNow = Math.round((+hm[0] * 60 + +hm[1]) / 60) % 24;
-  return push_(subscriptions_().filter(function (x) { return x.hour === hourNow; }).map(function (x) { return x.url; }));
+  return push_(subscriptions_().filter(function (x) { return x.hour === hourNow && who[x.name]; }).map(function (x) { return x.url; }));
 }
 
 // 시험용 — 회장님이 편집기에서 ▶ testPush. 날짜·시각과 상관없이 알림을 켠 모든 휴대폰에 지금 한 번 보냄.
@@ -607,11 +675,23 @@ function push_(urls) {
 // 시트를 열면 위쪽에 '📖 성경통독' 메뉴가 생깁니다. 시트를 편집할 수 있는 사람(회장님)에게만 보이고,
 // 화면(링크)에서는 부를 수 없습니다(doPost 목록에 없음). 회원·기록·알림에서 그 사람 줄을 전부 지웁니다.
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('📖 성경통독').addItem('회원 완전 삭제…', 'deleteMemberMenu').addToUi();
+  SpreadsheetApp.getUi().createMenu('📖 성경통독')
+    .addItem('새 회차 시작…', 'newTermMenu')
+    .addItem('회원 완전 삭제… (관리자)', 'deleteMemberMenu')
+    .addToUi();
+}
+
+// 관리자 = 시트 주인. 리더(편집자로 공유받은 사람)는 회차만 열 수 있고 완전 삭제는 못 함.
+function isOwner_() {
+  try {
+    var owner = SpreadsheetApp.getActiveSpreadsheet().getOwner();
+    return !!owner && owner.getEmail() === Session.getEffectiveUser().getEmail();
+  } catch (e) { return false; }
 }
 
 function deleteMemberMenu() {
   var ui = SpreadsheetApp.getUi();
+  if (!isOwner_()) { ui.alert('회원 완전 삭제는 관리자(시트 주인)만 할 수 있습니다.'); return; }
   var r = ui.prompt('회원 완전 삭제', '지울 이름을 정확히 적어 주세요.', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
   var name = Core.validName(r.getResponseText());
@@ -652,7 +732,45 @@ function deleteMember_(name) {
     return {
       pushes: deleteRowsWhere_(pushes_(), 4, function (r) { return r[1] === name || eps[r[2]]; }),
       records: deleteRowsWhere_(records_(), 4, function (r) { return r[1] === name; }),
+      joins: deleteRowsWhere_(joins_(), 3, function (r) { return r[1] === name; }),
       members: deleteRowsWhere_(members_(), 1, function (r) { return r[0] === name; })
     };
+  });
+}
+
+// ── 리더·관리자: 새 회차 시작 ─────────────────────
+// 한 바퀴(약 1년)가 끝나면 리더가 다음 회차 시작일을 정함. 그날 창세기 1장부터 새 읽기표.
+// 아직 시작 전인 회차가 있으면 그 날짜를 고침(새로 만들지 않음).
+function newTermMenu() {
+  var ui = SpreadsheetApp.getUi();
+  var terms = terms_(), last = terms[terms.length - 1], today = today_();
+  var editing = last.start > today && last.n > 1;
+  var n = editing ? last.n : last.n + 1;
+  var r = ui.prompt(n + '기 시작일', (editing ? n + '기 시작일(' + last.start + ')을 고칩니다.\n' : '') +
+    '시작 날짜를 2028-01-01 처럼 적어 주세요. 그날 창세기 1장부터 시작합니다.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  var d = String(r.getResponseText()).trim();
+  var err = newTermError_(d, terms, editing, today);
+  if (err) { ui.alert(err); return; }
+  var p = Core.makePlan(d);
+  var ok = ui.alert(n + '기 시작', n + '기: ' + d + ' ~ ' + p.END + ' (' + p.DAY_COUNT + '일)\n' +
+    '회원들은 앱에서 「' + n + '기 참여」 를 누르면 함께 읽기에 들어옵니다. 시작할까요?', ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  setTerm_(n, d, editing);
+  ui.alert(n + '기 준비 완료: ' + d + ' 시작');
+}
+function newTermError_(d, terms, editing, today) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || Core.addDays(d, 0) !== d) return '날짜 모양이 아닙니다: ' + d + ' (예: 2028-01-01)';
+  if (d < today) return '오늘보다 앞선 날짜로는 시작할 수 없습니다.';
+  var prev = terms[terms.length - (editing ? 2 : 1)];
+  if (prev && d <= Core.makePlan(prev.start).END) return prev.n + '기가 ' + Core.makePlan(prev.start).END + ' 에 끝납니다. 그 뒤 날짜로 정해 주세요.';
+  return '';
+}
+function setTerm_(n, d, editing) {
+  locked_(function () {
+    var sh = termsSheet_();
+    if (!rows_(sh, 2).length) append_(sh, ['1', Core.FIRST_START, now_()]); // 1기를 시트에 먼저 적어 둠
+    if (editing) deleteRowsWhere_(sh, 2, function (r) { return +r[0] === n; });
+    append_(sh, [String(n), d, now_()]);
   });
 }

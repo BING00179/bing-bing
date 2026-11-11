@@ -9,8 +9,10 @@ self.addEventListener('activate', function (e) { e.waitUntil(self.clients.claim(
 
 function todayKST() { return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); }
 
-function morningNotice(today) {
-  var p = Core.portionFor(today);
+// 앱이 저장해 둔 회차 목록으로 오늘 읽을 곳을 계산 (없으면 1기)
+function morningNotice(today, terms) {
+  var tn = Core.termsNow(terms && terms.length ? terms : Core.termsFrom([]), today);
+  var p = Core.makePlan(tn.cur.start).portionFor(today);
   return {
     title: '📖 오늘 읽을 곳',
     body: p ? Core.portionLabel(p) : '함께 읽는 성경',
@@ -19,10 +21,13 @@ function morningNotice(today) {
 }
 
 self.addEventListener('push', function (e) {
-  var n = morningNotice(todayKST());
   // 아이폰은 알림을 받으면 반드시 화면에 띄워야 합니다 (안 띄우면 알림 권한이 끊김)
-  e.waitUntil(self.registration.showNotification(n.title, {
-    body: n.body, tag: n.tag, icon: 'icon-192.png', badge: 'icon-192.png', data: { url: './' + SEARCH }
+  var termsP = self.caches ? caches.match('terms').then(function (r) { return r ? r.json() : null; }).catch(function () { return null; }) : Promise.resolve(null);
+  e.waitUntil(termsP.then(function (terms) {
+    var n = morningNotice(todayKST(), terms);
+    return self.registration.showNotification(n.title, {
+      body: n.body, tag: n.tag, icon: 'icon-192.png', badge: 'icon-192.png', data: { url: './' + SEARCH }
+    });
   }));
 });
 

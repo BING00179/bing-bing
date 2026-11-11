@@ -7,7 +7,7 @@ const vm = require('node:vm');
 
 const SITE = path.join(__dirname, '..', '..', 'bible');
 
-function load(nowKST, search) {
+function load(nowKST, search, savedTerms) {
   const handlers = {};
   const shown = [];
   const opened = [];
@@ -22,7 +22,9 @@ function load(nowKST, search) {
   const RealDate = Date;
   const fixed = new RealDate(nowKST.replace(' ', 'T') + ':00+09:00').getTime();
   class FakeDate extends RealDate { constructor(...a) { super(...(a.length ? a : [fixed])); } static now() { return fixed; } }
-  const ctx = { self, URL, Date: FakeDate, Promise };
+  const caches = { match: (k) => Promise.resolve(savedTerms && k === 'terms' ? { json: () => Promise.resolve(savedTerms) } : undefined) };
+  self.caches = caches;
+  const ctx = { self, URL, Date: FakeDate, Promise, caches };
   ctx.importScripts = (f) => vm.runInContext(fs.readFileSync(path.join(SITE, f), 'utf8'), ctx);
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(SITE, 'sw.js'), 'utf8'), ctx);
@@ -63,4 +65,14 @@ test('알림을 누르면 ?s= 가 붙은 앱 주소로 연다', async () => {
   await p;
   assert.ok(closed);
   assert.deepEqual(e.opened, ['https://bing00179.github.io/bing-bing/bible/?s=ABC']);
+});
+
+test('2기가 열리면 앱이 저장해 둔 회차로 그날 분량을 띄움', async () => {
+  const terms = [{ n: 1, start: '2027-01-01' }, { n: 2, start: '2028-01-03' }];
+  const e = load('2028-01-04 06:00', '?s=ABC', terms);
+  await push(e);
+  assert.equal(e.shown[0][1].body, '창세기 4~6장', '2기 둘째 날');
+  const old = load('2028-01-04 06:00', '?s=ABC'); // 저장된 회차가 없으면 1기 기준 → 읽기표 밖
+  await push(old);
+  assert.equal(old.shown[0][1].body, '함께 읽는 성경');
 });
