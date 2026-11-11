@@ -164,8 +164,9 @@
   // ── 처음 한 번: 홈 화면 설치 → 알림 켜기 (원스톱) ──
   function setupDone() { try { return localStorage.getItem('bible.setup') === 'done' || !!alarmChoice(); } catch (e) { return true; } }
   function finishSetup() { try { localStorage.setItem('bible.setup', 'done'); } catch (e) {} tab = 'today'; render(); window.scrollTo(0, 0); }
-  function skipInstall() { try { localStorage.setItem('bible.installSkip', '1'); } catch (e) {} }
-  function installSkipped() { try { return localStorage.getItem('bible.installSkip') === '1'; } catch (e) { return false; } }
+  // '설치 없이' 는 이번에 열었을 때만 — 다음에 열면 설치부터 다시 (예전에 쓰던 localStorage 값은 보지 않음)
+  function skipInstall() { try { sessionStorage.setItem('bible.installSkip2', '1'); } catch (e) {} }
+  function installSkipped() { try { return sessionStorage.getItem('bible.installSkip2') === '1'; } catch (e) { return false; } }
   function stepHead(n, title) {
     return '<div class="small" style="margin-bottom:4px">' + n + ' / 2 단계</div><div class="portion" style="font-size:24px;margin-top:0">' + title + '</div>';
   }

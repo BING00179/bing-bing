@@ -45,7 +45,8 @@ var CACHE = 'bible-v1';
 self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
-  e.respondWith(fetch(req).then(function (res) {
+  // cache: 'no-cache' — 휴대폰이 붙잡아 둔 옛 파일 대신 매번 GitHub 에 새것인지 확인 (열 때마다 최신)
+  e.respondWith(fetch(req, { cache: 'no-cache' }).then(function (res) {
     if (res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(req, copy); }); }
     return res;
   }).catch(function () {
