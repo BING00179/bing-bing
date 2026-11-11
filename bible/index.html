@@ -37,9 +37,9 @@
   header .who { font-size: 15px; color: var(--muted); }
   header .who button { font-size: 15px; }
   .linkbtn { background: none; border: 0; color: var(--accent); text-decoration: underline; padding: 4px; cursor: pointer; font: inherit; }
-  nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 16px; }
+  nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 16px; }
   nav button {
-    font: inherit; font-size: 17px; padding: 10px 4px; border-radius: 12px;
+    font: inherit; font-size: 16px; padding: 10px 2px; border-radius: 12px; white-space: nowrap; letter-spacing: -0.02em;
     border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer;
   }
   nav button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
@@ -87,6 +87,12 @@
   .dayrow .day { margin-bottom: 0; }
   .dayrow .open { font: inherit; font-size: 20px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
   .hoursel { font: inherit; font-size: 18px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); margin-left: 6px; }
+  .switch { display: flex; align-items: center; gap: 12px; width: 100%; font: inherit; font-size: 19px; font-weight: 700; padding: 12px 14px;
+    border-radius: 14px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+  .switch .knob { position: relative; width: 52px; height: 30px; border-radius: 99px; background: var(--bar); flex: none; transition: background .15s; }
+  .switch .knob::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .15s; }
+  .switch.on .knob { background: var(--done); }
+  .switch.on .knob::after { left: 25px; }
   ol.steps { margin: 6px 0 14px; padding-left: 22px; line-height: 1.7; }
   ol.steps li { margin-bottom: 6px; }
   .key { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: .9em; }
@@ -153,12 +159,14 @@
       return;
     }
     who.innerHTML = esc(me) + ' 님 · <button class="linkbtn" data-act="switch">다른 이름</button>';
-    if (!setupDone()) { main.innerHTML = setupHtml(); return; }
-    var tabs = [['today', '오늘'], ['all', '함께 읽기'], ['past', '지난 날']];
+    // 브라우저로 열었으면 예전 기록과 상관없이 설치부터 (이번에 '설치 없이' 를 누른 때만 건너뜀).
+    // 설치한 앱으로 열었으면 알림 설정이 끝날 때까지 알림 단계.
+    if (!Install.standalone() ? !installSkipped() : !setupDone()) { main.innerHTML = setupHtml(); return; }
+    var tabs = [['today', '오늘'], ['all', '함께 읽기'], ['past', '지난 날'], ['set', '⚙ 설정']];
     if (reading) { main.innerHTML = readerHtml(); return; }
     main.innerHTML = '<nav role="tablist">' + tabs.map(function (t) {
       return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + '</button>';
-    }).join('') + '</nav>' + (tab === 'today' ? todayHtml() : tab === 'all' ? allHtml() : pastHtml());
+    }).join('') + '</nav>' + (tab === 'today' ? todayHtml() : tab === 'all' ? allHtml() : tab === 'set' ? settingsHtml() : pastHtml());
   }
 
   // ── 처음 한 번: 홈 화면 설치 → 알림 켜기 (원스톱) ──
@@ -170,6 +178,27 @@
   function stepHead(n, title) {
     return '<div class="small" style="margin-bottom:4px">' + n + ' / 2 단계</div><div class="portion" style="font-size:24px;margin-top:0">' + title + '</div>';
   }
+  // 홈 화면 설치 안내 (처음 설정과 ⚙ 설정이 같이 씀)
+  function installBlock() {
+    var h = '';
+    if (Install.canPrompt()) {
+      h += '<div class="small" style="margin-bottom:12px">한 번 설치하면 앱처럼 아이콘을 눌러 바로 열려요.</div>' +
+        '<button class="big" data-act="install">홈 화면에 설치하기</button>';
+    } else if (Install.isIOS()) {
+      h += '<ol class="steps"><li>화면 아래 가운데 <b>공유 버튼</b> <span class="key">□↑</span> 을 누르세요</li>' +
+        '<li>목록을 올려 <b>홈 화면에 추가</b> 를 누르세요</li>' +
+        '<li>오른쪽 위 <b>추가</b> 를 누르세요</li>' +
+        '<li>홈 화면에 생긴 <b>성경통독</b> 아이콘으로 다시 열면 <b>알림 켜기</b> 가 이어져요</li></ol>' +
+        '<div class="small">아이폰은 홈 화면 아이콘으로 연 앱에서만 알림을 받을 수 있어요. 이름은 한 번 더 골라 주세요.</div>';
+    } else {
+      h += '<ol class="steps"><li>오른쪽 위 <b>⋮</b> (또는 아래 <b>≡</b>) 메뉴를 누르세요</li>' +
+        '<li><b>홈 화면에 추가</b> 또는 <b>앱 설치</b> 를 누르세요</li>' +
+        '<li><b>설치</b> / <b>추가</b> 를 누르세요</li></ol>' +
+        '<button class="big" data-act="installed">설치했어요</button>';
+    }
+    return h;
+  }
+
   function setupHtml() {
     var h = '<div class="card">';
     // 순서: 브라우저에서는 설치까지만 → 설치한 앱(홈 화면 아이콘)으로 열면 그 안에서 알림 켜기
@@ -180,21 +209,7 @@
         '<div class="hint" style="margin-top:14px"><button class="linkbtn" data-act="install-skip">아이콘이 안 보여요 · 이대로 쓰기</button></div>';
     } else if (!Install.standalone() && !installSkipped()) {
       h += stepHead(1, '📲 홈 화면에 앱 설치');
-      if (Install.canPrompt()) {
-        h += '<div class="small" style="margin-bottom:12px">한 번 설치하면 앱처럼 아이콘을 눌러 바로 열려요.</div>' +
-          '<button class="big" data-act="install">홈 화면에 설치하기</button>';
-      } else if (Install.isIOS()) {
-        h += '<ol class="steps"><li>화면 아래 가운데 <b>공유 버튼</b> <span class="key">□↑</span> 을 누르세요</li>' +
-          '<li>목록을 올려 <b>홈 화면에 추가</b> 를 누르세요</li>' +
-          '<li>오른쪽 위 <b>추가</b> 를 누르세요</li>' +
-          '<li>홈 화면에 생긴 <b>성경통독</b> 아이콘으로 다시 열면 <b>알림 켜기</b> 가 이어져요</li></ol>' +
-          '<div class="small">아이폰은 홈 화면 아이콘으로 연 앱에서만 알림을 받을 수 있어요. 이름은 한 번 더 골라 주세요.</div>';
-      } else {
-        h += '<ol class="steps"><li>오른쪽 위 <b>⋮</b> (또는 아래 <b>≡</b>) 메뉴를 누르세요</li>' +
-          '<li><b>홈 화면에 추가</b> 또는 <b>앱 설치</b> 를 누르세요</li>' +
-          '<li><b>설치</b> / <b>추가</b> 를 누르세요</li></ol>' +
-          '<button class="big" data-act="installed">설치했어요</button>';
-      }
+      h += installBlock();
       h += '<div class="hint"><button class="linkbtn" data-act="install-skip">설치 없이 이대로 쓰기</button></div>';
     } else {
       h += stepHead(2, '🔔 매일 알림') + hourPicker();
@@ -246,7 +261,10 @@
         (done ? '읽었어요 ✅' : '읽기 완료') + '</button>' +
         (done ? '<div class="hint">잘못 눌렀으면 한 번 더 누르면 취소돼요</div>' : '') + '</div>';
     }
-    h += alarmHtml();
+    var ac = alarmChoice();
+    h += '<div class="small" style="text-align:center;margin:-4px 0 12px">' +
+      (ac === 'push' ? '🔔 매일 ' + Core.hourLabel(myHour()) + ' 알림' : ac === 'cal' ? '📅 달력 알림 · 매일 ' + Core.hourLabel(myHour()) : '🔕 알림 꺼짐') +
+      ' · <button class="linkbtn" data-tab="set">설정</button></div>';
     h += '<div class="card"><div style="font-weight:700">내 진도</div>' + progressHtml(m.prog) +
       (m.missed > 0 ? '<button class="missbtn" data-tab="past">밀린 날 ' + m.missed + '일 ›</button>' : '') + '</div>';
     return h;
@@ -287,7 +305,7 @@
       '<ol class="steps">' + steps.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ol>' +
       '<div class="small" style="margin:-6px 0 12px">그래도 안 오면: 휴대폰 <b>설정 → 애플리케이션 → ' +
       (/SamsungBrowser/.test(ua) ? '삼성 인터넷' : 'Chrome') + ' → 알림</b> 도 켜져 있는지 봐 주세요. (메뉴 이름은 휴대폰마다 조금 달라요)</div>' +
-      '<button class="big" data-act="setup-push">설정했어요 · 다시 확인</button>';
+      '<button class="big" data-act="setup-push">다시 확인</button>';
   }
 
   function alarmHtml() {
@@ -358,6 +376,41 @@
     return h;
   }
 
+  // ── ⚙ 설정 ──
+  function sect(title, body) { return '<div class="card"><div style="font-weight:700;margin-bottom:8px">' + title + '</div>' + body + '</div>'; }
+  function settingsHtml() {
+    var h = '', on = alarmChoice() === 'push', push = Push.status(), a;
+    // 알림
+    a = hourPicker();
+    if (!state.vapidKey) a += '<div class="small">🔔 앱 알림은 회장님이 준비 중이에요.</div>';
+    else if (push === 'ios-home') a += '<div class="small">🔔 아이폰은 <b>홈 화면 아이콘으로 연 앱</b>에서만 앱 알림을 켤 수 있어요. 아래 "홈 화면 앱" 을 먼저 해 주세요.</div>';
+    else if (push !== 'ok') a += '<div class="small">🔔 이 브라우저에서는 앱 알림이 안 돼요. 달력 알림을 써 주세요.</div>';
+    else if (Push.permission() === 'denied') a += deniedHtml();
+    else a += '<button class="switch' + (on ? ' on' : '') + '" data-act="push-toggle" role="switch" aria-checked="' + on + '">' +
+      '<span class="knob"></span><span>' + (on ? '앱 알림 켜짐' : '앱 알림 꺼짐') + '</span></button>' +
+      '<div class="small" style="margin-top:6px">' + (on ? '시각을 바꾸면 바로 적용돼요.' : '누르면 켜져요. 휴대폰이 물으면 <b>허용</b>.') + '</div>';
+    a += calLink('📅 달력에 넣기') +
+      '<div class="small" style="margin-top:6px">달력 알림은 휴대폰 달력에 들어가요. 시각을 바꾸려면 달력에서 "함께 읽는 성경" 일정을 지우고 다시 넣어 주세요.</div>';
+    h += sect('🔔 매일 알림', a);
+    // 홈 화면 앱
+    if (Install.standalone()) a = '<div class="small">✅ 지금 홈 화면 앱으로 열려 있어요.</div>';
+    else if (Install.installed()) a = '<div class="small">✅ 설치돼 있어요. 홈 화면의 <b>📖 성경통독</b> 아이콘으로 열면 알림이 앱 이름으로 와요.</div>';
+    else a = installBlock();
+    h += sect('📲 홈 화면 앱', a);
+    // 글씨
+    h += sect('🔤 말씀 글씨 크기', '<div class="sizes" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
+      '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="-2">가−</button>' +
+      '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="2">가+</button></div>' +
+      '<div class="fontsample" style="font-size:' + fontSize() + 'px;line-height:1.8">태초에 하나님이 천지를 창조하시니라</div>');
+    // 이름
+    h += sect('👤 내 이름', '<div style="margin-bottom:8px">' + esc(me) + '</div><button class="linkbtn" data-act="switch">다른 이름으로 바꾸기</button>');
+    // 정보
+    h += sect('ℹ️ 정보', '<div class="small">읽기표: 2027-01-01 창세기 ~ 2027-12-28 요한계시록, 평일·토요일·공휴일 3장, 주일 5장<br>' +
+      '앱 안 말씀: 성경전서 개역한글판 (대한성서공회) · 개역개정은 장마다 링크</div>' +
+      '<div class="hint" style="text-align:left;margin-top:10px"><button class="linkbtn" data-act="reset-setup">처음 설정(설치·알림) 다시 하기</button></div>');
+    return h;
+  }
+
   function allHtml() {
     var t = state.today;
     if (!state.members.length) return '<div class="card small">아직 등록한 분이 없어요.</div>';
@@ -402,11 +455,25 @@
     if (b.dataset.act === 'close-read') { reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return; }
     if (b.dataset.act === 'font') {
       setFont(Math.max(14, Math.min(34, fontSize() + +b.dataset.n)));
-      var tx = document.querySelector('.reader .text'); if (tx) tx.style.fontSize = fontSize() + 'px';
+      document.querySelectorAll('.reader .text, .fontsample').forEach(function (tx) { tx.style.fontSize = fontSize() + 'px'; });
       return;
     }
     var act = b.dataset.act;
     if (act === 'alarm-none') { setAlarm('none'); render(); return; }
+    if (act === 'push-toggle') {
+      if (alarmChoice() === 'push') {
+        run(Push.off().then(function (u) { return u ? call('unsubscribe', u) : Api.state(); }),
+          function () { setAlarm('none'); toast('앱 알림을 껐어요'); });
+      } else {
+        run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u, myHour()); }),
+          function () { setAlarm('push'); toast('알림을 켰어요. 매일 ' + Core.hourLabel(myHour()) + ' 🔔'); });
+      }
+      return;
+    }
+    if (act === 'reset-setup') {
+      try { localStorage.removeItem('bible.setup'); localStorage.removeItem('bible.installed'); sessionStorage.removeItem('bible.installSkip2'); if (alarmChoice() !== 'push') localStorage.removeItem('bible.alarm'); } catch (e5) {}
+      tab = 'today'; render(); window.scrollTo(0, 0); return;
+    }
     if (act === 'alarm-change') {
       // 앱 알림을 받던 휴대폰이면 먼저 끔 (시트에 '해제' 줄)
       var was = alarmChoice(); setAlarm('');
@@ -456,6 +523,10 @@
     if (e.target.id !== 'alarmHour') return;
     setHour(+e.target.value);
     document.querySelectorAll('a[data-act=cal-get]').forEach(function (a) { a.href = Api.calendarUrl(myHour()); });
+    if (tab === 'set' && alarmChoice() === 'push' && !busy) {
+      run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u, myHour()); }),
+        function () { toast('알림 시각을 ' + Core.hourLabel(myHour()) + '로 바꿨어요'); });
+    } else if (tab === 'set') render();
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target.id === 'newname') document.querySelector('[data-act=register]').click();
