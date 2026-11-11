@@ -104,6 +104,27 @@
   .seg.segwide { display: flex; margin: 0 0 12px; }
   .seg.segwide button { flex: 1; font-size: 16px; padding: 8px; }
   .demobar { background: #fff3cd; color: #6b4f00; border: 1px solid #f0d58a; border-radius: 10px; padding: 8px 12px; font-size: 14px; margin-bottom: 10px; text-align: center; }
+  .reader .text p { cursor: pointer; border-radius: 6px; }
+  .reader .text p.hl1 { background: #c7d2fe88; } .reader .text p.hl2 { background: #f5c2e788; } .reader .text p.hl3 { background: #fdba7488; }
+  .reader .text p.hl4 { background: #fde68a99; } .reader .text p.hl5 { background: #a5f3fc88; } .reader .text p.hl6 { background: #bbf7d099; }
+  .reader .text p.sel { background: var(--bar); box-shadow: 0 0 0 4px var(--bar); }
+  .reader .text p.flash { animation: flash 1.6s ease-out; }
+  @keyframes flash { from { background: var(--done-bg); } }
+  .reader .mk svg { width: .8em; height: .8em; vertical-align: -.05em; color: var(--accent); }
+  .reader .mk.bm svg { fill: var(--accent); }
+  body.hasbar .reader { padding-bottom: 240px; }
+  #versebar { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--card); border-top: 1px solid var(--line);
+    box-shadow: 0 -4px 16px rgba(0,0,0,.12); padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); }
+  #versebar .vb-top { display: flex; justify-content: space-between; align-items: center; max-width: 520px; margin: 0 auto 6px; }
+  #versebar .vb-row { display: flex; gap: 6px; max-width: 520px; margin: 0 auto 8px; }
+  #versebar .vb-btn { flex: 1; font: inherit; font-size: 14px; border: 0; background: none; color: var(--ink); padding: 6px 2px; border-radius: 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  #versebar .vb-btn svg { color: var(--muted); }
+  #versebar .vb-btn.on svg { color: var(--accent); }
+  #versebar .vb-btn.on { color: var(--accent); font-weight: 700; background: var(--bg); }
+  #versebar .colors { justify-content: space-between; }
+  #versebar .dot { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer; font-size: 18px; background: var(--card); color: var(--muted); }
+  #versebar textarea { display: block; width: 100%; max-width: 520px; margin: 0 auto 8px; font: inherit; font-size: 17px; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+  .notelink { display: block; width: 100%; text-align: left; font: inherit; font-size: 16px; padding: 10px 4px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); cursor: pointer; }
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   .dayrow .day { margin-bottom: 0; }
   .dayrow .open { font: inherit; font-size: 20px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
@@ -444,13 +465,23 @@
       }).then(function (j) { books[n] = j; });
     }));
   }
+  function verseBarHide() { var bar = document.getElementById('versebar'); if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; } document.body.classList.remove('hasbar'); }
   function openReader(d, restoring, y) {
+    Sel.clear(); memoOpen = false; verseBarHide();
     if (!restoring) { Tts.reset(); readFrom = tab; }
     reading = d; loadErr = '';
     render(); window.scrollTo(0, y || 0);
     loadBooks(Core.chaptersOf(P.portionFor(d))).catch(function () {
       loadErr = '말씀을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.';
-    }).then(function () { if (reading === d) { render(); if (y) window.scrollTo(0, y); } });
+    }).then(function () {
+      if (reading !== d) return;
+      render();
+      if (focusKey) {
+        var el = document.querySelector('.reader p[data-k="' + focusKey + '"]');
+        if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); }
+        focusKey = null;
+      } else if (y) window.scrollTo(0, y);
+    });
   }
   // ── 말씀 듣기 (휴대폰 한국어 음성, Web Speech) ──
   // 절마다 하나씩 읽음 (긴 글을 한 번에 넘기면 크롬이 중간에 끊는 일이 있어서). 장이 바뀌면 장 이름부터.
@@ -558,6 +589,117 @@
   }
 
 
+  // ── 절 고르기 · 형광펜 · 책갈피 · 묵상 ── 모두 이 휴대폰에만 저장 (서버·시트 안 씀)
+  //   키: '권-장-절' (예 47-8-22). 묵상은 고른 절 묶음의 첫 절 키에 붙고, 범위를 같이 적어 둠.
+  var Notes = (function () {
+    function get(k, d) { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } }
+    function put(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+    var HL = 'bible.hl', BM = 'bible.bm', MEMO = 'bible.memo';
+    return {
+      hl: function (k) { return get(HL, {})[k] || 0; },
+      setHl: function (keys, c) { var m = get(HL, {}); keys.forEach(function (k) { if (c) m[k] = c; else delete m[k]; }); put(HL, m); },
+      bm: function (k) { return !!get(BM, {})[k]; },
+      bms: function () { return get(BM, {}); },
+      toggleBm: function (keys, label) {
+        var m = get(BM, {}), on = !keys.every(function (k) { return m[k]; });
+        keys.forEach(function (k, i) { if (on) m[k] = { label: i === 0 ? label : '', at: Date.now() }; else delete m[k]; });
+        put(BM, m); return on;
+      },
+      memoOf: function (k) { return get(MEMO, {})[k] || null; },
+      memos: function () { return get(MEMO, {}); },
+      setMemo: function (k, label, text) { var m = get(MEMO, {}); if (text) m[k] = { label: label, text: text, at: Date.now() }; else delete m[k]; put(MEMO, m); }
+    };
+  })();
+  // 고른 절: 누를 때마다 넣고 빼기 (여러 절 가능)
+  var Sel = (function () {
+    var keys = [];
+    return {
+      has: function (k) { return keys.indexOf(k) >= 0; },
+      toggle: function (k) { var i = keys.indexOf(k); if (i >= 0) keys.splice(i, 1); else keys.push(k); },
+      clear: function () { keys = []; },
+      list: function () {
+        return keys.slice().sort(function (a, b) {
+          var x = a.split('-').map(Number), y = b.split('-').map(Number);
+          return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+        });
+      }
+    };
+  })();
+  var memoOpen = false;
+  function keyParts(k) { var x = k.split('-').map(Number); return { book: x[0], ch: x[1], v: x[2] }; }
+  function verseText(k) { var p = keyParts(k), b = books[p.book]; return b ? b.c[p.ch - 1][p.v - 1] : ''; }
+  // "고린도후서 8:22" / "고린도후서 8:22–23" / "고린도후서 8:22 외 2절"
+  function selLabel(ks) {
+    var a = keyParts(ks[0]), name = Core.BOOKS[a.book - 1][0];
+    if (ks.length === 1) return name + ' ' + a.ch + ':' + a.v;
+    var z = keyParts(ks[ks.length - 1]);
+    var contiguous = a.book === z.book && a.ch === z.ch && z.v - a.v === ks.length - 1;
+    return contiguous ? name + ' ' + a.ch + ':' + a.v + '–' + z.v : name + ' ' + a.ch + ':' + a.v + ' 외 ' + (ks.length - 1) + '절';
+  }
+  // 아래 메뉴 아이콘 (선 아이콘으로 통일 — 이모지는 휴대폰마다 모양·색이 달라 튐)
+  function svg(d) { return '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; }
+  var ICON = {
+    share: svg('<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>'),
+    play: svg('<circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5z" fill="currentColor"/>'),
+    bm: svg('<path d="M7 3.5h10v17l-5-3.5-5 3.5z"/>'),
+    memo: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>')
+  };
+  var HL_COLORS = ['#c7d2fe', '#f5c2e7', '#fdba74', '#fde68a', '#a5f3fc', '#bbf7d0'];
+  function verseBar() {
+    var bar = document.getElementById('versebar');
+    if (!bar) { bar = document.createElement('div'); bar.id = 'versebar'; document.body.appendChild(bar); }
+    var ks = Sel.list();
+    if (!reading || !ks.length) { bar.style.display = 'none'; bar.innerHTML = ''; document.body.classList.remove('hasbar'); return; }
+    var label = selLabel(ks), bmOn = ks.every(function (k) { return Notes.bm(k); }), memo = Notes.memoOf(ks[0]);
+    var h = '<div class="vb-top"><b>' + esc(label) + '</b><button class="linkbtn" data-act="v-clear">닫기</button></div>';
+    if (memoOpen) {
+      h += '<textarea id="memotext" rows="4" placeholder="이 말씀으로 묵상한 것을 적어 보세요">' + esc(memo ? memo.text : '') + '</textarea>' +
+        '<div class="vb-row"><button class="vb-btn" data-act="v-memo-save">저장</button>' +
+        (memo ? '<button class="vb-btn" data-act="v-memo-del">삭제</button>' : '') +
+        '<button class="vb-btn" data-act="v-memo-close">취소</button></div>';
+    } else {
+      h += '<div class="vb-row">' +
+        '<button class="vb-btn" data-act="v-share">' + ICON.share + '공유</button>' +
+        '<button class="vb-btn" data-act="v-listen">' + ICON.play + '듣기</button>' +
+        '<button class="vb-btn' + (bmOn ? ' on' : '') + '" data-act="v-bm">' + ICON.bm + '책갈피</button>' +
+        '<button class="vb-btn' + (memo ? ' on' : '') + '" data-act="v-memo">' + ICON.memo + '묵상</button></div>' +
+        '<div class="vb-row colors">' + HL_COLORS.map(function (c, i) {
+          return '<button class="dot" style="background:' + c + '" data-act="v-hl" data-c="' + (i + 1) + '" aria-label="형광펜 ' + (i + 1) + '"></button>';
+        }).join('') + '<button class="dot none" data-act="v-hl" data-c="0" aria-label="형광펜 지우기">⊘</button></div>';
+    }
+    bar.innerHTML = h; bar.style.display = 'block'; document.body.classList.add('hasbar');
+    if (memoOpen) { var ta = document.getElementById('memotext'); if (ta) ta.focus(); }
+  }
+  // 절 다시 그리기 (화면 전체를 다시 그리면 읽던 자리가 흔들리므로 그 절만)
+  function refreshVerses(ks) {
+    ks.forEach(function (k) {
+      var el = document.querySelector('.reader p[data-k="' + k + '"]'); if (!el) return;
+      el.className = el.className.replace(/\bhl\d\b|\bsel\b/g, '').trim();
+      var c = Notes.hl(k); if (c) el.classList.add('hl' + c);
+      if (Sel.has(k)) el.classList.add('sel');
+      el.querySelectorAll('.mk').forEach(function (m) { m.remove(); });
+      if (Notes.bm(k)) el.insertAdjacentHTML('beforeend', ' <span class="mk bm">' + ICON.bm + '</span>');
+      if (Notes.memoOf(k)) el.insertAdjacentHTML('beforeend', ' <span class="mk memo">' + ICON.memo + '</span>');
+    });
+  }
+  function shareVerses(ks) {
+    var text = selLabel(ks) + '\n' + ks.map(function (k) { return keyParts(k).v + ' ' + verseText(k); }).join('\n') + '\n(개역한글)';
+    if (navigator.share) { navigator.share({ text: text }).catch(function () {}); return; }
+    var done = function () { toast('📋 복사됨 · 붙여넣기 하세요'); };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () { toast('공유가 안 돼요'); });
+    else toast('공유가 안 돼요');
+  }
+  // 책갈피·묵상에서 그 절로 가기: 지금 회차 읽기표에서 그 장이 있는 날을 찾아 연다
+  var focusKey = null;
+  function openVerse(k) {
+    var p = keyParts(k), found = null;
+    for (var d = P.START; d <= P.END && !found; d = Core.addDays(d, 1)) {
+      Core.chaptersOf(P.portionFor(d)).forEach(function (c) { if (c.book === p.book && c.chapter === p.ch) found = d; });
+    }
+    if (!found) { toast('읽기표에서 찾지 못했어요'); return; }
+    focusKey = k; openReader(found);
+  }
+
   function readerHtml() {
     var d = reading, p = P.portionFor(d), list = Core.chaptersOf(p), m = mine(me), done = m.done.has(d);
     var h = '<div class="reader"><div class="bar2"><button class="linkbtn" data-act="close-read">‹ 돌아가기</button>' +
@@ -571,7 +713,14 @@
       h += '<h2 id="tts-' + ci + '-t"' + (Tts.at(ci, -1) ? ' class="speaking"' : '') + '><span>' + c.name + ' ' + c.chapter + '장</span><a href="' + c.gae + '" target="_blank" rel="noopener">개역개정으로 보기 ↗</a></h2>';
       var b = books[c.book];
       if (!b) { h += loadErr ? '' : '<p class="small">불러오는 중…</p>'; return; }
-      b.c[c.chapter - 1].forEach(function (v, i) { h += '<p id="tts-' + ci + '-' + i + '"' + (Tts.at(ci, i) ? ' class="speaking"' : '') + '><sup>' + (i + 1) + '</sup>' + esc(v) + '</p>'; });
+      b.c[c.chapter - 1].forEach(function (v, i) {
+        var k = c.book + '-' + c.chapter + '-' + (i + 1), hl = Notes.hl(k), cls = [];
+        if (Tts.at(ci, i)) cls.push('speaking');
+        if (hl) cls.push('hl' + hl);
+        if (Sel.has(k)) cls.push('sel');
+        h += '<p id="tts-' + ci + '-' + i + '" data-k="' + k + '" data-ci="' + ci + '"' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '><sup>' + (i + 1) + '</sup>' + esc(v) +
+          (Notes.bm(k) ? ' <span class="mk bm">' + ICON.bm + '</span>' : '') + (Notes.memoOf(k) ? ' <span class="mk memo">' + ICON.memo + '</span>' : '') + '</p>';
+      });
     });
     h += '</div><div class="src">성경전서 개역한글판 (대한성서공회) · 개역개정은 대한성서공회 웹사이트에서 열려요</div>';
     if (d <= state.today) {
@@ -604,6 +753,15 @@
     else a = installBlock();
     h += sect('📲 홈 화면 앱', a);
     // 글씨
+    var bms = Notes.bms(), memos = Notes.memos();
+    var bmKeys = Object.keys(bms).filter(function (k) { return bms[k].label; }).sort(function (a, b) { return bms[b].at - bms[a].at; });
+    var memoKeys = Object.keys(memos).sort(function (a, b) { return memos[b].at - memos[a].at; });
+    h += sect('🔖 책갈피 · 📝 묵상', (bmKeys.length || memoKeys.length ? '' : '<div class="small">말씀 화면에서 절을 누르면 책갈피·묵상을 남길 수 있어요.</div>') +
+      bmKeys.map(function (k) { return '<button class="notelink" data-act="open-verse" data-k="' + k + '">🔖 ' + esc(bms[k].label) + '</button>'; }).join('') +
+      memoKeys.map(function (k) {
+        return '<button class="notelink" data-act="open-verse" data-k="' + k + '">📝 ' + esc(memos[k].label) +
+          '<span class="small"> ' + esc(memos[k].text.slice(0, 40)) + (memos[k].text.length > 40 ? '…' : '') + '</span></button>';
+      }).join('') + '<div class="small" style="margin-top:6px">이 휴대폰에만 저장돼요.</div>');
     h += sect('🔤 말씀 글씨 크기', '<div class="sizes" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="-2">가−</button>' +
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="2">가+</button></div>' +
@@ -687,10 +845,11 @@
     if (!b || busy) return;
     if (b.dataset.tab) { tab = b.dataset.tab; render(); window.scrollTo(0, 0); return; }
     if (b.dataset.act === 'read') { openReader(b.dataset.date); return; }
+    if (b.dataset.act === 'open-verse') { openVerse(b.dataset.k); return; }
     if (b.dataset.act === 'tts-play') { Tts.play(); return; }
     if (b.dataset.act === 'tts-rate') { Tts.setRate(+b.dataset.r); var bar = document.getElementById('ttsbar'); if (bar) bar.outerHTML = ttsBar(); return; }
     if (b.dataset.act === 'tts-pause') { Tts.pause(); return; }
-    if (b.dataset.act === 'close-read') { Tts.reset(); reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return; }
+    if (b.dataset.act === 'close-read') { Tts.reset(); Sel.clear(); memoOpen = false; verseBarHide(); reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return; }
     if (b.dataset.act === 'font') {
       setFont(Math.max(14, Math.min(34, fontSize() + +b.dataset.n)));
       document.querySelectorAll('.reader .text, .fontsample').forEach(function (tx) { tx.style.fontSize = fontSize() + 'px'; });
@@ -786,6 +945,34 @@
       run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u, myHour()); }),
         function () { toast('🔔 알림 시간 변경 · 매일 ' + Core.hourLabel(myHour())); });
     } else if (tab === 'set') render();
+  });
+  document.addEventListener('click', function (e) {
+    // 절 누르기: 고르기/빼기
+    var pEl = e.target.closest('.reader p[data-k]');
+    if (pEl && !e.target.closest('button, a')) {
+      Sel.toggle(pEl.dataset.k); memoOpen = false; refreshVerses([pEl.dataset.k]); verseBar(); return;
+    }
+    var b = e.target.closest('#versebar button'); if (!b) return;
+    var ks = Sel.list(), act = b.dataset.act;
+    if (!ks.length) return;
+    if (act === 'v-clear') { Sel.clear(); memoOpen = false; refreshVerses(ks); verseBar(); }
+    else if (act === 'v-hl') { Notes.setHl(ks, +b.dataset.c); Sel.clear(); refreshVerses(ks); verseBar(); toast(+b.dataset.c ? '🖍 형광펜' : '형광펜 지움'); }
+    else if (act === 'v-bm') { var on = Notes.toggleBm(ks, selLabel(ks)); refreshVerses(ks); verseBar(); toast(on ? '🔖 책갈피 저장' : '책갈피 지움'); }
+    else if (act === 'v-share') { shareVerses(ks); }
+    else if (act === 'v-listen') {
+      var first = document.querySelector('.reader p[data-k="' + ks[0] + '"]');
+      var at = first ? { ci: +first.dataset.ci, vi: keyParts(ks[0]).v - 1 } : null;
+      Sel.clear(); refreshVerses(ks); verseBar();
+      Tts.resumeFrom(at); Tts.play();
+    }
+    else if (act === 'v-memo') { memoOpen = true; verseBar(); }
+    else if (act === 'v-memo-close') { memoOpen = false; verseBar(); }
+    else if (act === 'v-memo-save' || act === 'v-memo-del') {
+      var t = act === 'v-memo-save' ? (document.getElementById('memotext').value || '').trim() : '';
+      Notes.setMemo(ks[0], selLabel(ks), t);
+      memoOpen = false; Sel.clear(); refreshVerses(ks); verseBar();
+      toast(t ? '📝 묵상 저장' : '묵상 지움');
+    }
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target.id === 'newname') document.querySelector('[data-act=register]').click();
