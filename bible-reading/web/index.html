@@ -103,6 +103,7 @@
   .chip.on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
   .seg.segwide { display: flex; margin: 0 0 12px; }
   .seg.segwide button { flex: 1; font-size: 16px; padding: 8px; }
+  .demobar { background: #fff3cd; color: #6b4f00; border: 1px solid #f0d58a; border-radius: 10px; padding: 8px 12px; font-size: 14px; margin-bottom: 10px; text-align: center; }
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   .dayrow .day { margin-bottom: 0; }
   .dayrow .open { font: inherit; font-size: 20px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
@@ -235,6 +236,12 @@
   function render() {
     var who = document.getElementById('who');
     var main = document.getElementById('main');
+    if (Api.demo && !document.getElementById('demobar')) {
+      var bar = document.createElement('div');
+      bar.id = 'demobar'; bar.className = 'demobar';
+      bar.textContent = '시연용 화면 · 2027년 1월 15일로 가정 · 예시 회원 · 실제 기록 아님';
+      document.querySelector('.wrap').insertBefore(bar, document.querySelector('.wrap').firstChild);
+    }
     if (!me) {
       who.innerHTML = '';
       main.innerHTML = pickerHtml();

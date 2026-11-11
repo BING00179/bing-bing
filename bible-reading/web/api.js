@@ -5,9 +5,12 @@ var Api = (function () {
   var params = new URLSearchParams(location.search);
   var KEY = 'bible.s';
   var s = params.get('s');
+  // ?s=demo 는 리더·임원 시연용: 2027년 1월 중순처럼, 예시 회원과 기록이 들어 있는 가짜 서버
+  var DEMO = s === 'demo';
+  if (DEMO) s = 'preview';
   try {
-    if (s) localStorage.setItem(KEY, s);
-    else s = localStorage.getItem(KEY);
+    if (s && s !== 'preview') localStorage.setItem(KEY, s); // 연습·시연 링크는 실제 열쇠를 덮어쓰지 않음
+    else if (!s) s = localStorage.getItem(KEY);
   } catch (e) {}
   if (s && s !== 'preview' && !/^[A-Za-z0-9_-]{20,150}$/.test(s)) s = null;
 
@@ -32,9 +35,30 @@ var Api = (function () {
   // ── 미리보기용 가짜 서버: server.gs 와 같은 규칙. ?today=2027-01-05 로 날짜 바꾸기 ──
   var fake = (function () {
     var K = 'bible.preview.db';
-    function db() { try { return JSON.parse(localStorage.getItem(K)) || { members: [], records: [] }; } catch (e) { return { members: [], records: [] }; } }
+    if (DEMO) K = 'bible.demo.db';
+    function db() {
+      var d = null;
+      try { d = JSON.parse(localStorage.getItem(K)); } catch (e) {}
+      return d || (DEMO ? demoSeed() : { members: [], records: [] });
+    }
+    // 시연용 예시: 1월 1일~어제까지 사람마다 다르게 읽고·필사한 기록
+    function demoSeed() {
+      var people = [['김은혜', 1, 0], ['박소망', 0.85, 0.6], ['이믿음', 0.6, 0], ['최사랑', 0, 0.9], ['정기쁨', 0.95, 0.95]];
+      var d = { members: [], records: [], joins: [] }, end = Core.addDays(today(), -1);
+      people.forEach(function (x, i) {
+        d.members.push(x[0]);
+        if (!x[1]) d.joins.push([x[0], '1', '읽기', '나감']);
+        if (x[2]) d.joins.push([x[0], '1', '필사', '참여']);
+        var k = 0;
+        for (var day = Core.FIRST_START; day <= end; day = Core.addDays(day, 1), k++) {
+          if (x[1] && ((k * 7 + i * 3) % 20) / 20 < x[1]) d.records.push([x[0], day, '완료']);
+          if (x[2] && ((k * 5 + i) % 20) / 20 < x[2]) d.records.push([x[0], day, '필사완료']);
+        }
+      });
+      return d;
+    }
     function put(d) { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) {} }
-    function today() { return params.get('today') || new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); }
+    function today() { return params.get('today') || (DEMO ? '2027-01-15' : new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)); }
     // ?term2=2028-01-03 이면 2기가 열린 상태로 미리보기
     function terms() { var t = [['1', Core.FIRST_START]]; if (params.get('term2')) t.push(['2', params.get('term2')]); return Core.termsFrom(t); }
     function openTerm() { var tn = Core.termsNow(terms(), today()); return tn.next || tn.cur; }
@@ -78,7 +102,7 @@ var Api = (function () {
   var impl = s === 'preview' ? fake : base ? real : null;
   return {
     ready: !!impl,
-    preview: s === 'preview',
+    preview: s === 'preview', demo: DEMO,
     sw: 'sw.js' + (s ? '?s=' + encodeURIComponent(s) : ''),
     state: function () { return impl.state(); },
     call: function (fn) { return impl.call(fn, Array.prototype.slice.call(arguments, 1)); },
