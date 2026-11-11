@@ -98,6 +98,11 @@
     background: var(--card); color: var(--accent); border: 2px solid var(--accent); cursor: pointer; }
   .copybtn.done { background: var(--done-bg); color: var(--done); border-color: var(--done); }
   .dayrow .open.copied { background: var(--done-bg); border-color: var(--done); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { font: inherit; font-size: 18px; font-weight: 700; padding: 10px 18px; border-radius: 999px; border: 2px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; }
+  .chip.on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+  .seg.segwide { display: flex; margin: 0 0 12px; }
+  .seg.segwide button { flex: 1; font-size: 16px; padding: 8px; }
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   .dayrow .day { margin-bottom: 0; }
   .dayrow .open { font: inherit; font-size: 20px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
@@ -167,21 +172,31 @@
     try { if (window.caches) caches.open('bible-meta').then(function (c) { c.put('terms', new Response(JSON.stringify(terms))); }); } catch (e) {}
   }
   function openTerm() { return TN.next || TN.cur; }
-  function joined(term, name) { return Core.participants(term, state.members, state.joins || []).indexOf(name) >= 0; }
+  // ── 팀 ── 읽기 팀·필사 팀 (같은 날짜 같은 분량, 멤버만 다름). 회차마다 고름.
+  function inTeam(team, term, name) {
+    return Core.participants(term || TN.cur, state.members, state.joins || [], team).indexOf(name || me) >= 0;
+  }
+  function teamPicked() { try { return localStorage.getItem('bible.teamPick.' + openTerm().n + '.' + me) === '1'; } catch (e) { return true; } }
+  function teamChips(term) {
+    return '<div class="chips">' + Core.TEAMS.map(function (team) {
+      var on = inTeam(team, term);
+      return '<button class="chip' + (on ? ' on' : '') + '" data-act="team-toggle" data-team="' + team + '">' + (on ? '✓ ' : '') + team + ' 팀</button>';
+    }).join('') + '</div>';
+  }
+  // 처음이거나 새 회차면 팀 고르기 (둘 다 골라도 됨)
   function joinHtml() {
     var t = openTerm();
-    if (!t || joined(t, me)) return '';
+    if (!t || teamPicked()) return '';
     var p = Core.makePlan(t.start);
-    return '<div class="card"><div class="small">' + (TN.next ? '다음 회차' : '지금 회차') + '</div>' +
-      '<div class="portion" style="margin-top:0">' + t.n + '기 통독</div>' +
-      '<div class="small" style="margin-bottom:12px">' + dateLabel(t.start, true) + ' ~ ' + dateLabel(p.END, true) + '</div>' +
-      '<button class="big" data-act="join">' + t.n + '기 참여</button></div>';
+    return '<div class="card"><div class="small">' + (TN.next ? '다음 회차 · ' : '') + t.n + '기 · ' + dateLabel(t.start, true) + ' ~ ' + dateLabel(p.END, true) + '</div>' +
+      '<div class="portion" style="margin-top:0;font-size:24px">참여 팀</div>' +
+      '<div class="small" style="margin-bottom:10px">하는 것을 모두 눌러 주세요. 나중에 ⚙ 설정에서 바꿀 수 있어요.</div>' +
+      teamChips(t) + '<button class="big" style="margin-top:12px" data-act="team-ok">확인</button></div>';
   }
 
-  // ── 필사 ── 분량·밀린 날 없이 '필사 완료' 누른 날 수만 셈. 안 하는 사람은 설정에서 버튼을 숨김.
-  function copyOn() { try { return localStorage.getItem('bible.copy') !== 'off'; } catch (e) { return true; } }
+  // ── 필사 ── 분량·밀린 날 없이 '필사 완료' 누른 날 수만 셈. 필사 팀에게만 버튼.
   function copyBtn(d, cls) {
-    if (!copyOn()) return '';
+    if (!inTeam('필사')) return '';
     var did = P.doneSet(state.records, me, '필사').has(d);
     return '<button class="copybtn' + (did ? ' done' : '') + (cls ? ' ' + cls : '') + '" data-act="copy" data-date="' + d + '" data-done="' + (did ? 0 : 1) + '">' +
       (did ? '✍️ 필사 완료됨' : '✍️ 필사 완료') + '</button>';
@@ -322,21 +337,22 @@
     } else if (!p) {
       h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div><div class="portion">' + TN.cur.n + '기 통독 완료</div>' + (TN.next ? '<div class="small">' + TN.next.n + '기 시작 · ' + dateLabel(TN.next.start, true) + '</div>' : '<div class="small">다음 회차는 리더가 정하면 열려요.</div>') + '</div>';
     } else {
-      var done = m.done.has(t);
+      var done = m.done.has(t), rd = inTeam('읽기');
       h += '<div class="card"><div class="date">오늘 · ' + dateLabel(t) + '</div>' +
         '<div class="portion"><button class="portionlink" data-act="read" data-date="' + t + '">' + Core.portionLabel(p) + '</button></div>' +
         '<button class="readbtn" data-act="read" data-date="' + t + '">📖 말씀 읽기</button>' +
-        '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + t + '" data-done="' + (done ? 0 : 1) + '">' +
-        (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' + copyBtn(t) +
-        (done ? '<div class="hint">잘못 눌렀으면 한 번 더 누르면 취소돼요</div>' : '') + '</div>';
+        (rd ? '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + t + '" data-done="' + (done ? 0 : 1) + '">' +
+        (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' : '') + copyBtn(t) +
+        (!rd && !inTeam('필사') ? '<div class="small" style="margin-top:8px">참여 팀 없음 · <button class="linkbtn" data-tab="set">설정</button></div>' : '') +
+        (rd && done ? '<div class="hint">잘못 눌렀으면 한 번 더 누르면 취소돼요</div>' : '') + '</div>';
     }
     var ac = alarmChoice();
     h += '<div class="small" style="text-align:center;margin:-4px 0 12px">' +
       (ac === 'push' ? '🔔 매일 ' + Core.hourLabel(myHour()) + ' 알림' : ac === 'cal' ? '📅 달력 알림 · 매일 ' + Core.hourLabel(myHour()) : '🔕 알림 꺼짐') +
       ' · <button class="linkbtn" data-tab="set">설정</button></div>';
-    h += '<div class="card"><div style="font-weight:700">내 진도</div>' + progressHtml(m.prog) +
-      (m.copied.size ? '<div class="small" style="margin-top:4px">✍️ 필사 ' + m.copied.size + '회</div>' : '') +
+    if (inTeam('읽기')) h += '<div class="card"><div style="font-weight:700">읽기 진도</div>' + progressHtml(m.prog) +
       (m.missed > 0 ? '<button class="missbtn" data-tab="past">밀린 날 ' + m.missed + '일 ›</button>' : '') + '</div>';
+    if (inTeam('필사')) h += '<div class="card"><div style="font-weight:700">필사</div><div class="small">✍️ ' + TN.cur.n + '기 필사 ' + m.copied.size + '회</div></div>';
     return h;
   }
 
@@ -568,9 +584,8 @@
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="2">가+</button></div>' +
       '<div class="fontsample" style="font-size:' + fontSize() + 'px;line-height:1.8">태초에 하나님이 천지를 창조하시니라</div>');
     // 이름
-    h += sect('✍️ 필사', '<button class="switch' + (copyOn() ? ' on' : '') + '" data-act="copy-toggle" role="switch" aria-checked="' + copyOn() + '">' +
-      '<span class="knob"></span><span>' + (copyOn() ? '필사 버튼 보임' : '필사 버튼 숨김') + '</span></button>' +
-      '<div class="small" style="margin-top:6px">필사를 안 하시면 꺼 두세요. 필사는 횟수만 세요.</div>');
+    h += sect('👥 참여 팀 · ' + openTerm().n + '기', teamChips(openTerm()) +
+      '<div class="small" style="margin-top:8px">읽기 팀: 읽기 완료·진도·밀린 날 / 필사 팀: 필사 완료 횟수. 둘 다 해도 돼요.</div>');
     h += sect('👤 내 이름', '<div style="margin-bottom:8px">' + esc(me) + '</div><button class="linkbtn" data-act="switch">다른 이름으로 바꾸기</button>');
     // 정보
     h += sect('ℹ️ 정보', '<div class="small">' + TN.cur.n + '기 읽기표: ' + P.START + ' 창세기 ~ ' + P.END + ' 요한계시록, 평일·토요일·공휴일 3장, 주일 5장<br>' +
@@ -579,31 +594,55 @@
     return h;
   }
 
+  var boardTeam = null;
   function allHtml() {
     var t = state.today;
-    var list = Core.participants(TN.cur, state.members, state.joins || []);
-    if (!list.length) return joinHtml() + '<div class="card small">' + TN.cur.n + '기 참여자 없음</div>';
-    return joinHtml() + '<div class="card">' + (P.portionFor(t) ? '<div class="small" style="margin-bottom:10px">오늘 ' + Core.portionLabel(P.portionFor(t)) + '</div>' : '') +
-      '<div class="small" style="margin-bottom:6px">' + TN.cur.n + '기 · ' + list.length + '명</div>' +
-      list.map(function (n) {
-        var m = mine(n), last = P.lastReadLabel(m.done);
-        return '<div class="row"><div class="top"><span class="name">' + esc(n) + (m.done.has(t) ? ' ✅' : '') + (m.copied.has(t) ? ' ✍️' : '') + '</span>' +
-          (m.missed > 0 ? '<span class="miss">밀린 ' + m.missed + '일</span>' : '') + '</div>' +
-          '<div class="small">' + (last ? esc(last) : '읽은 곳 없음') + (m.copied.size ? ' · ✍️ 필사 ' + m.copied.size + '회' : '') + '</div>' + progressHtml(m.prog) + '</div>';
+    if (!boardTeam) boardTeam = inTeam('읽기') || !inTeam('필사') ? '읽기' : '필사';
+    var lists = {};
+    Core.TEAMS.forEach(function (team) { lists[team] = Core.participants(TN.cur, state.members, state.joins || [], team); });
+    var list = lists[boardTeam];
+    var h = joinHtml() + '<div class="seg segwide" role="tablist">' + Core.TEAMS.map(function (team) {
+      return '<button class="' + (team === boardTeam ? 'sel' : '') + '" data-act="board-team" data-team="' + team + '">' + team + ' 팀 ' + lists[team].length + '</button>';
+    }).join('') + '</div>';
+    if (!list.length) return h + '<div class="card small">' + TN.cur.n + '기 ' + boardTeam + ' 팀 참여자 없음</div>';
+    h += '<div class="card">' + (P.portionFor(t) ? '<div class="small" style="margin-bottom:10px">오늘 ' + Core.portionLabel(P.portionFor(t)) + '</div>' : '');
+    if (boardTeam === '필사') {
+      return h + list.map(function (n) {
+        var m = mine(n), latest = '';
+        m.copied.forEach(function (d) { if (d > latest) latest = d; });
+        return '<div class="row"><div class="top"><span class="name">' + esc(n) + (m.copied.has(t) ? ' ✍️' : '') + '</span>' +
+          '<span class="small">필사 ' + m.copied.size + '회</span></div>' +
+          '<div class="small">' + (latest ? '최근 ' + dateLabel(latest) : '필사 기록 없음') + '</div></div>';
       }).join('') + '</div>';
+    }
+    return h + list.map(function (n) {
+      var m = mine(n), last = P.lastReadLabel(m.done);
+      return '<div class="row"><div class="top"><span class="name">' + esc(n) + (m.done.has(t) ? ' ✅' : '') + '</span>' +
+        (m.missed > 0 ? '<span class="miss">밀린 ' + m.missed + '일</span>' : '') + '</div>' +
+        '<div class="small">' + (last ? esc(last) : '읽은 곳 없음') + '</div>' + progressHtml(m.prog) + '</div>';
+    }).join('') + '</div>';
   }
+
 
   function pastHtml() {
     var t = state.today;
     if (t < P.START) return '<div class="card small">' + dateLabel(P.START, true) + '부터 시작해요.</div>';
-    var m = mine(me), last = t > P.END ? P.END : t, h = '';
-    h += '<p class="small">날짜를 누르면 읽음 / 안 읽음이 바뀌어요. 📖 를 누르면 그날 말씀을 읽어요.</p>';
+    var m = mine(me), last = t > P.END ? P.END : t, h = '', rd = inTeam('읽기'), cp = inTeam('필사');
+    h += '<p class="small">' + (rd ? '날짜를 누르면 읽음 / 안 읽음이 바뀌어요.' : '날짜를 누르면 필사 / 안 함이 바뀌어요.') + ' 📖 를 누르면 그날 말씀을 읽어요.</p>';
     for (var d = last; d >= P.START; d = Core.addDays(d, -1)) {
+      if (!rd) { // 필사만 하는 사람: 날짜 줄이 필사 체크
+        var c = m.copied.has(d);
+        h += '<div class="dayrow"><button class="day' + (c ? ' done' : '') + '" data-act="copy" data-date="' + d + '" data-done="' + (c ? 0 : 1) + '">' +
+          '<span class="d">' + dateLabel(d) + '</span><span class="p">' + Core.portionLabel(P.portionFor(d)) + '</span>' +
+          '<span class="s">' + (c ? '✍️ 필사' : '') + '</span></button>' +
+          '<button class="open" data-act="read" data-date="' + d + '" aria-label="' + dateLabel(d) + ' 말씀 읽기">📖</button></div>';
+        continue;
+      }
       var done = m.done.has(d), missed = !done && d < t;
       h += '<div class="dayrow"><button class="day' + (done ? ' done' : missed ? ' missed' : '') + '" data-act="mark" data-date="' + d + '" data-done="' + (done ? 0 : 1) + '">' +
         '<span class="d">' + dateLabel(d) + '</span><span class="p">' + Core.portionLabel(P.portionFor(d)) + '</span>' +
         '<span class="s">' + (done ? '✅ 읽음' : missed ? '안 읽음' : '오늘') + '</span></button>' +
-        (copyOn() ? '<button class="open' + (m.copied.has(d) ? ' copied' : '') + '" data-act="copy" data-date="' + d + '" data-done="' + (m.copied.has(d) ? 0 : 1) + '" aria-label="' + dateLabel(d) + ' 필사">✍️</button>' : '') +
+        (cp ? '<button class="open' + (m.copied.has(d) ? ' copied' : '') + '" data-act="copy" data-date="' + d + '" data-done="' + (m.copied.has(d) ? 0 : 1) + '" aria-label="' + dateLabel(d) + ' 필사">✍️</button>' : '') +
         '<button class="open" data-act="read" data-date="' + d + '" aria-label="' + dateLabel(d) + ' 말씀 읽기">📖</button></div>';
     }
     return h;
@@ -692,10 +731,16 @@
         if (b.dataset.done === '1') toast('✍️ 필사 완료 · ' + dateLabel(b.dataset.date));
       });
     }
-    else if (act === 'copy-toggle') {
-      try { localStorage.setItem('bible.copy', copyOn() ? 'off' : 'on'); } catch (e7) {}
+    else if (act === 'team-toggle') {
+      var team = b.dataset.team, on = !inTeam(team, openTerm());
+      run(call('join', me, team, on), function () { toast((on ? '✓ ' : '') + team + ' 팀 ' + (on ? '참여' : '나감')); });
+    }
+    else if (act === 'team-ok') {
+      if (!Core.TEAMS.some(function (tm) { return inTeam(tm, openTerm()); })) { toast('팀을 하나 이상 골라 주세요'); return; }
+      try { localStorage.setItem('bible.teamPick.' + openTerm().n + '.' + me, '1'); } catch (e8) {}
       render();
     }
+    else if (act === 'board-team') { boardTeam = b.dataset.team; render(); }
     else if (act === 'mark') {
       run(call('mark', me, b.dataset.date, b.dataset.done === '1'), function () {
         if (b.dataset.done === '1') toast('✅ 읽기 완료 · ' + dateLabel(b.dataset.date));

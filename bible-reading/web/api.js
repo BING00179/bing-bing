@@ -40,9 +40,10 @@ var Api = (function () {
     function openTerm() { var tn = Core.termsNow(terms(), today()); return tn.next || tn.cur; }
     function state(d) { return { today: today(), members: d.members.slice(), records: d.records.slice(), vapidKey: params.get('vapid') || '',
       terms: terms(), joins: (d.joins || []).slice() }; }
-    function joinTerm(d, name) {
-      var t = openTerm(); d.joins = d.joins || [];
-      if (t.n > 1 && !d.joins.some(function (j) { return j[0] === name && +j[1] === t.n; })) d.joins.push([name, String(t.n)]);
+    function joinTerm(d, name, team, on) {
+      var t = openTerm(); d.joins = d.joins || []; team = team || '읽기'; on = on !== false;
+      var now = Core.participants(t, [name], d.joins, team).length > 0;
+      if (now !== on) d.joins.push([name, String(t.n), team, on ? '참여' : '나감']);
     }
     var fns = {
       register: function (name) {
@@ -51,7 +52,7 @@ var Api = (function () {
         var d = db(); if (d.members.indexOf(n) < 0) d.members.push(n); joinTerm(d, n); put(d);
         var st = state(d); st.name = n; return st;
       },
-      join: function (name) { var d = db(); joinTerm(d, name); put(d); return state(d); },
+      join: function (name, team, on) { var d = db(); joinTerm(d, name, team, on); put(d); return state(d); },
       mark: function (name, date, done, kind) {
         var pre = kind === '필사' ? '필사' : '';
         if (!terms().some(function (t) { return Core.makePlan(t.start).portionFor(date); })) throw new Error('읽기표에 없는 날짜입니다.');
