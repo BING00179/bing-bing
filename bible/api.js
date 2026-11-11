@@ -139,6 +139,13 @@ var Install = (function () {
   return {
     isKakao: function () { return /KAKAOTALK/i.test(ua); },
     isIOS: function () { return /iPhone|iPad|iPod/.test(ua); },
+    isAndroid: function () { return /Android/.test(ua); },
+    isSamsung: function () { return /SamsungBrowser/.test(ua); },
+    // 갤럭시: 크롬으로 열기 (크롬이 설치 창·알림 허용 창을 가장 잘 띄움). 크롬이 없으면 지금 브라우저에 그대로.
+    openInChrome: function () {
+      location.href = 'intent://' + location.href.replace(/^https?:\/\//, '') +
+        '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(location.href) + ';end';
+    },
     standalone: function () { return navigator.standalone === true || matchMedia('(display-mode: standalone)').matches; },
     installed: function () {
       if (this.standalone()) return true;
@@ -155,6 +162,9 @@ var Install = (function () {
     },
     onChange: function (f) { listeners.push(f); },
     // 카톡 안 브라우저 → 외부 브라우저 (카카오 비공식 주소, 안 되는 경우가 있어 안내 화면을 같이 보여 줌)
-    openExternal: function () { location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href); }
+    openExternal: function () {
+      if (/Android/.test(ua)) return this.openInChrome();
+      location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href);
+    }
   };
 })();

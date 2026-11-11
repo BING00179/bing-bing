@@ -171,7 +171,13 @@
   }
   function setupHtml() {
     var h = '<div class="card">';
-    if (!Install.installed() && !installSkipped()) {
+    // 순서: 브라우저에서는 설치까지만 → 설치한 앱(홈 화면 아이콘)으로 열면 그 안에서 알림 켜기
+    if (!Install.standalone() && !installSkipped() && Install.installed()) {
+      h += stepHead(1, '✅ 설치됐어요') +
+        '<div style="font-size:20px;line-height:1.6;margin:8px 0 14px">이제 휴대폰 <b>홈 화면</b>에 생긴<br><b>📖 성경통독</b> 아이콘을 눌러 열어 주세요.</div>' +
+        '<div class="small">그 앱 안에서 <b>2/2 알림 켜기</b> 가 이어져요. 이 브라우저 창은 닫으셔도 돼요.</div>' +
+        '<div class="hint" style="margin-top:14px"><button class="linkbtn" data-act="install-skip">아이콘이 안 보여요 · 이대로 쓰기</button></div>';
+    } else if (!Install.standalone() && !installSkipped()) {
       h += stepHead(1, '📲 홈 화면에 앱 설치');
       if (Install.canPrompt()) {
         h += '<div class="small" style="margin-bottom:12px">한 번 설치하면 앱처럼 아이콘을 눌러 바로 열려요.</div>' +
@@ -188,7 +194,7 @@
           '<li><b>설치</b> / <b>추가</b> 를 누르세요</li></ol>' +
           '<button class="big" data-act="installed">설치했어요</button>';
       }
-      h += '<div class="hint"><button class="linkbtn" data-act="install-skip">설치는 나중에</button></div>';
+      h += '<div class="hint"><button class="linkbtn" data-act="install-skip">설치 없이 이대로 쓰기</button></div>';
     } else {
       h += stepHead(2, '🔔 매일 알림') + hourPicker();
       var push = Push.status();
@@ -408,6 +414,8 @@
       return;
     }
     if (act === 'kakao-out') { Install.openExternal(); return; }
+    if (act === 'chrome-out') { Install.openInChrome(); return; }
+    if (act === 'stay-samsung') { try { sessionStorage.setItem('bible.staySamsung', '1'); } catch (e4) {} start(); return; }
     if (act === 'install') {
       Install.prompt().then(function (ok) { if (!ok) toast('설치를 취소했어요. 다시 누르거나 "설치는 나중에" 를 눌러 주세요.'); render(); });
       return;
@@ -453,17 +461,32 @@
   });
 
   function kakaoHtml() {
-    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">외부 브라우저로 여는 중…</div>' +
+    var where = Install.isAndroid() ? '크롬' : Install.isIOS() ? 'Safari' : '외부 브라우저';
+    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">' + where + '(으)로 여는 중…</div>' +
       '<div class="small" style="margin-bottom:12px">카톡 안에서는 앱 설치와 알림이 안 돼요. 자동으로 안 넘어가면 아래를 눌러 주세요.</div>' +
-      '<button class="big" data-act="kakao-out">외부 브라우저로 열기</button>' +
+      '<button class="big" data-act="kakao-out">' + where + '(으)로 열기</button>' +
       '<div class="small" style="margin-top:14px"><b>그래도 안 되면</b><br>' +
       (Install.isIOS() ? '오른쪽 아래 <b>공유 버튼</b> → <b>Safari로 열기</b>' : '오른쪽 위 <b>⋮</b> → <b>다른 브라우저로 열기</b>') + '</div></div>';
   }
+
+  function samsungHtml() {
+    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">크롬으로 여는 중…</div>' +
+      '<div class="small" style="margin-bottom:12px">삼성 인터넷보다 크롬에서 앱 설치·알림이 잘 돼요. 자동으로 안 넘어가면 아래를 눌러 주세요.</div>' +
+      '<button class="big" data-act="chrome-out">크롬으로 열기</button>' +
+      '<div class="hint"><button class="linkbtn" data-act="stay-samsung">크롬이 없어요 · 여기서 계속</button></div></div>';
+  }
+  function staySamsung() { try { return sessionStorage.getItem('bible.staySamsung') === '1'; } catch (e) { return false; } }
 
   function start() {
     if (Install.isKakao()) {
       document.getElementById('main').innerHTML = kakaoHtml();
       Install.openExternal();
+      return;
+    }
+    // 갤럭시 삼성 인터넷(설치한 앱 말고) → 크롬으로 한 번 넘김
+    if (Install.isSamsung() && Install.isAndroid() && !Install.standalone() && !staySamsung()) {
+      document.getElementById('main').innerHTML = samsungHtml();
+      try { if (sessionStorage.getItem('bible.toChrome') !== '1') { sessionStorage.setItem('bible.toChrome', '1'); Install.openInChrome(); } } catch (e) { Install.openInChrome(); }
       return;
     }
     Install.onChange(function () { if (state && me && !setupDone()) render(); });
