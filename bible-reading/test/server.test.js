@@ -37,7 +37,7 @@ function makeEnv(todayKST, timeKST) {
       deleteRow(r) { rows.splice(r - 1, 1); },
       getRange(r, c, nr, nc) {
         return {
-          setValues(v) { v.forEach((row, i) => { rows[r - 1 + i] = row.map(String); }); return this; },
+          setValues(v) { v.forEach((row, i) => { const cur = (rows[r - 1 + i] || []).slice(); row.forEach((x, k) => { cur[c - 1 + k] = String(x); }); for (let k = 0; k < cur.length; k++) if (cur[k] === undefined) cur[k] = ''; rows[r - 1 + i] = cur; }); return this; },
           setFontWeight() { return this; },
           setNumberFormat() { return this; },
           getDisplayValues() { return rows.slice(r - 1, r - 1 + nr).map((x) => x.slice(c - 1, c - 1 + nc)); },
@@ -304,7 +304,7 @@ test('새 회차: 리더가 시작일을 정함 → 2기 읽기표, 참여한 �
   e.post('join', '영희');
   e.post('register', '민수');
   st = e.get().data;
-  assert.deepEqual([...st.joins].map((j) => [...j]), [['영희', '2'], ['민수', '2']]);
+  assert.deepEqual([...st.joins].map((j) => [...j]), [['영희', '2', '읽기', '참여'], ['민수', '2', '읽기', '참여']]);
   assert.deepEqual([...e.g.Core.participants(st.terms[1], st.members, st.joins)], ['영희', '민수']);
 });
 
@@ -331,4 +331,39 @@ test('완전 삭제는 참여 기록도 지움', () => {
   e.ui.answers.push(['OK', '영희'], ['YES']);
   e.g.deleteMemberMenu();
   assert.equal(e.sheets['참여'].rows.length, 1);
+});
+
+test('필사 팀: 따로 참여·나가기, 필사 완료 기록, 알림은 두 팀 합쳐서', () => {
+  const e = makeEnv('2027-01-05', '06:00');
+  e.g.setupPush();
+  e.post('register', '영희'); e.post('register', '민수');
+  assert.ok(e.post('join', '민수', '필사', true).ok);
+  assert.ok(e.post('join', '민수', '읽기', false).ok);          // 민수는 필사만
+  assert.ok(e.post('join', '영희', '필사', true).ok);           // 영희는 둘 다
+  e.post('join', '영희', '필사', true);                         // 같은 상태면 줄 안 늘어남
+  assert.ok(!e.post('join', '영희', '노래', true).ok);
+  const st = e.get().data;
+  const t1 = st.terms[0];
+  assert.deepEqual([...e.g.Core.participants(t1, st.members, st.joins, '읽기')], ['영희']);
+  assert.deepEqual([...e.g.Core.participants(t1, st.members, st.joins, '필사')], ['영희', '민수']);
+  assert.equal(e.sheets['참여'].rows.length, 4, '머리줄 + 3줄');
+  assert.deepEqual([...e.sheets['참여'].rows[0]], ['시각', '이름', '회차', '팀', '동작']);
+  assert.ok(e.post('mark', '민수', '2027-01-05', true, '필사').ok);
+  assert.ok(!e.post('mark', '민수', '2027-01-05', true, '그림').ok);
+  assert.deepEqual([...e.sheets['기록'].rows.slice(-1)[0].slice(1)], ['민수', '2027-01-05', '필사완료']);
+  e.post('subscribe', '민수', EP1, 6);
+  assert.equal(e.g.sendMorning(), 1, '필사만 하는 사람도 알림');
+});
+
+test('예전 3칸짜리 참여 시트에 팀·동작 제목을 붙임', () => {
+  const e = makeEnv('2027-12-30');
+  e.post('register', '영희');
+  e.ui.answers.push(['OK', '2028-01-03'], ['YES']);
+  e.g.newTermMenu();
+  e.sheets['참여'] = undefined;
+  const sh = e.g.SpreadsheetApp.getActiveSpreadsheet().insertSheet('참여');
+  sh.rows.push(['시각', '이름', '회차'], ['x', '영희', '2']);
+  const st = e.get().data;
+  assert.deepEqual([...e.sheets['참여'].rows[0]], ['시각', '이름', '회차', '팀', '동작']);
+  assert.deepEqual([...e.g.Core.participants(st.terms[1], st.members, st.joins)], ['영희'], '예전 줄 = 읽기 참여');
 });

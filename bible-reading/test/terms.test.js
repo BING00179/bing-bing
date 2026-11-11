@@ -42,3 +42,24 @@ test('참여자: 1기는 등록한 사람 전부, 2기부터는 참여를 누른
   assert.deepEqual(C.participants({ n: 1 }, members, joins), members);
   assert.deepEqual(C.participants({ n: 2 }, members, joins), ['영희', '민수']);
 });
+
+test('팀: 읽기·필사 따로 참여, 나가기, 1기 읽기 팀은 등록자 전부가 기본', () => {
+  const members = ['영희', '철수', '민수'];
+  const joins = [
+    ['민수', '1', '필사', '참여'], ['민수', '1', '읽기', '나감'],  // 민수는 1기 필사만
+    ['영희', '1', '필사', '참여'],                                // 영희는 1기 둘 다
+    ['철수', '2', '', ''],                                       // 예전 줄 = 2기 읽기 참여
+    ['영희', '2', '필사', '참여'], ['영희', '2', '필사', '나감'],
+  ];
+  assert.deepEqual(C.participants({ n: 1 }, members, joins, '읽기'), ['영희', '철수']);
+  assert.deepEqual(C.participants({ n: 1 }, members, joins, '필사'), ['영희', '민수']);
+  assert.deepEqual(C.participants({ n: 2 }, members, joins), ['철수']);
+  assert.deepEqual(C.participants({ n: 2 }, members, joins, '필사'), []);
+});
+
+test('필사 기록은 읽기 기록과 따로 셈', () => {
+  const recs = [['영희', '2027-01-01', '완료'], ['영희', '2027-01-01', '필사완료'], ['영희', '2027-01-02', '필사완료'],
+    ['영희', '2027-01-02', '필사취소'], ['영희', '2027-01-03', '필사완료']];
+  assert.deepEqual([...C.doneSet(recs, '영희')], ['2027-01-01']);
+  assert.deepEqual([...C.doneSet(recs, '영희', '필사')].sort(), ['2027-01-01', '2027-01-03']);
+});

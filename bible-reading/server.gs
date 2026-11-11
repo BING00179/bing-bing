@@ -53,11 +53,16 @@ function sheet_(name, header) {
 function members_() { return sheet_('회원', ['이름', '등록 시각']); }
 function records_() { return sheet_('기록', ['시각', '이름', '날짜', '동작']); }
 function termsSheet_() { return sheet_('회차', ['회차', '시작일', '만든 시각']); }
-function joins_() { return sheet_('참여', ['시각', '이름', '회차']); }
+function joins_() {
+  var sh = sheet_('참여', ['시각', '이름', '회차', '팀', '동작']);
+  // 팀을 넣기 전에 만든 시트에는 넷째·다섯째 칸 제목이 없음 (빈 칸 = 읽기·참여)
+  if (sh.getRange(1, 4, 1, 1).getDisplayValues()[0][0] !== '팀') sh.getRange(1, 4, 1, 2).setValues([['팀', '동작']]);
+  return sh;
+}
 
 // ── 회차 ── 시트 '회차' 가 비어 있으면 1기(2027-01-01)만
 function terms_() { return Core.termsFrom(rows_(termsSheet_(), 2)); }
-function joinRows_() { return rows_(joins_(), 3).map(function (r) { return [r[1], r[2]]; }); }
+function joinRows_() { return rows_(joins_(), 5).map(function (r) { return [r[1], r[2], r[3], r[4]]; }); }
 // 그 날짜가 들어 있는 회차의 읽기표 (없으면 null)
 function planOf_(date) {
   var hit = null;
@@ -120,25 +125,31 @@ function register(name) {
 }
 
 // 회차 참여 (2기부터. 1기는 등록한 사람 전부). 이미 참여했으면 그대로.
-function joinTerm_(name, term) {
-  if (!term || term.n === 1) return;
-  var done = joinRows_().some(function (j) { return j[0] === name && +j[1] === term.n; });
-  if (!done) append_(joins_(), [now_(), name, String(term.n)]);
+// 그 회차의 읽기·필사 팀에 들어가거나(on) 나감. 이미 그 상태면 아무것도 안 씀.
+function joinTerm_(name, term, team, on) {
+  if (!term) return;
+  team = team || '읽기'; on = on !== false;
+  var now = Core.participants(term, [name], joinRows_(), team).length > 0;
+  if (now !== on) append_(joins_(), [now_(), name, String(term.n), team, on ? '참여' : '나감']);
 }
-function join(name) {
+function join(name, team, on) {
+  team = team || '읽기';
+  if (Core.TEAMS.indexOf(team) < 0) throw new Error('모르는 팀입니다.');
   locked_(function () {
     if (memberNames_().indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
-    joinTerm_(name, openTerm_());
+    joinTerm_(name, openTerm_(), team, on);
   });
   return getState();
 }
 
-function mark(name, date, done) {
+function mark(name, date, done, kind) {
+  if (kind && kind !== '필사' && kind !== '읽기') throw new Error('모르는 기록입니다.');
+  var pre = kind === '필사' ? '필사' : '';
   if (!planOf_(date)) throw new Error('읽기표에 없는 날짜입니다.');
   if (date > today_()) throw new Error('아직 오지 않은 날은 체크할 수 없어요.');
   locked_(function () {
     if (memberNames_().indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
-    append_(records_(), [now_(), name, date, done ? '완료' : '취소']);
+    append_(records_(), [now_(), name, date, pre + (done ? '완료' : '취소')]);
   });
   return getState();
 }
@@ -194,7 +205,9 @@ function sendMorning() {
   if (!tn.cur || !Core.makePlan(tn.cur.start).portionFor(today)) return 0; // 시작 전·끝난 뒤·회차 사이 쉬는 날
   // 지금 회차 참여자에게만
   var who = {};
-  Core.participants(tn.cur, memberNames_(), joinRows_()).forEach(function (m) { who[m] = true; });
+  Core.TEAMS.forEach(function (team) {
+    Core.participants(tn.cur, memberNames_(), joinRows_(), team).forEach(function (m) { who[m] = true; });
+  });
   // 트리거는 정시 앞뒤 15분쯤에 돌므로 가장 가까운 정시로 봄 (6:50 → 7시)
   var hm = Utilities.formatDate(new Date(), TZ, 'HH:mm').split(':');
   var hourNow = Math.round((+hm[0] * 60 + +hm[1]) / 60) % 24;

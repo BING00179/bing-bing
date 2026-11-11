@@ -64,14 +64,17 @@ var Core = (function () {
     function portionFor(d) { return PLAN[d] || null; }
 
     // records: [[이름, 날짜, '완료'|'취소'], ...] 기록 순서대로. 마지막 줄이 그날 상태.
-    function doneSet(records, name) {
+    // kind: '읽기'(기본) 또는 '필사'. 기록 동작: 읽기 = 완료/취소, 필사 = 필사완료/필사취소
+    function doneSet(records, name, kind) {
+      var pre = kind === '필사' ? '필사' : '';
       var last = {};
       records.forEach(function (r) {
-        if (r[0] === name) last[r[1]] = r[2];
+        if (r[0] !== name) return;
+        if (r[2] === pre + '완료' || r[2] === pre + '취소') last[r[1]] = r[2];
       });
       var s = new Set();
       Object.keys(last).forEach(function (d) {
-        if (last[d] === '완료' && PLAN[d]) s.add(d);
+        if (last[d] === pre + '완료' && PLAN[d]) s.add(d);
       });
       return s;
     }
@@ -147,13 +150,20 @@ var Core = (function () {
     terms.forEach(function (t) { if (t.start <= today) cur = t; else if (!next) next = t; });
     return { cur: cur || next, next: cur ? next : null };
   }
-  // 그 회차 참여자: 1기는 등록한 사람 전부, 2기부터는 '참여' 를 누른 사람 (등록 순서)
-  function participants(term, members, joins) {
-    if (term.n === 1) return members.slice();
-    var set = {};
-    (joins || []).forEach(function (j) { if (+j[1] === term.n) set[j[0]] = true; });
-    return members.filter(function (m) { return set[m]; });
+  // 그 회차·그 팀 참여자 (등록 순서). joins: [[이름, 회차, 팀, 동작], …] 기록 순서대로, 마지막 줄이 지금 상태.
+  //   팀이 비면 '읽기', 동작이 비면 '참여' (예전 줄 호환).
+  //   1기 읽기 팀만 예외: 등록한 사람 전부가 기본, '나감' 을 누른 사람만 빠짐.
+  function participants(term, members, joins, team) {
+    team = team || '읽기';
+    var last = {};
+    (joins || []).forEach(function (j) {
+      if (+j[1] !== term.n || (j[2] || '읽기') !== team) return;
+      last[j[0]] = j[3] || '참여';
+    });
+    var byDefault = term.n === 1 && team === '읽기';
+    return members.filter(function (m) { return last[m] ? last[m] === '참여' : byDefault; });
   }
+  var TEAMS = ['읽기', '필사'];
 
   function chapterIndex(book, ch) {
     for (var i = 0; i < TOTAL; i++) {
@@ -235,7 +245,7 @@ var Core = (function () {
     icsFor: first.icsFor, icsEscape: icsEscape, ALARM_HOURS: ALARM_HOURS, DEFAULT_ALARM_HOUR: DEFAULT_ALARM_HOUR,
     alarmHour: alarmHour, hourLabel: hourLabel,
     APP_BASE: APP_BASE, BOOKS: BOOKS, TOTAL: TOTAL, FIRST_START: FIRST_START,
-    makePlan: planFor, termsFrom: termsFrom, termsNow: termsNow, participants: participants,
+    makePlan: planFor, termsFrom: termsFrom, termsNow: termsNow, participants: participants, TEAMS: TEAMS,
     // 1기 읽기표 (예전 이름 그대로 — 시험·호환용)
     START: first.START, END: first.END, DAY_COUNT: first.DAY_COUNT, portionFor: first.portionFor,
     doneSet: first.doneSet, progress: first.progress, missedDays: first.missedDays, lastReadLabel: first.lastReadLabel,
