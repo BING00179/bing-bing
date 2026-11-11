@@ -202,6 +202,10 @@ var Core = (function () {
 // (test/webpush.test.js). 알림 내용은 보내지 않으므로(빈 푸시) 암호화는 필요 없고,
 // 휴대폰의 sw.js 가 그날 분량을 스스로 계산해 보여줍니다.
 var WebPush = (function () {
+  // 큰 정수(BigInt). 앱스 스크립트 편집기는 0n 같은 표기를 저장할 때 못 읽으므로
+  // (2026-11-11 'Unexpected token ILLEGAL') 전부 BigInt() 호출로 만듭니다.
+  var I0 = BigInt(0), I1 = BigInt(1), I2 = BigInt(2), I3 = BigInt(3), I4 = BigInt(4), I8 = BigInt(8), IFF = BigInt(255);
+
   // ── SHA-256 ──
   var K = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -280,29 +284,29 @@ var WebPush = (function () {
     }
     return out;
   }
-  function toInt(bytes) { var n = 0n; bytes.forEach(function (b) { n = (n << 8n) | BigInt(b); }); return n; }
-  function toBytes(n, len) { var out = new Array(len); for (var i = len - 1; i >= 0; i--) { out[i] = Number(n & 0xffn); n >>= 8n; } return out; }
+  function toInt(bytes) { var n = I0; bytes.forEach(function (b) { n = (n << I8) | BigInt(b); }); return n; }
+  function toBytes(n, len) { var out = new Array(len); for (var i = len - 1; i >= 0; i--) { out[i] = Number(n & IFF); n >>= I8; } return out; }
 
   // ── P-256 ──
-  var P = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn;
-  var N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
-  var G = [0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296n,
-           0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5n];
-  function mod(a, m) { var r = a % m; return r < 0n ? r + m : r; }
+  var P = BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff');
+  var N = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');
+  var G = [BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),
+           BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')];
+  function mod(a, m) { var r = a % m; return r < I0 ? r + m : r; }
   function inv(a, m) {
-    var t = 0n, nt = 1n, r = m, nr = mod(a, m);
-    while (nr !== 0n) { var q = r / nr; var x = t - q * nt; t = nt; nt = x; x = r - q * nr; r = nr; nr = x; }
+    var t = I0, nt = I1, r = m, nr = mod(a, m);
+    while (nr !== I0) { var q = r / nr; var x = t - q * nt; t = nt; nt = x; x = r - q * nr; r = nr; nr = x; }
     return mod(t, m);
   }
   // 야코비안 좌표 (역수 계산을 마지막 한 번으로)
   function dbl(p) {
     if (!p) return null;
     var X = p[0], Y = p[1], Z = p[2];
-    if (Y === 0n) return null;
-    var YY = mod(Y * Y, P), S = mod(4n * X * YY, P), ZZ = mod(Z * Z, P);
-    var M = mod(3n * (X - ZZ) * (X + ZZ), P); // a = -3
-    var X3 = mod(M * M - 2n * S, P);
-    return [X3, mod(M * (S - X3) - 8n * YY * YY, P), mod(2n * Y * Z, P)];
+    if (Y === I0) return null;
+    var YY = mod(Y * Y, P), S = mod(I4 * X * YY, P), ZZ = mod(Z * Z, P);
+    var M = mod(I3 * (X - ZZ) * (X + ZZ), P); // a = -3
+    var X3 = mod(M * M - I2 * S, P);
+    return [X3, mod(M * (S - X3) - I8 * YY * YY, P), mod(I2 * Y * Z, P)];
   }
   function add(p, q) {
     if (!p) return q; if (!q) return p;
@@ -311,19 +315,19 @@ var WebPush = (function () {
     var S1 = mod(p[1] * q[2] * Z2Z2, P), S2 = mod(q[1] * p[2] * Z1Z1, P);
     if (U1 === U2) return S1 === S2 ? dbl(p) : null;
     var H = mod(U2 - U1, P), R = mod(S2 - S1, P), HH = mod(H * H, P), HHH = mod(H * HH, P), V = mod(U1 * HH, P);
-    var X3 = mod(R * R - HHH - 2n * V, P);
+    var X3 = mod(R * R - HHH - I2 * V, P);
     return [X3, mod(R * (V - X3) - S1 * HHH, P), mod(p[2] * q[2] * H, P)];
   }
   function mul(k) {
-    var R = null, Q = [G[0], G[1], 1n];
-    while (k > 0n) { if (k & 1n) R = add(R, Q); Q = dbl(Q); k >>= 1n; }
+    var R = null, Q = [G[0], G[1], I1];
+    while (k > I0) { if (k & I1) R = add(R, Q); Q = dbl(Q); k >>= I1; }
     var zi = inv(R[2], P), zi2 = mod(zi * zi, P);
     return [mod(R[0] * zi2, P), mod(R[1] * zi2 * zi, P)];
   }
 
   function keysFromPrivate(privB64) {
     var d = toInt(unb64u(privB64));
-    if (d <= 0n || d >= N) throw new Error('개인키 범위 밖');
+    if (d <= I0 || d >= N) throw new Error('개인키 범위 밖');
     var Q = mul(d);
     return { privateKey: b64u(toBytes(d, 32)), publicKey: b64u([4].concat(toBytes(Q[0], 32), toBytes(Q[1], 32))) };
   }
@@ -332,7 +336,7 @@ var WebPush = (function () {
     for (;;) {
       var seed = sha256(utf8(random() + random() + random() + random()));
       var d = toInt(seed);
-      if (d > 0n && d < N) return keysFromPrivate(b64u(seed));
+      if (d > I0 && d < N) return keysFromPrivate(b64u(seed));
     }
   }
 
@@ -346,11 +350,11 @@ var WebPush = (function () {
     for (;;) {
       V = hmac(Kk, V);
       var k = toInt(V);
-      if (k > 0n && k < N) {
+      if (k > I0 && k < N) {
         var r = mod(mul(k)[0], N);
-        if (r !== 0n) {
+        if (r !== I0) {
           var s = mod(inv(k, N) * (e + r * d), N);
-          if (s !== 0n) return toBytes(r, 32).concat(toBytes(s, 32));
+          if (s !== I0) return toBytes(r, 32).concat(toBytes(s, 32));
         }
       }
       Kk = hmac(Kk, V.concat([0])); V = hmac(Kk, V);

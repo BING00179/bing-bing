@@ -44,3 +44,9 @@ test('저장소의 결과물이 최신이다 (node bible-reading/build.js 를 �
     assert.ok(fs.readFileSync(path.join(site, f)).equals(buf), 'bible/' + f + ' 이 옛것');
   }
 });
+
+test('앱스 스크립트가 못 읽는 BigInt 표기(0n)가 Code.gs 에 없다', () => {
+  // 2026-11-11 실제 편집기에서 'Unexpected token ILLEGAL 라인 283' 으로 저장이 막혔던 것
+  const code = out.code.replace(/\/\/[^\n]*/g, '').replace(/'(?:\\.|[^'\\\n])*'/g, "''");
+  assert.ok(!/\b(0x[0-9a-fA-F]+|\d+)n\b/.test(code), code.match(/\b(0x[0-9a-fA-F]+|\d+)n\b/));
+});
