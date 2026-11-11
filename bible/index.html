@@ -94,6 +94,10 @@
   .seg button { font: inherit; font-size: 13px; border: 0; background: none; color: var(--muted); padding: 4px 9px; border-radius: 999px; cursor: pointer; }
   .seg button.sel { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
   .reader .text p.speaking, .reader h2.speaking { background: var(--done-bg); border-radius: 8px; box-shadow: 0 0 0 4px var(--done-bg); }
+  .copybtn { width: 100%; font: inherit; font-size: 18px; font-weight: 700; padding: 12px; border-radius: 14px; margin-top: 8px;
+    background: var(--card); color: var(--accent); border: 2px solid var(--accent); cursor: pointer; }
+  .copybtn.done { background: var(--done-bg); color: var(--done); border-color: var(--done); }
+  .dayrow .open.copied { background: var(--done-bg); border-color: var(--done); }
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   .dayrow .day { margin-bottom: 0; }
   .dayrow .open { font: inherit; font-size: 20px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
@@ -174,9 +178,19 @@
       '<button class="big" data-act="join">' + t.n + '기 참여</button></div>';
   }
 
+  // ── 필사 ── 분량·밀린 날 없이 '필사 완료' 누른 날 수만 셈. 안 하는 사람은 설정에서 버튼을 숨김.
+  function copyOn() { try { return localStorage.getItem('bible.copy') !== 'off'; } catch (e) { return true; } }
+  function copyBtn(d, cls) {
+    if (!copyOn()) return '';
+    var did = P.doneSet(state.records, me, '필사').has(d);
+    return '<button class="copybtn' + (did ? ' done' : '') + (cls ? ' ' + cls : '') + '" data-act="copy" data-date="' + d + '" data-done="' + (did ? 0 : 1) + '">' +
+      (did ? '✍️ 필사 완료됨' : '✍️ 필사 완료') + '</button>';
+  }
+
   function mine(name) {
     var done = P.doneSet(state.records, name);
-    return { done: done, prog: P.progress(done), missed: P.missedDays(done, state.today) };
+    var copied = P.doneSet(state.records, name, '필사');
+    return { done: done, prog: P.progress(done), missed: P.missedDays(done, state.today), copied: copied };
   }
   function progressHtml(p) {
     return '<div class="bar"><i style="width:' + p.percent + '%"></i></div>' +
@@ -313,7 +327,7 @@
         '<div class="portion"><button class="portionlink" data-act="read" data-date="' + t + '">' + Core.portionLabel(p) + '</button></div>' +
         '<button class="readbtn" data-act="read" data-date="' + t + '">📖 말씀 읽기</button>' +
         '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + t + '" data-done="' + (done ? 0 : 1) + '">' +
-        (done ? '읽었어요 ✅' : '읽기 완료') + '</button>' +
+        (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' + copyBtn(t) +
         (done ? '<div class="hint">잘못 눌렀으면 한 번 더 누르면 취소돼요</div>' : '') + '</div>';
     }
     var ac = alarmChoice();
@@ -321,6 +335,7 @@
       (ac === 'push' ? '🔔 매일 ' + Core.hourLabel(myHour()) + ' 알림' : ac === 'cal' ? '📅 달력 알림 · 매일 ' + Core.hourLabel(myHour()) : '🔕 알림 꺼짐') +
       ' · <button class="linkbtn" data-tab="set">설정</button></div>';
     h += '<div class="card"><div style="font-weight:700">내 진도</div>' + progressHtml(m.prog) +
+      (m.copied.size ? '<div class="small" style="margin-top:4px">✍️ 필사 ' + m.copied.size + '회</div>' : '') +
       (m.missed > 0 ? '<button class="missbtn" data-tab="past">밀린 날 ' + m.missed + '일 ›</button>' : '') + '</div>';
     return h;
   }
@@ -520,7 +535,7 @@
     h += '</div><div class="src">성경전서 개역한글판 (대한성서공회) · 개역개정은 대한성서공회 웹사이트에서 열려요</div>';
     if (d <= state.today) {
       h += '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + d + '" data-done="' + (done ? 0 : 1) + '">' +
-        (done ? '읽었어요 ✅' : '읽기 완료') + '</button>';
+        (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' + copyBtn(d);
     }
     h += '<div class="hint" style="margin-top:14px"><button class="linkbtn" data-act="close-read">‹ 돌아가기</button></div></div>';
     return h;
@@ -553,6 +568,9 @@
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="2">가+</button></div>' +
       '<div class="fontsample" style="font-size:' + fontSize() + 'px;line-height:1.8">태초에 하나님이 천지를 창조하시니라</div>');
     // 이름
+    h += sect('✍️ 필사', '<button class="switch' + (copyOn() ? ' on' : '') + '" data-act="copy-toggle" role="switch" aria-checked="' + copyOn() + '">' +
+      '<span class="knob"></span><span>' + (copyOn() ? '필사 버튼 보임' : '필사 버튼 숨김') + '</span></button>' +
+      '<div class="small" style="margin-top:6px">필사를 안 하시면 꺼 두세요. 필사는 횟수만 세요.</div>');
     h += sect('👤 내 이름', '<div style="margin-bottom:8px">' + esc(me) + '</div><button class="linkbtn" data-act="switch">다른 이름으로 바꾸기</button>');
     // 정보
     h += sect('ℹ️ 정보', '<div class="small">' + TN.cur.n + '기 읽기표: ' + P.START + ' 창세기 ~ ' + P.END + ' 요한계시록, 평일·토요일·공휴일 3장, 주일 5장<br>' +
@@ -569,9 +587,9 @@
       '<div class="small" style="margin-bottom:6px">' + TN.cur.n + '기 · ' + list.length + '명</div>' +
       list.map(function (n) {
         var m = mine(n), last = P.lastReadLabel(m.done);
-        return '<div class="row"><div class="top"><span class="name">' + esc(n) + (m.done.has(t) ? ' ✅' : '') + '</span>' +
+        return '<div class="row"><div class="top"><span class="name">' + esc(n) + (m.done.has(t) ? ' ✅' : '') + (m.copied.has(t) ? ' ✍️' : '') + '</span>' +
           (m.missed > 0 ? '<span class="miss">밀린 ' + m.missed + '일</span>' : '') + '</div>' +
-          '<div class="small">' + (last ? esc(last) : '읽은 곳 없음') + '</div>' + progressHtml(m.prog) + '</div>';
+          '<div class="small">' + (last ? esc(last) : '읽은 곳 없음') + (m.copied.size ? ' · ✍️ 필사 ' + m.copied.size + '회' : '') + '</div>' + progressHtml(m.prog) + '</div>';
       }).join('') + '</div>';
   }
 
@@ -585,6 +603,7 @@
       h += '<div class="dayrow"><button class="day' + (done ? ' done' : missed ? ' missed' : '') + '" data-act="mark" data-date="' + d + '" data-done="' + (done ? 0 : 1) + '">' +
         '<span class="d">' + dateLabel(d) + '</span><span class="p">' + Core.portionLabel(P.portionFor(d)) + '</span>' +
         '<span class="s">' + (done ? '✅ 읽음' : missed ? '안 읽음' : '오늘') + '</span></button>' +
+        (copyOn() ? '<button class="open' + (m.copied.has(d) ? ' copied' : '') + '" data-act="copy" data-date="' + d + '" data-done="' + (m.copied.has(d) ? 0 : 1) + '" aria-label="' + dateLabel(d) + ' 필사">✍️</button>' : '') +
         '<button class="open" data-act="read" data-date="' + d + '" aria-label="' + dateLabel(d) + ' 말씀 읽기">📖</button></div>';
     }
     return h;
@@ -667,6 +686,15 @@
       var n = Core.validName(document.getElementById('newname').value);
       if (!n) { toast('이름을 1~20자로 적어 주세요.'); return; }
       run(call('register', n), function (s) { me = s.name; save(me); tab = 'today'; });
+    }
+    else if (act === 'copy') {
+      run(call('mark', me, b.dataset.date, b.dataset.done === '1', '필사'), function () {
+        if (b.dataset.done === '1') toast('✍️ 필사 완료 · ' + dateLabel(b.dataset.date));
+      });
+    }
+    else if (act === 'copy-toggle') {
+      try { localStorage.setItem('bible.copy', copyOn() ? 'off' : 'on'); } catch (e7) {}
+      render();
     }
     else if (act === 'mark') {
       run(call('mark', me, b.dataset.date, b.dataset.done === '1'), function () {

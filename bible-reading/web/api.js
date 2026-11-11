@@ -52,12 +52,13 @@ var Api = (function () {
         var st = state(d); st.name = n; return st;
       },
       join: function (name) { var d = db(); joinTerm(d, name); put(d); return state(d); },
-      mark: function (name, date, done) {
+      mark: function (name, date, done, kind) {
+        var pre = kind === '필사' ? '필사' : '';
         if (!terms().some(function (t) { return Core.makePlan(t.start).portionFor(date); })) throw new Error('읽기표에 없는 날짜입니다.');
         if (date > today()) throw new Error('아직 오지 않은 날은 체크할 수 없어요.');
         var d = db();
         if (d.members.indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
-        d.records.push([name, date, done ? '완료' : '취소']); put(d); return state(d);
+        d.records.push([name, date, pre + (done ? '완료' : '취소')]); put(d); return state(d);
       }
     };
     function later(f) { return new Promise(function (ok) { setTimeout(ok, 150); }).then(f); }
