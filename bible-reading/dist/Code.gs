@@ -502,7 +502,8 @@ function termsSheet_() { return sheet_('회차', ['회차', '시작일', '만든
 function joins_() {
   var sh = sheet_('참여', ['시각', '이름', '회차', '팀', '동작']);
   // 팀을 넣기 전에 만든 시트에는 넷째·다섯째 칸 제목이 없음 (빈 칸 = 읽기·참여)
-  if (sh.getRange(1, 4, 1, 1).getDisplayValues()[0][0] !== '팀') sh.getRange(1, 4, 1, 2).setValues([['팀', '동작']]);
+  // 비어 있을 때만 채움 (회장님이 제목 글자를 고쳐도 되돌리지 않음)
+  if (sh.getRange(1, 4, 1, 1).getDisplayValues()[0][0] === '') sh.getRange(1, 4, 1, 2).setValues([['팀', '동작']]);
   return sh;
 }
 
@@ -518,9 +519,9 @@ function planOf_(date) {
 // 새로 등록·참여할 회차: 시작 전인 다음 회차가 있으면 그것, 없으면 지금 회차
 function openTerm_() { var tn = Core.termsNow(terms_(), today_()); return tn.next || tn.cur; }
 function pushes_() {
-  var sh = sheet_('알림', ['시각', '이름', '알림 주소', '동작', '알림 시각']);
+  var sh = sheet_('알림', ['시각', '이름', '알림 주소', '동작', '알림 시간']);
   // 시각 고르기 전에 만든 시트에는 다섯째 칸 제목이 없음
-  if (sh.getRange(1, 5, 1, 1).getDisplayValues()[0][0] !== '알림 시각') sh.getRange(1, 5, 1, 1).setValues([['알림 시각']]);
+  if (sh.getRange(1, 5, 1, 1).getDisplayValues()[0][0] === '') sh.getRange(1, 5, 1, 1).setValues([['알림 시간']]);
   return sh;
 }
 function now_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
@@ -603,7 +604,7 @@ function mark(name, date, done, kind) {
 function subscribe(name, endpoint, hour) {
   if (!WebPush.allowedEndpoint(endpoint)) throw new Error('이 휴대폰의 알림 주소를 받을 수 없어요.');
   var h = hour === undefined || hour === null || hour === '' ? Core.DEFAULT_ALARM_HOUR : Core.alarmHour(hour);
-  if (h === null) throw new Error('알림 시각은 5시~22시 정시로 골라 주세요.');
+  if (h === null) throw new Error('알림 시간은 5시~22시 정시로 골라 주세요.');
   locked_(function () {
     if (memberNames_().indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
     append_(pushes_(), [now_(), name, endpoint, '등록', String(h)]);

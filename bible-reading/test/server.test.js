@@ -211,7 +211,7 @@ test('알림 시각 바꾸기: 다시 등록하면 새 시각, 잘못된 시각�
   assert.ok(!e.post('subscribe', '영희', EP2, 'x').ok);
   e.g.sendMorning();
   assert.deepEqual(e.fetched.map((r) => r.url), [EP1]);
-  assert.equal(e.sheets['알림'].rows[0][4], '알림 시각');
+  assert.equal(e.sheets['알림'].rows[0][4], '알림 시간');
   assert.equal(e.sheets['알림'].rows[2][4], '21');
 });
 
@@ -366,4 +366,13 @@ test('예전 3칸짜리 참여 시트에 팀·동작 제목을 붙임', () => {
   const st = e.get().data;
   assert.deepEqual([...e.sheets['참여'].rows[0]], ['시각', '이름', '회차', '팀', '동작']);
   assert.deepEqual([...e.g.Core.participants(st.terms[1], st.members, st.joins)], ['영희'], '예전 줄 = 읽기 참여');
+});
+
+test('시트 칸 제목을 회장님이 고쳐도 서버가 되돌리지 않음 (비어 있을 때만 채움)', () => {
+  const e = makeEnv('2027-01-05');
+  e.post('register', '영희');
+  e.post('subscribe', '영희', EP1, 6);
+  e.sheets['알림'].rows[0][4] = '받는 시간';
+  e.post('subscribe', '영희', EP1, 7);
+  assert.equal(e.sheets['알림'].rows[0][4], '받는 시간');
 });
