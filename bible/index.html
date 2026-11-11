@@ -192,7 +192,9 @@
     } else {
       h += stepHead(2, '🔔 매일 알림') + hourPicker();
       var push = Push.status();
-      if (state.vapidKey && push === 'ok') {
+      if (state.vapidKey && push === 'ok' && Push.permission() === 'denied') {
+        h += deniedHtml();
+      } else if (state.vapidKey && push === 'ok') {
         h += '<div class="small" style="margin-bottom:12px">고른 시각에 "📖 오늘 읽을 곳" 알림이 와요. 누르면 바로 이 앱이 열려요.</div>' +
           '<button class="big" data-act="setup-push">알림 켜기</button>' +
           '<div class="small" style="margin-top:8px">휴대폰이 "알림 허용?" 을 물으면 <b>허용</b> 을 눌러 주세요.</div>';
@@ -260,6 +262,27 @@
       ' target="_blank" rel="noopener" href="' + esc(Api.calendarUrl(myHour())) + '" data-act="cal-get">' + label + '</a>';
   }
 
+  // 알림이 막혀 있을 때 — 웹 앱은 설정 화면을 직접 열 수 없어서, 그 브라우저에 맞는 순서를 보여 주고
+  // 설정하고 돌아오면(화면이 다시 보이면) 저절로 다시 확인해 알림을 켬.
+  var pushWanted = false;
+  function deniedHtml() {
+    pushWanted = true;
+    var ua = navigator.userAgent, steps;
+    if (Install.standalone() && !Install.isIOS()) {
+      steps = ['홈 화면의 <b>성경통독</b> 아이콘을 <b>길게</b> 누르세요', '<b>앱 정보</b> (ⓘ) 를 누르세요', '<b>알림</b> → <b>켜기</b>'];
+    } else if (/SamsungBrowser/.test(ua)) {
+      steps = ['화면 아래 <b>≡</b> 메뉴 → <b>설정</b>', '<b>사이트 및 다운로드</b> → <b>알림</b>', '목록에서 <b>bing00179.github.io</b> 를 찾아 <b>허용</b>'];
+    } else {
+      steps = ['주소창 왼쪽 <b>아이콘</b> (자물쇠 또는 ⚙) 을 누르세요', '<b>권한</b> → <b>알림</b>', '<b>허용</b> 으로 바꾸세요'];
+    }
+    return '<div class="small miss" style="margin-bottom:8px">🔕 이 휴대폰에서 알림이 막혀 있어요</div>' +
+      '<div class="small">웹 앱은 설정 화면을 직접 열 수 없어서, 아래 순서로 한 번만 풀어 주세요.</div>' +
+      '<ol class="steps">' + steps.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ol>' +
+      '<div class="small" style="margin:-6px 0 12px">그래도 안 오면: 휴대폰 <b>설정 → 애플리케이션 → ' +
+      (/SamsungBrowser/.test(ua) ? '삼성 인터넷' : 'Chrome') + ' → 알림</b> 도 켜져 있는지 봐 주세요. (메뉴 이름은 휴대폰마다 조금 달라요)</div>' +
+      '<button class="big" data-act="setup-push">설정했어요 · 다시 확인</button>';
+  }
+
   function alarmHtml() {
     var c = alarmChoice();
     if (c) {
@@ -269,6 +292,7 @@
     }
     var push = Push.status(), pushPart;
     if (!state.vapidKey) pushPart = '<div class="small">🔔 앱 알림은 회장님이 준비 중이에요.</div>';
+    else if (push === 'ok' && Push.permission() === 'denied') pushPart = deniedHtml().replace('data-act="setup-push"', 'data-act="push-on"');
     else if (push === 'ok') pushPart = '<button class="big" data-act="push-on">🔔 앱 알림 받기</button>';
     else if (push === 'ios-home') pushPart = '<div class="small"><b>🔔 앱 알림 (아이폰)</b><br>' +
       '아래 가운데 <b>공유 버튼(□↑)</b> → <b>홈 화면에 추가</b> → 홈 화면의 <b>성경통독</b> 아이콘으로 열고 여기를 다시 눌러 주세요.</div>';
@@ -462,6 +486,13 @@
   // 앱으로 돌아올 때마다(닫았다 열기·다른 앱에서 복귀) 최신 기록으로 새로고침
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'visible' || !state || busy || !Api.ready) return;
+    if (pushWanted && me && Push.permission() === 'granted' && alarmChoice() !== 'push') {
+      // 설정에서 허용하고 돌아옴 → 바로 알림 켜기
+      pushWanted = false;
+      run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u, myHour()); }),
+        function () { setAlarm('push'); try { localStorage.setItem('bible.setup', 'done'); } catch (e3) {} tab = 'today'; toast('알림을 켰어요. 매일 ' + Core.hourLabel(myHour()) + '에 만나요 🔔'); });
+      return;
+    }
     Api.state().then(function (s) { state = s; if (!busy) render(); }).catch(function () {});
   });
   start();

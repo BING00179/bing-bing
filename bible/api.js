@@ -94,7 +94,11 @@ var Push = (function () {
   }
   function on(vapidKey) {
     return Notification.requestPermission().then(function (p) {
-      if (p !== 'granted') throw new Error('알림이 허용되지 않았어요. 휴대폰 설정에서 이 앱의 알림을 켜 주세요.');
+      if (p !== 'granted') {
+        var err = new Error(p === 'denied' ? '알림이 막혀 있어요. 아래 순서대로 설정에서 허용해 주세요.' : '"허용" 을 눌러야 알림이 와요. 다시 눌러 주세요.');
+        err.code = p; // 'denied' (막힘 — 설정에서만 풀 수 있음) / 'default' (창을 그냥 닫음)
+        throw err;
+      }
       return reg();
     }).then(function (r) {
       return r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(vapidKey) });
@@ -110,7 +114,9 @@ var Push = (function () {
       return sub.unsubscribe().then(function () { return u; });
     });
   }
-  return { status: status, on: on, off: off };
+  // 지금 알림 권한: 'granted' | 'denied' | 'default' | '' (지원 안 함)
+  function permission() { return 'Notification' in window ? Notification.permission : ''; }
+  return { status: status, on: on, off: off, permission: permission };
 })();
 
 // ── 홈 화면 설치 ──
