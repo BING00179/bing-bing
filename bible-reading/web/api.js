@@ -147,7 +147,7 @@ var Install = (function () {
       });
     },
     onChange: function (f) { listeners.push(f); },
-    // 카톡 안 브라우저 → 바깥 브라우저 (카카오 비공식 주소, 안 되는 경우가 있어 안내 화면을 같이 보여 줌)
+    // 카톡 안 브라우저 → 외부 브라우저 (카카오 비공식 주소, 안 되는 경우가 있어 안내 화면을 같이 보여 줌)
     openExternal: function () { location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href); }
   };
 })();
