@@ -207,3 +207,15 @@ test('달력 파일: ?cal=1&h=21 이면 밤 9시', () => {
   const d = e.g.doGet({ parameter: { cal: '1', h: '99' } });
   assert.ok(d.text.includes('DTSTART:20261231T210000Z'), '이상한 값이면 6시');
 });
+
+test('testPush: 시작 전이라도, 시각과 상관없이 알림 켠 모든 휴대폰에 지금 보냄. 화면에서는 못 부름', () => {
+  const e = makeEnv('2026-11-11', '14:10');
+  e.g.setupPush();
+  e.post('register', '영희');
+  e.post('subscribe', '영희', EP1, 6);
+  e.post('subscribe', '영희', EP2, 21);
+  assert.equal(e.g.sendMorning(), 0, '정기 알림은 2027 전에는 안 감');
+  assert.equal(e.g.testPush(), 2);
+  assert.deepEqual(e.fetched.map((r) => r.url), [EP1, EP2]);
+  assert.equal(e.post('testPush').error, '모르는 요청입니다.');
+});

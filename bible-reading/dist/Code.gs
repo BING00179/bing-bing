@@ -563,14 +563,26 @@ function setupPush() {
 // 정시마다 트리거가 부릅니다(그 시각을 고른 휴대폰에만). 빈 알림을 보내면 휴대폰이 그날 분량을 계산해 띄웁니다.
 function sendMorning() {
   if (!Core.portionFor(today_())) return 0; // 시작 전·끝난 뒤
+  // 트리거는 정시 앞뒤 15분쯤에 돌므로 가장 가까운 정시로 봄 (6:50 → 7시)
+  var hm = Utilities.formatDate(new Date(), TZ, 'HH:mm').split(':');
+  var hourNow = Math.round((+hm[0] * 60 + +hm[1]) / 60) % 24;
+  return push_(subscriptions_().filter(function (x) { return x.hour === hourNow; }).map(function (x) { return x.url; }));
+}
+
+// 시험용 — 회장님이 편집기에서 ▶ testPush. 날짜·시각과 상관없이 알림을 켠 모든 휴대폰에 지금 한 번 보냄.
+// (화면에서는 부를 수 없음: doPost 목록에 없음)
+function testPush() {
+  var urls = activeEndpoints_();
+  Logger.log('알림 켠 휴대폰 ' + urls.length + '대에 시험 알림을 보냅니다.');
+  if (!urls.length) Logger.log('알림을 켠 휴대폰이 없습니다. 앱에서 [알림 켜기] 를 먼저 눌러 주세요.');
+  return push_(urls);
+}
+
+function push_(urls) {
   var props = PropertiesService.getScriptProperties();
   var priv = props.getProperty('VAPID_PRIVATE');
   if (!priv) throw new Error('setupPush 를 먼저 실행해 주세요.');
   var keys = { privateKey: priv, publicKey: props.getProperty('VAPID_PUBLIC') };
-  // 트리거는 정시 앞뒤 15분쯤에 돌므로 가장 가까운 정시로 봄 (6:50 → 7시)
-  var hm = Utilities.formatDate(new Date(), TZ, 'HH:mm').split(':');
-  var hourNow = Math.round((+hm[0] * 60 + +hm[1]) / 60) % 24;
-  var urls = subscriptions_().filter(function (x) { return x.hour === hourNow; }).map(function (x) { return x.url; });
   if (!urls.length) return 0;
   var nowSec = Math.floor(Date.now() / 1000);
   var reqs = urls.map(function (u) {
