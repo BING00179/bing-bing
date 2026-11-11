@@ -128,6 +128,8 @@ var Install = (function () {
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     deferred = e;
+    // 크롬이 '설치할 수 있다' 고 알림 = 아직 설치 안 됨. 예전에 눌린 '설치했어요' 기록은 지움.
+    try { localStorage.removeItem('bible.installed'); } catch (err) {}
     listeners.forEach(function (f) { f(); });
   });
   window.addEventListener('appinstalled', function () {

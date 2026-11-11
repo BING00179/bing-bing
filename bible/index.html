@@ -194,7 +194,7 @@
       h += '<ol class="steps"><li>오른쪽 위 <b>⋮</b> (또는 아래 <b>≡</b>) 메뉴를 누르세요</li>' +
         '<li><b>홈 화면에 추가</b> 또는 <b>앱 설치</b> 를 누르세요</li>' +
         '<li><b>설치</b> / <b>추가</b> 를 누르세요</li></ol>' +
-        '<button class="big" data-act="installed">설치했어요</button>';
+        '<button class="big" data-act="installed">설치 완료</button>';
     }
     return h;
   }
@@ -203,10 +203,11 @@
     var h = '<div class="card">';
     // 순서: 브라우저에서는 설치까지만 → 설치한 앱(홈 화면 아이콘)으로 열면 그 안에서 알림 켜기
     if (!Install.standalone() && !installSkipped() && Install.installed()) {
-      h += stepHead(1, '✅ 설치됐어요') +
+      h += stepHead(1, '✅ 설치 완료') +
         '<div style="font-size:20px;line-height:1.6;margin:8px 0 14px">이제 휴대폰 <b>홈 화면</b>에 생긴<br><b>📖 성경통독</b> 아이콘을 눌러 열어 주세요.</div>' +
         '<div class="small">그 앱 안에서 <b>2/2 알림 켜기</b> 가 이어져요. 이 브라우저 창은 닫으셔도 돼요.</div>' +
-        '<div class="hint" style="margin-top:14px"><button class="linkbtn" data-act="install-skip">아이콘이 안 보여요 · 이대로 쓰기</button></div>';
+        '<button class="readbtn" style="margin-top:14px" data-act="not-installed">아직 설치 안 됐어요</button>' +
+        '<div class="hint"><button class="linkbtn" data-act="install-skip">설치 없이 이대로 쓰기</button></div>';
     } else if (!Install.standalone() && !installSkipped()) {
       h += stepHead(1, '📲 홈 화면에 앱 설치');
       h += installBlock();
@@ -488,6 +489,7 @@
       Install.prompt().then(function (ok) { if (!ok) toast('설치를 취소했어요. 다시 누르거나 "설치는 나중에" 를 눌러 주세요.'); render(); });
       return;
     }
+    if (act === 'not-installed') { try { localStorage.removeItem('bible.installed'); } catch (e6) {} render(); return; }
     if (act === 'installed') { try { localStorage.setItem('bible.installed', '1'); } catch (e2) {} render(); return; }
     if (act === 'install-skip') { skipInstall(); render(); return; }
     if (act === 'setup-none') { setAlarm('none'); finishSetup(); return; }
