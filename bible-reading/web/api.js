@@ -26,7 +26,7 @@ var Api = (function () {
       return fetch(base, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ fn: fn, args: args }) }).then(unwrap);
     },
-    calendarUrl: function () { return base + '?cal=1'; }
+    calendarUrl: function (h) { return base + '?cal=1&h=' + (Core.alarmHour(h) || Core.DEFAULT_ALARM_HOUR); }
   };
 
   // ── 미리보기용 가짜 서버: server.gs 와 같은 규칙. ?today=2027-01-05 로 날짜 바꾸기 ──
@@ -52,13 +52,14 @@ var Api = (function () {
       }
     };
     function later(f) { return new Promise(function (ok) { setTimeout(ok, 150); }).then(f); }
-    var blob = null;
+    var blobs = {};
     return {
       state: function () { return later(function () { return state(db()); }); },
       call: function (fn, args) { return later(function () { return fns[fn].apply(null, args); }); },
-      calendarUrl: function () {
-        if (!blob) blob = URL.createObjectURL(new Blob([Core.icsFor(Core.APP_BASE + '?s=preview')], { type: 'text/calendar' }));
-        return blob;
+      calendarUrl: function (h) {
+        var H = Core.alarmHour(h) || Core.DEFAULT_ALARM_HOUR;
+        if (!blobs[H]) blobs[H] = URL.createObjectURL(new Blob([Core.icsFor(Core.APP_BASE + '?s=preview', H)], { type: 'text/calendar' }));
+        return blobs[H];
       }
     };
   })();
@@ -70,7 +71,7 @@ var Api = (function () {
     sw: 'sw.js' + (s ? '?s=' + encodeURIComponent(s) : ''),
     state: function () { return impl.state(); },
     call: function (fn) { return impl.call(fn, Array.prototype.slice.call(arguments, 1)); },
-    calendarUrl: function () { return impl.calendarUrl(); }
+    calendarUrl: function (h) { return impl.calendarUrl(h); }
   };
 })();
 

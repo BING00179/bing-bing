@@ -15,7 +15,7 @@ function doGet(e) {
   var p = (e && e.parameter) || {};
   if (p.cal) {
     // 매일 아침 6시 알림이 들어 있는 달력 파일
-    return ContentService.createTextOutput(Core.icsFor(appLink_()))
+    return ContentService.createTextOutput(Core.icsFor(appLink_(), p.h))
       .setMimeType(ContentService.MimeType.ICAL)
       .downloadAsFile('bible-2027.ics');
   }
@@ -52,7 +52,12 @@ function sheet_(name, header) {
 }
 function members_() { return sheet_('회원', ['이름', '등록 시각']); }
 function records_() { return sheet_('기록', ['시각', '이름', '날짜', '동작']); }
-function pushes_() { return sheet_('알림', ['시각', '이름', '알림 주소', '동작']); }
+function pushes_() {
+  var sh = sheet_('알림', ['시각', '이름', '알림 주소', '동작', '알림 시각']);
+  // 시각 고르기 전에 만든 시트에는 다섯째 칸 제목이 없음
+  if (sh.getRange(1, 5, 1, 1).getDisplayValues()[0][0] !== '알림 시각') sh.getRange(1, 5, 1, 1).setValues([['알림 시각']]);
+  return sh;
+}
 function now_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
 function today_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'); }
 
@@ -108,11 +113,13 @@ function mark(name, date, done) {
   return getState();
 }
 
-function subscribe(name, endpoint) {
+function subscribe(name, endpoint, hour) {
   if (!WebPush.allowedEndpoint(endpoint)) throw new Error('이 휴대폰의 알림 주소를 받을 수 없어요.');
+  var h = hour === undefined || hour === null || hour === '' ? Core.DEFAULT_ALARM_HOUR : Core.alarmHour(hour);
+  if (h === null) throw new Error('알림 시각은 5시~22시 정시로 골라 주세요.');
   locked_(function () {
     if (memberNames_().indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
-    append_(pushes_(), [now_(), name, endpoint, '등록']);
+    append_(pushes_(), [now_(), name, endpoint, '등록', String(h)]);
   });
   return getState();
 }
@@ -123,12 +130,15 @@ function unsubscribe(endpoint) {
   return getState();
 }
 
-// 알림 주소별 마지막 동작이 '등록' 인 것
-function activeEndpoints_() {
+// 알림 주소별 마지막 줄이 '등록' 인 것 → [{url, hour}]
+function subscriptions_() {
   var last = {};
-  rows_(pushes_(), 4).forEach(function (r) { last[r[2]] = r[3]; });
-  return Object.keys(last).filter(function (u) { return last[u] === '등록'; });
+  rows_(pushes_(), 5).forEach(function (r) { last[r[2]] = r; });
+  return Object.keys(last).filter(function (u) { return last[u][3] === '등록'; }).map(function (u) {
+    return { url: u, hour: Core.alarmHour(last[u][4]) || Core.DEFAULT_ALARM_HOUR };
+  });
 }
+function activeEndpoints_() { return subscriptions_().map(function (x) { return x.url; }); }
 
 // ── 아침 알림 ───────────────────────────────────────
 // 회장님이 편집기에서 한 번 실행: ▶ setupPush
@@ -141,18 +151,24 @@ function setupPush() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'sendMorning') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('sendMorning').timeBased().atHour(6).nearMinute(0).everyDays(1).inTimezone(TZ).create();
-  Logger.log('알림 준비 끝. 매일 아침 6시 무렵 sendMorning 이 돕니다. 알림 받는 휴대폰: ' + activeEndpoints_().length + '대');
+  // 각자 고른 시각에 보내도록 5시~22시 정시마다 하나씩 (프로젝트당 20개 제한 안)
+  Core.ALARM_HOURS.forEach(function (h) {
+    ScriptApp.newTrigger('sendMorning').timeBased().atHour(h).nearMinute(0).everyDays(1).inTimezone(TZ).create();
+  });
+  Logger.log('알림 준비 끝. 5시~22시 정시마다 sendMorning 이 돌며 그 시각을 고른 휴대폰에 보냅니다. 알림 받는 휴대폰: ' + activeEndpoints_().length + '대');
 }
 
-// 매일 아침 트리거가 부릅니다. 빈 알림을 보내면 휴대폰이 그날 분량을 계산해 띄웁니다.
+// 정시마다 트리거가 부릅니다(그 시각을 고른 휴대폰에만). 빈 알림을 보내면 휴대폰이 그날 분량을 계산해 띄웁니다.
 function sendMorning() {
   if (!Core.portionFor(today_())) return 0; // 시작 전·끝난 뒤
   var props = PropertiesService.getScriptProperties();
   var priv = props.getProperty('VAPID_PRIVATE');
   if (!priv) throw new Error('setupPush 를 먼저 실행해 주세요.');
   var keys = { privateKey: priv, publicKey: props.getProperty('VAPID_PUBLIC') };
-  var urls = activeEndpoints_();
+  // 트리거는 정시 앞뒤 15분쯤에 돌므로 가장 가까운 정시로 봄 (6:50 → 7시)
+  var hm = Utilities.formatDate(new Date(), TZ, 'HH:mm').split(':');
+  var hourNow = Math.round((+hm[0] * 60 + +hm[1]) / 60) % 24;
+  var urls = subscriptions_().filter(function (x) { return x.hour === hourNow; }).map(function (x) { return x.url; });
   if (!urls.length) return 0;
   var nowSec = Math.floor(Date.now() / 1000);
   var reqs = urls.map(function (u) {

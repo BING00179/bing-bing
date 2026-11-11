@@ -57,3 +57,23 @@ test('한 줄은 75바이트 이하 (한글이 잘리지 않게 접음)', () => 
 test('쉼표·세미콜론·줄바꿈은 달력 규칙대로 이스케이프', () => {
   assert.equal(C.icsEscape('a,b;c\nd\\e'), 'a\\,b\\;c\\nd\\\\e');
 });
+
+test('알림 시각은 각자 고름 — 5시~22시 정시, 기본 6시', () => {
+  assert.deepEqual(C.ALARM_HOURS, [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+  assert.equal(C.DEFAULT_ALARM_HOUR, 6);
+  assert.equal(C.alarmHour('7'), 7);
+  assert.equal(C.alarmHour(4), null);
+  assert.equal(C.alarmHour(23), null);
+  assert.equal(C.alarmHour('7시'), null);
+  assert.equal(C.alarmHour(6.5), null);
+  assert.equal(C.hourLabel(5), '오전 5시');
+  assert.equal(C.hourLabel(12), '낮 12시');
+  assert.equal(C.hourLabel(21), '밤 9시');
+  assert.equal(C.hourLabel(18), '오후 6시');
+});
+
+test('달력 파일도 고른 시각으로 (밤 9시 = 12:00 UTC)', () => {
+  const e = C.icsFor(URL, 21).split('BEGIN:VEVENT')[1];
+  assert.ok(e.includes('DTSTART:20270101T120000Z'));
+  assert.equal(C.icsFor(URL), C.icsFor(URL, 6), '기본은 6시');
+});

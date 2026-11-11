@@ -86,6 +86,7 @@
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   .dayrow .day { margin-bottom: 0; }
   .dayrow .open { font: inherit; font-size: 20px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+  .hoursel { font: inherit; font-size: 18px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); margin-left: 6px; }
   ol.steps { margin: 6px 0 14px; padding-left: 22px; line-height: 1.7; }
   ol.steps li { margin-bottom: 6px; }
   .key { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: .9em; }
@@ -189,10 +190,10 @@
       }
       h += '<div class="hint"><button class="linkbtn" data-act="install-skip">설치는 나중에</button></div>';
     } else {
-      h += stepHead(2, '🔔 매일 아침 6시 알림');
+      h += stepHead(2, '🔔 매일 알림') + hourPicker();
       var push = Push.status();
       if (state.vapidKey && push === 'ok') {
-        h += '<div class="small" style="margin-bottom:12px">아침 6시에 "📖 오늘 읽을 곳" 알림이 와요. 누르면 바로 이 앱이 열려요.</div>' +
+        h += '<div class="small" style="margin-bottom:12px">고른 시각에 "📖 오늘 읽을 곳" 알림이 와요. 누르면 바로 이 앱이 열려요.</div>' +
           '<button class="big" data-act="setup-push">알림 켜기</button>' +
           '<div class="small" style="margin-top:8px">휴대폰이 "알림 허용?" 을 물으면 <b>허용</b> 을 눌러 주세요.</div>';
       } else if (push === 'ios-home') {
@@ -200,8 +201,7 @@
       } else {
         h += '<div class="small" style="margin-bottom:12px">이 휴대폰에서는 앱 알림이 안 돼요. 대신 달력 알림을 쓰실 수 있어요.</div>';
       }
-      h += '<a class="big" style="display:block;text-align:center;text-decoration:none;margin-top:10px;background:var(--card);color:var(--accent);border:2px solid var(--accent)"' +
-        ' target="_blank" rel="noopener" href="' + esc(Api.calendarUrl()) + '" data-act="cal-get">📅 달력 알림으로 받기</a>' +
+      h += calLink('📅 달력으로 받기') +
         '<div class="hint"><button class="linkbtn" data-act="setup-none">알림 없이 시작하기</button></div>';
     }
     return h + '</div>';
@@ -246,10 +246,24 @@
   // 아침 알림 — 📅 달력 / 🔔 앱 알림 / 필요 없음 중 고르기. 고른 것은 이 휴대폰에 기억.
   function alarmChoice() { try { return localStorage.getItem('bible.alarm') || ''; } catch (e) { return ''; } }
   function setAlarm(v) { try { v ? localStorage.setItem('bible.alarm', v) : localStorage.removeItem('bible.alarm'); } catch (e) {} }
+  // 알림 시각 — 각자 고름 (5시~22시 정시, 처음엔 6시). 이 휴대폰에 기억.
+  function myHour() { try { return Core.alarmHour(localStorage.getItem('bible.alarmHour')) || Core.DEFAULT_ALARM_HOUR; } catch (e) { return Core.DEFAULT_ALARM_HOUR; } }
+  function setHour(h) { try { localStorage.setItem('bible.alarmHour', String(h)); } catch (e) {} }
+  function hourPicker() {
+    return '<label class="small" style="display:block;margin-bottom:12px">몇 시에 받을까요? ' +
+      '<select id="alarmHour" class="hoursel">' + Core.ALARM_HOURS.map(function (h) {
+        return '<option value="' + h + '"' + (h === myHour() ? ' selected' : '') + '>' + Core.hourLabel(h) + '</option>';
+      }).join('') + '</select></label>';
+  }
+  function calLink(label) {
+    return '<a class="big" style="display:block;text-align:center;text-decoration:none;margin-top:10px;background:var(--card);color:var(--accent);border:2px solid var(--accent)"' +
+      ' target="_blank" rel="noopener" href="' + esc(Api.calendarUrl(myHour())) + '" data-act="cal-get">' + label + '</a>';
+  }
+
   function alarmHtml() {
     var c = alarmChoice();
     if (c) {
-      var what = c === 'cal' ? '📅 달력 알림' : c === 'push' ? '🔔 앱 알림 받는 중' : '알림 안 받음';
+      var what = c === 'cal' ? '📅 달력 알림 · 매일 ' + Core.hourLabel(myHour()) : c === 'push' ? '🔔 앱 알림 · 매일 ' + Core.hourLabel(myHour()) : '알림 안 받음';
       return '<div class="small" style="text-align:center;margin:-4px 0 12px">' + what +
         ' · <button class="linkbtn" data-act="alarm-change">바꾸기</button></div>';
     }
@@ -259,11 +273,9 @@
     else if (push === 'ios-home') pushPart = '<div class="small"><b>🔔 앱 알림 (아이폰)</b><br>' +
       '아래 가운데 <b>공유 버튼(□↑)</b> → <b>홈 화면에 추가</b> → 홈 화면의 <b>성경통독</b> 아이콘으로 열고 여기를 다시 눌러 주세요.</div>';
     else pushPart = '<div class="small">🔔 이 휴대폰(브라우저)에서는 앱 알림이 안 돼요. 달력 알림을 써 주세요.</div>';
-    return '<div class="card"><div style="font-weight:700">매일 아침 6시 알림, 고르세요</div>' +
-      '<div class="small" style="margin:4px 0 12px">원하는 분만 받으시면 돼요.</div>' +
-      pushPart +
-      '<a class="big" style="display:block;text-align:center;text-decoration:none;margin-top:10px;background:var(--card);color:var(--accent);border:2px solid var(--accent)"' +
-      ' target="_blank" rel="noopener" href="' + esc(Api.calendarUrl()) + '" data-act="cal-get">📅 내 달력에 넣기</a>' +
+    return '<div class="card"><div style="font-weight:700">매일 알림, 고르세요</div>' +
+      '<div class="small" style="margin:4px 0 12px">원하는 분만, 원하는 시각에 받으시면 돼요.</div>' +
+      hourPicker() + pushPart + calLink('📅 내 달력에 넣기') +
       '<div class="small" style="margin-top:6px">달력: 362일치 읽을 곳이 달력에 들어가요. 카톡 안에서 안 되면 ⋮ → 다른 브라우저로 열기.</div>' +
       '<div class="hint"><button class="linkbtn" data-act="alarm-none">알림 필요 없어요</button></div></div>';
   }
@@ -380,13 +392,13 @@
     if (act === 'install-skip') { skipInstall(); render(); return; }
     if (act === 'setup-none') { setAlarm('none'); finishSetup(); return; }
     if (act === 'setup-push') {
-      run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u); }),
-        function () { setAlarm('push'); try { localStorage.setItem('bible.setup', 'done'); } catch (e3) {} tab = 'today'; toast('알림을 켰어요. 아침 6시에 만나요 🔔'); });
+      run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u, myHour()); }),
+        function () { setAlarm('push'); try { localStorage.setItem('bible.setup', 'done'); } catch (e3) {} tab = 'today'; toast('알림을 켰어요. 매일 ' + Core.hourLabel(myHour()) + '에 만나요 🔔'); });
       return;
     }
     if (act === 'push-on') {
-      run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u); }),
-        function () { setAlarm('push'); toast('내일 아침 6시부터 알림이 와요 🔔'); });
+      run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u, myHour()); }),
+        function () { setAlarm('push'); toast('매일 ' + Core.hourLabel(myHour()) + '에 알림이 와요 🔔'); });
       return;
     }
     if (act === 'switch') { me = null; reading = null; save(null); render(); }
@@ -406,6 +418,11 @@
   document.addEventListener('click', function (e) {
     var a = e.target.closest('a[data-act=cal-get]');
     if (a) setTimeout(function () { setAlarm('cal'); if (!setupDone()) finishSetup(); else render(); }, 500);
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target.id !== 'alarmHour') return;
+    setHour(+e.target.value);
+    document.querySelectorAll('a[data-act=cal-get]').forEach(function (a) { a.href = Api.calendarUrl(myHour()); });
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target.id === 'newname') document.querySelector('[data-act=register]').click();

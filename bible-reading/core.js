@@ -137,9 +137,23 @@ var Core = (function () {
   }
 
   // ── 달력 알림 파일(.ics) ─────────────────────────────────────
-  // 날마다 한국 시각 06:00~06:15 일정 + 시작 시각에 울리는 알림.
+  // 날마다 고른 시각(한국)부터 15분 일정 + 시작 시각에 울리는 알림.
   // 시간은 UTC 로 적어 시간대 정보 없이도 어느 휴대폰에서나 같은 순간에 울림.
-  var ALARM_HOUR_KST = 6;
+  // 알림 시각은 각자 고름: 5시~22시 정시 (구글 예약 실행이 프로젝트당 20개까지라 18개). 기본 6시.
+  var ALARM_HOURS = [];
+  for (var hh = 5; hh <= 22; hh++) ALARM_HOURS.push(hh);
+  var DEFAULT_ALARM_HOUR = 6;
+  function alarmHour(v) {
+    var n = typeof v === 'number' ? v : /^\d{1,2}$/.test(String(v)) ? +v : NaN;
+    return ALARM_HOURS.indexOf(n) >= 0 ? n : null;
+  }
+  function hourLabel(h) {
+    if (h < 12) return '오전 ' + h + '시';
+    if (h === 12) return '낮 12시';
+    if (h < 19) return '오후 ' + (h - 12) + '시';
+    if (h < 21) return '저녁 ' + (h - 12) + '시';
+    return '밤 ' + (h - 12) + '시';
+  }
 
   function icsEscape(s) {
     return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
@@ -163,7 +177,8 @@ var Core = (function () {
     return new Date(ms).toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
   }
 
-  function icsFor(appUrl) {
+  function icsFor(appUrl, hour) {
+    var H = alarmHour(hour) || DEFAULT_ALARM_HOUR;
     var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//bible-reading//KO', 'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEscape('함께 읽는 성경')];
     Object.keys(PLAN).sort().forEach(function (d) {
@@ -172,8 +187,8 @@ var Core = (function () {
       L.push('BEGIN:VEVENT',
         'UID:bible-' + d.replace(/-/g, '') + '@bible-reading',
         'DTSTAMP:' + stampUTC(START, 0, 0),
-        'DTSTART:' + stampUTC(d, ALARM_HOUR_KST, 0),
-        'DTEND:' + stampUTC(d, ALARM_HOUR_KST, 15),
+        'DTSTART:' + stampUTC(d, H, 0),
+        'DTEND:' + stampUTC(d, H, 15),
         'SUMMARY:' + icsEscape('📖 ' + label),
         'DESCRIPTION:' + icsEscape(desc),
         'URL:' + appUrl,
@@ -186,7 +201,8 @@ var Core = (function () {
   }
 
   return {
-    icsFor: icsFor, icsEscape: icsEscape,
+    icsFor: icsFor, icsEscape: icsEscape, ALARM_HOURS: ALARM_HOURS, DEFAULT_ALARM_HOUR: DEFAULT_ALARM_HOUR,
+    alarmHour: alarmHour, hourLabel: hourLabel,
     APP_BASE: APP_BASE, BOOKS: BOOKS, TOTAL: TOTAL, START: START, END: END, DAY_COUNT: DAY_COUNT,
     addDays: addDays, weekday: weekday, portionFor: portionFor, chapterIndex: chapterIndex,
     portionLabel: portionLabel, chaptersOf: chaptersOf, GAE_CODES: GAE_CODES, doneSet: doneSet, progress: progress,
