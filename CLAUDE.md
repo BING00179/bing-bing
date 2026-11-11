@@ -372,6 +372,7 @@
     화면    bible/  → https://bing00179.github.io/bing-bing/bible/   (기본 브랜치에 머지됨)
     소스    bible-reading/ (core.js·webpush.js·server.gs·web/, 시험 node --test bible-reading/test/*.test.js)
     서버    사장님 구글 시트 + 앱스 스크립트(dist/Code.gs = 커밋 86670d0, 배포 버전 6 — 2026-11-12). 배포 아이디는 저장소에 없음
+    목록    bible-reading/docs/여전도회-목록.md (+png). 우리 = 30여 로데(82년생)
     모임    다른 여전도회도 씀 — 사장님 결정: 사장님 시트 하나에 여러 모임(A). 메뉴 「새 모임 만들기」 → 링크 끝 &g=코드.
             각 탭 끝 '모임' 칸(빈칸=처음 모임), '모임' 탭(코드·이름). 처음 모임 이름은 스크립트 속성 GROUP0_NAME.
             코드 완성(시험 76건) — 사장님이 새 Code.gs 붙여넣기·새 버전 배포(버전 7) 해야 적용
