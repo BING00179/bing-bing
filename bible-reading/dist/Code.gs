@@ -119,7 +119,57 @@ var Core = (function () {
     return t;
   }
 
+  // ── 달력 알림 파일(.ics) ─────────────────────────────────────
+  // 날마다 한국 시각 06:00~06:15 일정 + 시작 시각에 울리는 알림.
+  // 시간은 UTC 로 적어 시간대 정보 없이도 어느 휴대폰에서나 같은 순간에 울림.
+  var ALARM_HOUR_KST = 6;
+
+  function icsEscape(s) {
+    return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  }
+  function utf8Len(ch) {
+    var c = ch.codePointAt(0);
+    return c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+  }
+  // 한 줄 75바이트 넘으면 접기 (글자 중간에서 자르지 않음)
+  function fold(line) {
+    var out = '', len = 0;
+    Array.from(line).forEach(function (ch) {
+      var n = utf8Len(ch);
+      if (len + n > 75) { out += '\r\n '; len = 1; }
+      out += ch; len += n;
+    });
+    return out;
+  }
+  function stampUTC(d, hour, minute) {
+    var ms = toUTC(d) + ((hour - 9) * 60 + minute) * 60000; // KST = UTC+9
+    return new Date(ms).toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+  }
+
+  function icsFor(appUrl) {
+    var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//bible-reading//KO', 'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEscape('함께 읽는 성경')];
+    Object.keys(PLAN).sort().forEach(function (d) {
+      var label = portionLabel(PLAN[d]);
+      var desc = '오늘 읽을 곳: ' + label + '\n읽고 나서 [읽기 완료] 누르기: ' + appUrl;
+      L.push('BEGIN:VEVENT',
+        'UID:bible-' + d.replace(/-/g, '') + '@bible-reading',
+        'DTSTAMP:' + stampUTC(START, 0, 0),
+        'DTSTART:' + stampUTC(d, ALARM_HOUR_KST, 0),
+        'DTEND:' + stampUTC(d, ALARM_HOUR_KST, 15),
+        'SUMMARY:' + icsEscape('📖 ' + label),
+        'DESCRIPTION:' + icsEscape(desc),
+        'URL:' + appUrl,
+        'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT0M',
+        'DESCRIPTION:' + icsEscape('📖 ' + label),
+        'END:VALARM', 'END:VEVENT');
+    });
+    L.push('END:VCALENDAR');
+    return L.map(fold).join('\r\n') + '\r\n';
+  }
+
   return {
+    icsFor: icsFor, icsEscape: icsEscape,
     BOOKS: BOOKS, TOTAL: TOTAL, START: START, END: END, DAY_COUNT: DAY_COUNT,
     addDays: addDays, weekday: weekday, portionFor: portionFor, chapterIndex: chapterIndex,
     portionLabel: portionLabel, doneSet: doneSet, progress: progress,
@@ -137,7 +187,13 @@ var Core = (function () {
 
 var TZ = 'Asia/Seoul';
 
-function doGet() {
+function doGet(e) {
+  // ?cal=1 → 매일 아침 6시 알림이 들어 있는 달력 파일(.ics)
+  if (e && e.parameter && e.parameter.cal) {
+    return ContentService.createTextOutput(Core.icsFor(appUrl_()))
+      .setMimeType(ContentService.MimeType.ICAL)
+      .downloadAsFile('bible-2027.ics');
+  }
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('함께 읽는 성경')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -157,6 +213,7 @@ function sheet_(name, header) {
 }
 function members_() { return sheet_('회원', ['이름', '등록 시각']); }
 function records_() { return sheet_('기록', ['시각', '이름', '날짜', '동작']); }
+function appUrl_() { return ScriptApp.getService().getUrl(); }
 function now_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
 function today_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'); }
 
@@ -176,7 +233,7 @@ function append_(sh, row) {
 function getState() {
   var names = rows_(members_(), 1).map(function (r) { return r[0]; }).filter(String);
   var recs = rows_(records_(), 4).map(function (r) { return [r[1], r[2], r[3]]; });
-  return { today: today_(), members: names, records: recs };
+  return { today: today_(), members: names, records: recs, appUrl: appUrl_() };
 }
 
 function register(name) {

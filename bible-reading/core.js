@@ -117,7 +117,57 @@ var Core = (function () {
     return t;
   }
 
+  // ── 달력 알림 파일(.ics) ─────────────────────────────────────
+  // 날마다 한국 시각 06:00~06:15 일정 + 시작 시각에 울리는 알림.
+  // 시간은 UTC 로 적어 시간대 정보 없이도 어느 휴대폰에서나 같은 순간에 울림.
+  var ALARM_HOUR_KST = 6;
+
+  function icsEscape(s) {
+    return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  }
+  function utf8Len(ch) {
+    var c = ch.codePointAt(0);
+    return c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
+  }
+  // 한 줄 75바이트 넘으면 접기 (글자 중간에서 자르지 않음)
+  function fold(line) {
+    var out = '', len = 0;
+    Array.from(line).forEach(function (ch) {
+      var n = utf8Len(ch);
+      if (len + n > 75) { out += '\r\n '; len = 1; }
+      out += ch; len += n;
+    });
+    return out;
+  }
+  function stampUTC(d, hour, minute) {
+    var ms = toUTC(d) + ((hour - 9) * 60 + minute) * 60000; // KST = UTC+9
+    return new Date(ms).toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+  }
+
+  function icsFor(appUrl) {
+    var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//bible-reading//KO', 'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH', 'X-WR-CALNAME:' + icsEscape('함께 읽는 성경')];
+    Object.keys(PLAN).sort().forEach(function (d) {
+      var label = portionLabel(PLAN[d]);
+      var desc = '오늘 읽을 곳: ' + label + '\n읽고 나서 [읽기 완료] 누르기: ' + appUrl;
+      L.push('BEGIN:VEVENT',
+        'UID:bible-' + d.replace(/-/g, '') + '@bible-reading',
+        'DTSTAMP:' + stampUTC(START, 0, 0),
+        'DTSTART:' + stampUTC(d, ALARM_HOUR_KST, 0),
+        'DTEND:' + stampUTC(d, ALARM_HOUR_KST, 15),
+        'SUMMARY:' + icsEscape('📖 ' + label),
+        'DESCRIPTION:' + icsEscape(desc),
+        'URL:' + appUrl,
+        'BEGIN:VALARM', 'ACTION:DISPLAY', 'TRIGGER:PT0M',
+        'DESCRIPTION:' + icsEscape('📖 ' + label),
+        'END:VALARM', 'END:VEVENT');
+    });
+    L.push('END:VCALENDAR');
+    return L.map(fold).join('\r\n') + '\r\n';
+  }
+
   return {
+    icsFor: icsFor, icsEscape: icsEscape,
     BOOKS: BOOKS, TOTAL: TOTAL, START: START, END: END, DAY_COUNT: DAY_COUNT,
     addDays: addDays, weekday: weekday, portionFor: portionFor, chapterIndex: chapterIndex,
     portionLabel: portionLabel, doneSet: doneSet, progress: progress,

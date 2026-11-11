@@ -7,7 +7,13 @@
 
 var TZ = 'Asia/Seoul';
 
-function doGet() {
+function doGet(e) {
+  // ?cal=1 → 매일 아침 6시 알림이 들어 있는 달력 파일(.ics)
+  if (e && e.parameter && e.parameter.cal) {
+    return ContentService.createTextOutput(Core.icsFor(appUrl_()))
+      .setMimeType(ContentService.MimeType.ICAL)
+      .downloadAsFile('bible-2027.ics');
+  }
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('함께 읽는 성경')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -27,6 +33,7 @@ function sheet_(name, header) {
 }
 function members_() { return sheet_('회원', ['이름', '등록 시각']); }
 function records_() { return sheet_('기록', ['시각', '이름', '날짜', '동작']); }
+function appUrl_() { return ScriptApp.getService().getUrl(); }
 function now_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
 function today_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'); }
 
@@ -46,7 +53,7 @@ function append_(sh, row) {
 function getState() {
   var names = rows_(members_(), 1).map(function (r) { return r[0]; }).filter(String);
   var recs = rows_(records_(), 4).map(function (r) { return [r[1], r[2], r[3]]; });
-  return { today: today_(), members: names, records: recs };
+  return { today: today_(), members: names, records: recs, appUrl: appUrl_() };
 }
 
 function register(name) {

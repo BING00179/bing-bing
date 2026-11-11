@@ -24,7 +24,13 @@ var google = (function () {
     var q = new URLSearchParams(location.search).get('today');
     return q || new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
   }
-  function state(d) { return { today: today(), members: d.members.slice(), records: d.records.slice() }; }
+  function state(d) { return { today: today(), members: d.members.slice(), records: d.records.slice(), appUrl: icsUrl() }; }
+  // 미리보기에는 서버가 없으므로 달력 파일을 이 자리에서 만들어 내려받게 함
+  var icsBlobUrl = null;
+  function icsUrl() {
+    if (!icsBlobUrl) icsBlobUrl = URL.createObjectURL(new Blob([Core.icsFor(location.href.split('?')[0])], { type: 'text/calendar' }));
+    return icsBlobUrl + '#';
+  }
   var api = {
     getState: function () { return state(db()); },
     register: function (name) {
