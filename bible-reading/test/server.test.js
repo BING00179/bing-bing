@@ -20,7 +20,7 @@ function makeEnv(todayKST, timeKST) {
     menus: [], prompts: [], answers: [], alerts: [],
     Button: { OK: 'OK', CANCEL: 'CANCEL', YES: 'YES', NO: 'NO' },
     ButtonSet: { OK_CANCEL: 'OK_CANCEL', YES_NO: 'YES_NO' },
-    createMenu(title) { const m = { title, items: [], addItem(l, f) { m.items.push([l, f]); return m; }, addToUi() { ui.menus.push(m); } }; return m; },
+    createMenu(title) { const m = { title, items: [], addItem(l, f) { m.items.push([l, f]); return m; }, addSeparator() { return m; }, addToUi() { ui.menus.push(m); } }; return m; },
     prompt(t, msg) { ui.prompts.push(msg); const a = ui.answers.shift(); return { getSelectedButton: () => a[0], getResponseText: () => a[1] }; },
     alert(t, msg, btns) { ui.alerts.push(msg || t); if (btns) { const a = ui.answers.shift(); return a[0]; } return 'OK'; },
   };
@@ -91,7 +91,8 @@ function makeEnv(todayKST, timeKST) {
   vm.runInContext(CODE, g);
   const get = (p) => JSON.parse(g.doGet({ parameter: p || {} }).text);
   const post = (fn, ...args) => JSON.parse(g.doPost({ postData: { contents: JSON.stringify({ fn, args }) } }).text);
-  return { g, sheets, props, triggers, fetched, ui, who, get, post, setFetch: (f) => { fetchCode = f; } };
+  const postG = (grp, fn, ...args) => JSON.parse(g.doPost({ postData: { contents: JSON.stringify({ g: grp, fn, args }) } }).text);
+  return { g, sheets, props, triggers, fetched, ui, who, get, post, postG, setFetch: (f) => { fetchCode = f; } };
 }
 
 const EP1 = 'https://fcm.googleapis.com/fcm/send/aaa';
@@ -244,7 +245,7 @@ test('회원 완전 삭제: 시트 메뉴에만 있고, 그 사람의 회원·�
   e.post('subscribe', '영희', EP1, 6); e.post('unsubscribe', EP1); e.post('subscribe', '영희', EP1, 7);
   e.post('subscribe', '철수', EP2, 6);
   e.g.onOpen();
-  assert.deepEqual(e.ui.menus[0].items.map((x) => x[1]), ['newTermMenu', 'deleteMemberMenu']);
+  assert.deepEqual(e.ui.menus[0].items.map((x) => x[1]), ['newGroupMenu', 'groupLinksMenu', 'newTermMenu', 'deleteMemberMenu']);
   e.ui.answers.push(['OK', ' 영희 '], ['YES']);
   e.g.deleteMemberMenu();
   assert.ok(e.ui.alerts[0].includes('기록 2줄') && e.ui.alerts[0].includes('알림 3줄'), e.ui.alerts[0]);
@@ -347,10 +348,10 @@ test('필사 팀: 따로 참여·나가기, 필사 완료 기록, 알림은 두 
   assert.deepEqual([...e.g.Core.participants(t1, st.members, st.joins, '읽기')], ['영희']);
   assert.deepEqual([...e.g.Core.participants(t1, st.members, st.joins, '필사')], ['영희', '민수']);
   assert.equal(e.sheets['참여'].rows.length, 4, '머리줄 + 3줄');
-  assert.deepEqual([...e.sheets['참여'].rows[0]], ['시각', '이름', '회차', '팀', '동작']);
+  assert.deepEqual([...e.sheets['참여'].rows[0]], ['시각', '이름', '회차', '팀', '동작', '모임']);
   assert.ok(e.post('mark', '민수', '2027-01-05', true, '필사').ok);
   assert.ok(!e.post('mark', '민수', '2027-01-05', true, '그림').ok);
-  assert.deepEqual([...e.sheets['기록'].rows.slice(-1)[0].slice(1)], ['민수', '2027-01-05', '필사완료']);
+  assert.deepEqual([...e.sheets['기록'].rows.slice(-1)[0].slice(1, 4)], ['민수', '2027-01-05', '필사완료']);
   e.post('subscribe', '민수', EP1, 6);
   assert.equal(e.g.sendMorning(), 1, '필사만 하는 사람도 알림');
 });
@@ -364,7 +365,7 @@ test('예전 3칸짜리 참여 시트에 팀·동작 제목을 붙임', () => {
   const sh = e.g.SpreadsheetApp.getActiveSpreadsheet().insertSheet('참여');
   sh.rows.push(['시각', '이름', '회차'], ['x', '영희', '2']);
   const st = e.get().data;
-  assert.deepEqual([...e.sheets['참여'].rows[0]], ['시각', '이름', '회차', '팀', '동작']);
+  assert.deepEqual([...e.sheets['참여'].rows[0]], ['시각', '이름', '회차', '팀', '동작', '모임']);
   assert.deepEqual([...e.g.Core.participants(st.terms[1], st.members, st.joins)], ['영희'], '예전 줄 = 읽기 참여');
 });
 
@@ -375,4 +376,91 @@ test('시트 칸 제목을 회장님이 고쳐도 서버가 되돌리지 않음 
   e.sheets['알림'].rows[0][4] = '받는 시간';
   e.post('subscribe', '영희', EP1, 7);
   assert.equal(e.sheets['알림'].rows[0][4], '받는 시간');
+});
+
+// ── 여러 모임 (한 시트, 링크 끝 &g=코드) ──
+function makeGroup(e, name, first) {
+  if (first) e.ui.answers.push(['OK', first]);
+  e.ui.answers.push(['OK', name]);
+  e.g.newGroupMenu();
+  const link = e.ui.alerts[e.ui.alerts.length - 1];
+  return link.match(/&g=([a-z0-9]+)/)[1];
+}
+
+test('새 모임: 관리자만, 처음 모임 이름도 한 번 묻고, 그 모임 전용 링크를 보여 줌', () => {
+  const e = makeEnv('2027-01-05');
+  e.who.email = 'leader@example.com';
+  e.g.newGroupMenu();
+  assert.match(e.ui.alerts[0], /관리자/);
+  assert.equal(e.sheets['모임'], undefined);
+  e.who.email = 'owner@example.com';
+  const code = makeGroup(e, '3여전도회', '1여전도회');
+  assert.equal(e.props.GROUP0_NAME, '1여전도회');
+  assert.match(e.ui.alerts[e.ui.alerts.length - 1], new RegExp('\\?s=' + DEPLOY + '&g=' + code));
+  // 두 번째부터는 처음 모임 이름을 다시 묻지 않음, 같은 이름은 거절
+  const n = e.ui.prompts.length;
+  e.ui.answers.push(['OK', '3여전도회']);
+  e.g.newGroupMenu();
+  assert.equal(e.ui.prompts.length, n + 1);
+  assert.match(e.ui.alerts[e.ui.alerts.length - 1], /이미 있는/);
+  assert.equal(e.sheets['모임'].rows.length, 2);
+});
+
+test('모임끼리 명단·기록·참여가 섞이지 않고, 예전 링크(모임 없음)는 그대로', () => {
+  const e = makeEnv('2027-01-05');
+  e.post('register', '영희');
+  e.post('mark', '영희', '2027-01-05', true);
+  const code = makeGroup(e, '3여전도회', '1여전도회');
+  const r = e.postG(code, 'register', '영희'); // 같은 이름이어도 다른 모임이면 다른 사람
+  assert.ok(r.ok);
+  assert.deepEqual(r.data.records, []);
+  assert.equal(r.data.groupName, '3여전도회');
+  e.postG(code, 'register', '순자');
+  e.postG(code, 'mark', '순자', '2027-01-04', true);
+  const a = e.get(), b = e.get({ g: code });
+  assert.deepEqual(a.data.members, ['영희']);
+  assert.deepEqual(a.data.records, [['영희', '2027-01-05', '완료']]);
+  assert.equal(a.data.groupName, '1여전도회');
+  assert.deepEqual(b.data.members, ['영희', '순자']);
+  assert.deepEqual(b.data.records, [['순자', '2027-01-04', '완료']]);
+  assert.equal(e.post('mark', '순자', '2027-01-05', true).error, '등록되지 않은 이름입니다.', '다른 모임 사람은 기록 못 함');
+  assert.match(e.get({ g: 'zzzzzz' }).error, /모르는 모임/);
+  assert.match(e.postG('zzzzzz', 'register', 'x').error, /모르는 모임/);
+  assert.equal(e.sheets['회원'].rows.length, 4, '모르는 모임으로는 아무것도 안 씀');
+});
+
+test('새 회차·회원 삭제는 모임을 먼저 고르고, 그 모임 것만 바꿈', () => {
+  const e = makeEnv('2027-01-05');
+  e.post('register', '영희');
+  const code = makeGroup(e, '3여전도회', '1여전도회');
+  e.postG(code, 'register', '영희');
+  e.postG(code, 'mark', '영희', '2027-01-05', true);
+  // 삭제: 2번(3여전도회) 고르기 → 이름 → 예
+  e.ui.answers.push(['OK', '2'], ['OK', '영희'], ['YES']);
+  e.g.deleteMemberMenu();
+  assert.deepEqual(e.get({ g: code }).data.members, []);
+  assert.deepEqual(e.get().data.members, ['영희'], '처음 모임의 영희는 그대로');
+  // 새 회차: 2번 고르기 → 날짜
+  e.ui.answers.push(['OK', '2'], ['OK', '2028-01-03'], ['YES']);
+  e.g.newTermMenu();
+  assert.equal(e.get({ g: code }).data.terms.length, 2);
+  assert.equal(e.get().data.terms.length, 1);
+  // 취소하면 아무것도 안 함
+  e.ui.answers.push(['CANCEL', '']);
+  e.g.newTermMenu();
+  assert.equal(e.get().data.terms.length, 1);
+});
+
+test('아침 알림은 모든 모임에 감 (모임마다 자기 회차 기준)', () => {
+  const e = makeEnv('2027-01-05', '06:00');
+  e.g.setupPush();
+  e.post('register', '영희');
+  e.post('subscribe', '영희', EP1, 6);
+  const code = makeGroup(e, '3여전도회', '1여전도회');
+  e.postG(code, 'register', '순자');
+  e.postG(code, 'subscribe', '순자', EP2, 6);
+  assert.deepEqual(e.get().data.members, ['영희']);
+  e.g.sendMorning();
+  const urls = e.fetched.map((r) => r.url).sort();
+  assert.deepEqual(urls, [EP1, EP2].sort());
 });

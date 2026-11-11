@@ -143,12 +143,14 @@
   .loading { text-align: center; color: var(--muted); padding: 40px 0; }
   button:disabled { opacity: .6; cursor: wait; }
   .big[disabled], .copybtn[disabled] { opacity: .4; cursor: not-allowed; }
+  .grp { font-size: .6em; font-weight: 600; color: #6b7280; margin-left: 4px; }
+  .grp:empty { display: none; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>함께 읽는 성경</h1>
+    <h1>함께 읽는 성경 <small id="grp" class="grp"></small></h1>
     <span class="who" id="who"></span>
   </header>
   <div id="main"><div class="loading">불러오는 중…</div></div>
@@ -163,7 +165,7 @@
   var me = null;          // 이 휴대폰의 이름
   var tab = 'today';
   var busy = false;
-  var KEY = 'bible.name';
+  var KEY = 'bible.name' + (Api.group ? '.' + Api.group : ''); // 모임마다 이름 따로
 
   function load() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
   function save(n) { try { n ? localStorage.setItem(KEY, n) : localStorage.removeItem(KEY); } catch (e) {} }
@@ -191,6 +193,7 @@
     var terms = s.terms && s.terms.length ? s.terms : Core.termsFrom([]);
     TN = Core.termsNow(terms, s.today);
     P = Core.makePlan(TN.cur.start);
+    if (s.groupName) document.getElementById('grp').textContent = s.groupName;
     // 알림 받는 곳(sw.js)도 지금 회차를 알게 저장
     try { if (window.caches) caches.open('bible-meta').then(function (c) { c.put('terms', new Response(JSON.stringify(terms))); }); } catch (e) {}
   }
@@ -199,7 +202,7 @@
   function inTeam(team, term, name) {
     return Core.participants(term || TN.cur, state.members, state.joins || [], team).indexOf(name || me) >= 0;
   }
-  function teamPicked() { try { return localStorage.getItem('bible.teamPick.' + openTerm().n + '.' + me) === '1'; } catch (e) { return true; } }
+  function teamPicked() { try { return localStorage.getItem('bible.teamPick.' + (Api.group ? Api.group + '.' : '') + openTerm().n + '.' + me) === '1'; } catch (e) { return true; } }
   function teamChips(term) {
     return '<div class="chips">' + Core.TEAMS.map(function (team) {
       var on = inTeam(team, term);
@@ -921,7 +924,7 @@
     }
     else if (act === 'team-ok') {
       if (!Core.TEAMS.some(function (tm) { return inTeam(tm, openTerm()); })) { toast('팀을 하나 이상 골라 주세요'); return; }
-      try { localStorage.setItem('bible.teamPick.' + openTerm().n + '.' + me, '1'); } catch (e8) {}
+      try { localStorage.setItem('bible.teamPick.' + (Api.group ? Api.group + '.' : '') + openTerm().n + '.' + me, '1'); } catch (e8) {}
       render();
     }
     else if (act === 'board-team') { boardTeam = b.dataset.team; render(); }

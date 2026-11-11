@@ -13,6 +13,13 @@ var Api = (function () {
     else if (!s) s = localStorage.getItem(KEY);
   } catch (e) {}
   if (s && s !== 'preview' && !/^[A-Za-z0-9_-]{20,150}$/.test(s)) s = null;
+  // 모임: 링크 끝 &g=코드 (처음 모임은 없음). 열쇠(s)가 링크에 있을 때만 같이 기억 — 처음 모임 링크로 열면 비워짐
+  var GKEY = 'bible.g', g = '';
+  try {
+    if (params.get('s') && s !== 'preview') { g = params.get('g') || ''; localStorage.setItem(GKEY, g); }
+    else if (s !== 'preview') g = localStorage.getItem(GKEY) || '';
+  } catch (e) {}
+  if (!/^[a-z0-9]{0,20}$/.test(g)) g = '';
 
   var base = s && s !== 'preview' ? 'https://script.google.com/macros/s/' + s + '/exec' : null;
 
@@ -24,12 +31,12 @@ var Api = (function () {
     });
   }
   var real = {
-    state: function () { return fetch(base, { cache: 'no-store' }).then(unwrap); },
+    state: function () { return fetch(base + (g ? '?g=' + g : ''), { cache: 'no-store' }).then(unwrap); },
     call: function (fn, args) {
       return fetch(base, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ fn: fn, args: args }) }).then(unwrap);
+        body: JSON.stringify({ g: g, fn: fn, args: args }) }).then(unwrap);
     },
-    calendarUrl: function (h) { return base + '?cal=1&h=' + (Core.alarmHour(h) || Core.DEFAULT_ALARM_HOUR); }
+    calendarUrl: function (h) { return base + '?cal=1&h=' + (Core.alarmHour(h) || Core.DEFAULT_ALARM_HOUR) + (g ? '&g=' + g : ''); }
   };
 
   // ── 미리보기용 가짜 서버: server.gs 와 같은 규칙. ?today=2027-01-05 로 날짜 바꾸기 ──
@@ -63,7 +70,7 @@ var Api = (function () {
     function terms() { var t = [['1', Core.FIRST_START]]; if (params.get('term2')) t.push(['2', params.get('term2')]); return Core.termsFrom(t); }
     function openTerm() { var tn = Core.termsNow(terms(), today()); return tn.next || tn.cur; }
     function state(d) { return { today: today(), members: d.members.slice(), records: d.records.slice(), vapidKey: params.get('vapid') || '',
-      terms: terms(), joins: (d.joins || []).slice() }; }
+      terms: terms(), joins: (d.joins || []).slice(), groupName: params.get('gname') || '' }; }
     function joinTerm(d, name, team, on) {
       var t = openTerm(); d.joins = d.joins || []; team = team || '읽기'; on = on !== false;
       var now = Core.participants(t, [name], d.joins, team).length > 0;
@@ -102,8 +109,8 @@ var Api = (function () {
   var impl = s === 'preview' ? fake : base ? real : null;
   return {
     ready: !!impl,
-    preview: s === 'preview', demo: DEMO,
-    sw: 'sw.js' + (s ? '?s=' + encodeURIComponent(s) : ''),
+    preview: s === 'preview', demo: DEMO, group: g,
+    sw: 'sw.js' + (s ? '?s=' + encodeURIComponent(s) + (g ? '&g=' + g : '') : ''),
     state: function () { return impl.state(); },
     call: function (fn) { return impl.call(fn, Array.prototype.slice.call(arguments, 1)); },
     calendarUrl: function (h) { return impl.calendarUrl(h); }

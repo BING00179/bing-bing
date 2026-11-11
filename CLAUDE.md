@@ -372,8 +372,9 @@
     화면    bible/  → https://bing00179.github.io/bing-bing/bible/   (기본 브랜치에 머지됨)
     소스    bible-reading/ (core.js·webpush.js·server.gs·web/, 시험 node --test bible-reading/test/*.test.js)
     서버    사장님 구글 시트 + 앱스 스크립트(dist/Code.gs = 커밋 86670d0, 배포 버전 6 — 2026-11-12). 배포 아이디는 저장소에 없음
-    문의    다른 여전도회도 쓰고 싶다고 함 (2026-11-12). 권한 방법: 여전도회마다 시트·배포를 따로 → 링크 ?s= 만 다름(코드 그대로).
-            모임 이름 표시는 아직 안 정함. 서버를 바꾸면 모임마다 Code.gs 붙여넣기·배포가 늘어나는 점 유의
+    모임    다른 여전도회도 씀 — 사장님 결정: 사장님 시트 하나에 여러 모임(A). 메뉴 「새 모임 만들기」 → 링크 끝 &g=코드.
+            각 탭 끝 '모임' 칸(빈칸=처음 모임), '모임' 탭(코드·이름). 처음 모임 이름은 스크립트 속성 GROUP0_NAME.
+            코드 완성(시험 76건) — 사장님이 새 Code.gs 붙여넣기·새 버전 배포(버전 7) 해야 적용
     안내    bible-reading/README.md · 설계 docs/superpowers/specs/2026-11-11-성경통독-design.md
     시연    https://bing00179.github.io/bing-bing/bible/?s=demo (가짜 데이터, 리더·임원용)
 
