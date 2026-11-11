@@ -372,6 +372,7 @@
     화면    bible/  → https://bing00179.github.io/bing-bing/bible/   (기본 브랜치에 머지됨)
     소스    bible-reading/ (core.js·webpush.js·server.gs·web/, 시험 node --test bible-reading/test/*.test.js)
     서버    사장님 구글 시트 + 앱스 스크립트(dist/Code.gs 붙여넣기, 배포 버전 5). 배포 아이디는 저장소에 없음
+            ⏳ 사장님 할 일: 커밋 86670d0 의 Code.gs 붙여넣기 → 새 버전(6) → 알림 탭 E1 을 '알림 시간' 으로 (칸 제목만, 급하지 않음)
     안내    bible-reading/README.md · 설계 docs/superpowers/specs/2026-11-11-성경통독-design.md
     시연    https://bing00179.github.io/bing-bing/bible/?s=demo (가짜 데이터, 리더·임원용)
 
