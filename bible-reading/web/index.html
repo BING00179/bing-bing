@@ -504,7 +504,20 @@
       playing = true; token++;
       speechSynthesis.cancel();
       holdScreen();
-      speak(); refresh();
+      refresh();
+      // 첫 소리가 잘리지 않게: 0.3초 쉬고, 소리 없는 짧은 말로 음성 엔진을 깨운 뒤 시작
+      var my = token;
+      setTimeout(function () {
+        if (my !== token || !playing) return;
+        var w = new SpeechSynthesisUtterance('준비');
+        w.lang = 'ko-KR'; w.volume = 0; w.rate = 2;
+        var v = voice(); if (v) w.voice = v;
+        var started = false;
+        function go() { if (started || my !== token) return; started = true; speak(); }
+        w.onend = go; w.onerror = go;
+        setTimeout(go, 1500); // 준비 말이 끝났다는 신호가 안 와도 시작
+        try { speechSynthesis.speak(w); } catch (e) { go(); }
+      }, 300);
     }
     function pause() { playing = false; token++; releaseScreen(); if (ok) speechSynthesis.cancel(); refresh(); }
     function stop(done) { playing = false; token++; releaseScreen(); if (ok) speechSynthesis.cancel(); if (done) pos = 0; queue = done ? [] : queue; mark(null); refresh(); }
