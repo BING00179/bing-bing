@@ -84,6 +84,10 @@
   .reader .text sup { color: var(--muted); font-size: .65em; margin-right: 4px; vertical-align: .35em; }
   .reader .src { font-size: 13px; color: var(--muted); margin: 18px 0 14px; }
   .portionlink { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+  .ttsbar { display: flex; gap: 8px; align-items: center; margin: 8px -16px 4px; padding: 8px 16px; position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .ttsbtn { font: inherit; font-size: 18px; font-weight: 700; padding: 10px 16px; border-radius: 12px; border: 2px solid var(--accent); background: var(--card); color: var(--accent); cursor: pointer; }
+  .ttsbtn.on { background: var(--accent); color: var(--accent-ink); }
+  .reader .text p.speaking, .reader h2.speaking { background: var(--done-bg); border-radius: 8px; box-shadow: 0 0 0 4px var(--done-bg); }
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   .dayrow .day { margin-bottom: 0; }
   .dayrow .open { font: inherit; font-size: 20px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
@@ -373,25 +377,92 @@
     }));
   }
   function openReader(d) {
+    Tts.reset();
     readFrom = tab; reading = d; loadErr = '';
     render(); window.scrollTo(0, 0);
     loadBooks(Core.chaptersOf(P.portionFor(d))).catch(function () {
       loadErr = '말씀을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.';
     }).then(function () { if (reading === d) render(); });
   }
+  // ── 말씀 듣기 (휴대폰 한국어 음성, Web Speech) ──
+  // 절마다 하나씩 읽음 (긴 글을 한 번에 넘기면 크롬이 중간에 끊는 일이 있어서). 장이 바뀌면 장 이름부터.
+  var Tts = (function () {
+    var ok = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+    var queue = [], pos = 0, playing = false, token = 0, cur = null;
+    function rate() { try { return +localStorage.getItem('bible.rate') || 1; } catch (e) { return 1; } }
+    function voice() {
+      var vs = ok ? speechSynthesis.getVoices() : [];
+      return vs.filter(function (v) { return /^ko/i.test(v.lang); })[0] || null;
+    }
+    if (ok && speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = function () {};
+    function build() {
+      queue = [];
+      Core.chaptersOf(P.portionFor(reading)).forEach(function (c, ci) {
+        var b = books[c.book]; if (!b) return;
+        queue.push({ ci: ci, vi: -1, text: c.name + ' ' + c.chapter + '장' });
+        b.c[c.chapter - 1].forEach(function (v, i) { queue.push({ ci: ci, vi: i, text: v.replace(/[\[\]]/g, '') }); });
+      });
+    }
+    function mark(item) {
+      document.querySelectorAll('.reader .speaking').forEach(function (el) { el.classList.remove('speaking'); });
+      cur = item;
+      if (!item) return;
+      var el = document.getElementById('tts-' + item.ci + '-' + (item.vi < 0 ? 't' : item.vi));
+      if (el) { el.classList.add('speaking'); el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+    }
+    function speak() {
+      if (!playing) return;
+      if (pos >= queue.length) { stop(true); toast('📖 끝까지 들었어요'); return; }
+      var item = queue[pos], my = token;
+      var u = new SpeechSynthesisUtterance(item.text);
+      u.lang = 'ko-KR'; u.rate = rate();
+      var v = voice(); if (v) u.voice = v;
+      u.onend = function () { if (my !== token) return; pos++; speak(); };
+      u.onerror = function () { if (my !== token) return; pos++; speak(); };
+      mark(item);
+      try { speechSynthesis.speak(u); }
+      catch (e) { stop(false); toast('🔇 이 휴대폰에서 음성을 낼 수 없어요'); }
+    }
+    function play() {
+      if (!ok) return;
+      if (!queue.length) build();
+      if (!queue.length) { toast('말씀을 불러오는 중이에요'); return; }
+      playing = true; token++;
+      speechSynthesis.cancel();
+      speak(); refresh();
+    }
+    function pause() { playing = false; token++; if (ok) speechSynthesis.cancel(); refresh(); }
+    function stop(done) { playing = false; token++; if (ok) speechSynthesis.cancel(); if (done) pos = 0; queue = done ? [] : queue; mark(null); refresh(); }
+    function reset() { playing = false; token++; if (ok) speechSynthesis.cancel(); queue = []; pos = 0; cur = null; }
+    function refresh() { var bar = document.getElementById('ttsbar'); if (bar) bar.outerHTML = ttsBar(); }
+    return { ok: ok, play: play, pause: pause, reset: reset, rate: rate, playing: function () { return playing; },
+      at: function (ci, vi) { return !!cur && cur.ci === ci && cur.vi === vi; },
+      setRate: function (r) { try { localStorage.setItem('bible.rate', String(r)); } catch (e) {} if (playing) { token++; speechSynthesis.cancel(); playing = true; speak(); } } };
+  })();
+  function ttsBar() {
+    if (!Tts.ok) return '<div id="ttsbar" class="small" style="margin:6px 0 4px">🔇 이 휴대폰은 말씀 듣기를 지원하지 않아요</div>';
+    var r = Tts.rate();
+    return '<div id="ttsbar" class="ttsbar">' +
+      (Tts.playing() ? '<button class="ttsbtn on" data-act="tts-pause">⏸ 멈춤</button>' : '<button class="ttsbtn" data-act="tts-play">🔊 듣기</button>') +
+      '<select id="ttsRate" class="hoursel" aria-label="빠르기">' +
+      [[0.8, '느리게'], [1, '보통'], [1.2, '빠르게']].map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === r ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') +
+      '</select></div>';
+  }
+
   function readerHtml() {
     var d = reading, p = P.portionFor(d), list = Core.chaptersOf(p), m = mine(me), done = m.done.has(d);
     var h = '<div class="reader"><div class="bar2"><button class="linkbtn" data-act="close-read">‹ 돌아가기</button>' +
       '<span class="sizes"><button data-act="font" data-n="-2" aria-label="글씨 작게">가−</button> ' +
       '<button data-act="font" data-n="2" aria-label="글씨 크게">가+</button></span></div>' +
-      '<div class="date">' + dateLabel(d) + '</div><div class="portion" style="margin-bottom:4px">' + Core.portionLabel(p) + '</div>';
+      '<div class="date">' + dateLabel(d) + '</div><div class="portion" style="margin-bottom:4px">' + Core.portionLabel(p) + '</div>' +
+      ttsBar();
     if (loadErr) h += '<div class="card miss">' + esc(loadErr) + '</div>';
     h += '<div class="text" style="font-size:' + fontSize() + 'px">';
-    list.forEach(function (c) {
-      h += '<h2><span>' + c.name + ' ' + c.chapter + '장</span><a href="' + c.gae + '" target="_blank" rel="noopener">개역개정으로 보기 ↗</a></h2>';
+    list.forEach(function (c, ci) {
+      h += '<h2 id="tts-' + ci + '-t"' + (Tts.at(ci, -1) ? ' class="speaking"' : '') + '><span>' + c.name + ' ' + c.chapter + '장</span><a href="' + c.gae + '" target="_blank" rel="noopener">개역개정으로 보기 ↗</a></h2>';
       var b = books[c.book];
       if (!b) { h += loadErr ? '' : '<p class="small">불러오는 중…</p>'; return; }
-      b.c[c.chapter - 1].forEach(function (v, i) { h += '<p><sup>' + (i + 1) + '</sup>' + esc(v) + '</p>'; });
+      b.c[c.chapter - 1].forEach(function (v, i) { h += '<p id="tts-' + ci + '-' + i + '"' + (Tts.at(ci, i) ? ' class="speaking"' : '') + '><sup>' + (i + 1) + '</sup>' + esc(v) + '</p>'; });
     });
     h += '</div><div class="src">성경전서 개역한글판 (대한성서공회) · 개역개정은 대한성서공회 웹사이트에서 열려요</div>';
     if (d <= state.today) {
@@ -480,7 +551,9 @@
     if (!b || busy) return;
     if (b.dataset.tab) { tab = b.dataset.tab; render(); window.scrollTo(0, 0); return; }
     if (b.dataset.act === 'read') { openReader(b.dataset.date); return; }
-    if (b.dataset.act === 'close-read') { reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return; }
+    if (b.dataset.act === 'tts-play') { Tts.play(); return; }
+    if (b.dataset.act === 'tts-pause') { Tts.pause(); return; }
+    if (b.dataset.act === 'close-read') { Tts.reset(); reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return; }
     if (b.dataset.act === 'font') {
       setFont(Math.max(14, Math.min(34, fontSize() + +b.dataset.n)));
       document.querySelectorAll('.reader .text, .fontsample').forEach(function (tx) { tx.style.fontSize = fontSize() + 'px'; });
@@ -534,7 +607,7 @@
         function () { setAlarm('push'); toast('🔔 알림 켜짐 · 매일 ' + Core.hourLabel(myHour())); });
       return;
     }
-    if (act === 'switch') { me = null; reading = null; save(null); render(); }
+    if (act === 'switch') { Tts.reset(); me = null; reading = null; save(null); render(); }
     else if (act === 'pick') { me = b.dataset.name; save(me); tab = 'today'; render(); }
     else if (act === 'register') {
       var n = Core.validName(document.getElementById('newname').value);
@@ -553,6 +626,7 @@
     if (a) setTimeout(function () { setAlarm('cal'); if (!setupDone()) finishSetup(); else render(); }, 500);
   });
   document.addEventListener('change', function (e) {
+    if (e.target.id === 'ttsRate') { Tts.setRate(+e.target.value); return; }
     if (e.target.id !== 'alarmHour') return;
     setHour(+e.target.value);
     document.querySelectorAll('a[data-act=cal-get]').forEach(function (a) { a.href = Api.calendarUrl(myHour()); });
