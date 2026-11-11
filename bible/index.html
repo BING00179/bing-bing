@@ -73,9 +73,16 @@
   .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 12px 0 18px; }
   .names button { font: inherit; font-size: 19px; padding: 14px 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
   input[type=text] { width: 100%; font: inherit; font-size: 20px; padding: 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); margin: 8px 0 10px; }
-  .chlinks { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 10px; }
-  .chlink { display: block; text-align: center; text-decoration: none; font-size: 18px; font-weight: 700; padding: 12px 6px; border-radius: 12px;
-    background: var(--card); color: var(--accent); border: 2px solid var(--accent); word-break: keep-all; }
+  .readbtn { width: 100%; font: inherit; font-size: 20px; font-weight: 700; padding: 14px; border-radius: 14px; margin-bottom: 10px;
+    background: var(--card); color: var(--accent); border: 2px solid var(--accent); cursor: pointer; }
+  .reader .bar2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .reader .sizes button { font: inherit; font-size: 16px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
+  .reader h2 { font-size: 1.15em; margin: 22px 0 6px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .reader h2 a { font-size: 14px; font-weight: 400; color: var(--accent); }
+  .reader .text { line-height: 1.85; word-break: keep-all; }
+  .reader .text p { margin: 0 0 6px; }
+  .reader .text sup { color: var(--muted); font-size: .65em; margin-right: 4px; vertical-align: .35em; }
+  .reader .src { font-size: 13px; color: var(--muted); margin: 18px 0 14px; }
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   .dayrow .day { margin-bottom: 0; }
   .dayrow .open { font: inherit; font-size: 20px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
@@ -174,7 +181,7 @@
       var done = m.done.has(t);
       h += '<div class="card"><div class="date">오늘 · ' + dateLabel(t) + '</div>' +
         '<div class="portion">' + Core.portionLabel(p) + '</div>' +
-        chapterLinks(t) +
+        '<button class="readbtn" data-act="read" data-date="' + t + '">📖 말씀 읽기</button>' +
         '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + t + '" data-done="' + (done ? 0 : 1) + '">' +
         (done ? '읽었어요 ✅' : '읽기 완료') + '</button>' +
         (done ? '<div class="hint">잘못 눌렀으면 한 번 더 누르면 취소돼요</div>' : '') + '</div>';
@@ -210,37 +217,51 @@
       '<div class="hint"><button class="linkbtn" data-act="alarm-none">알림 필요 없어요</button></div></div>';
   }
 
-  // ── 말씀 읽기: 대한성서공회 웹사이트(개역개정)의 그 장을 엶 ──
-  // 개역개정은 저작권이 있어 본문을 앱에 넣지 않고 링크만 둡니다.
-  var reading = null;      // 링크 목록을 보고 있는 지난 날짜
-  var readFrom = 'today';
-  // 버튼 하나로 그날 첫 장을 엶 — 다음 장은 대한성서공회 화면 안에서 넘김.
-  // 장별 버튼은 접어 둠 (필요한 분만 펼침).
-  function chapterLinks(d) {
-    var list = Core.chaptersOf(Core.portionFor(d)), first = list[0];
-    var h = '<a class="big" style="display:block;text-align:center;text-decoration:none;margin-bottom:6px;background:var(--card);color:var(--accent);border:2px solid var(--accent)"' +
-      ' href="' + first.gae + '" target="_blank" rel="noopener">📖 오늘 말씀 열기</a>' +
-      '<div class="small" style="margin-bottom:10px">' + first.name + ' ' + first.chapter + '장이 열려요 (대한성서공회 개역개정). ' +
-      (list.length > 1 ? '다음 장은 그 화면에서 넘겨 읽어 주세요.' : '') + '</div>';
-    if (list.length > 1) {
-      h += '<details style="margin-bottom:12px"><summary class="small" style="cursor:pointer">장별로 열기</summary><div class="chlinks" style="margin-top:8px">' +
-        list.map(function (c) {
-          return '<a class="chlink" href="' + c.gae + '" target="_blank" rel="noopener">' + c.name + ' ' + c.chapter + '장</a>';
-        }).join('') + '</div></details>';
-    }
-    return h;
+  // ── 말씀 읽기 (개역한글, 앱 안) ──
+  var reading = null;      // 읽고 있는 날짜
+  var readFrom = 'today';  // 돌아갈 탭
+  var books = {};          // 권 번호 → {b, c} (한 번 받으면 기억)
+  var loadErr = '';
+  function fontSize() { try { return +localStorage.getItem('bible.font') || 20; } catch (e) { return 20; } }
+  function setFont(n) { try { localStorage.setItem('bible.font', String(n)); } catch (e) {} }
+  function loadBooks(list) {
+    var need = [];
+    list.forEach(function (c) { if (!books[c.book] && need.indexOf(c.book) < 0) need.push(c.book); });
+    return Promise.all(need.map(function (n) {
+      return fetch('text/' + (n < 10 ? '0' : '') + n + '.json').then(function (r) {
+        if (!r.ok) throw new Error(r.status);
+        return r.json();
+      }).then(function (j) { books[n] = j; });
+    }));
   }
-  function openReader(d) { readFrom = tab; reading = d; render(); window.scrollTo(0, 0); }
+  function openReader(d) {
+    readFrom = tab; reading = d; loadErr = '';
+    render(); window.scrollTo(0, 0);
+    loadBooks(Core.chaptersOf(Core.portionFor(d))).catch(function () {
+      loadErr = '말씀을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.';
+    }).then(function () { if (reading === d) render(); });
+  }
   function readerHtml() {
-    var d = reading, m = mine(me), done = m.done.has(d);
-    var h = '<div class="reader"><button class="linkbtn" data-act="close-read">‹ 돌아가기</button>' +
-      '<div class="card" style="margin-top:8px"><div class="date">' + dateLabel(d) + '</div>' +
-      '<div class="portion">' + Core.portionLabel(Core.portionFor(d)) + '</div>' + chapterLinks(d);
+    var d = reading, p = Core.portionFor(d), list = Core.chaptersOf(p), m = mine(me), done = m.done.has(d);
+    var h = '<div class="reader"><div class="bar2"><button class="linkbtn" data-act="close-read">‹ 돌아가기</button>' +
+      '<span class="sizes"><button data-act="font" data-n="-2" aria-label="글씨 작게">가−</button> ' +
+      '<button data-act="font" data-n="2" aria-label="글씨 크게">가+</button></span></div>' +
+      '<div class="date">' + dateLabel(d) + '</div><div class="portion" style="margin-bottom:4px">' + Core.portionLabel(p) + '</div>';
+    if (loadErr) h += '<div class="card miss">' + esc(loadErr) + '</div>';
+    h += '<div class="text" style="font-size:' + fontSize() + 'px">';
+    list.forEach(function (c) {
+      h += '<h2><span>' + c.name + ' ' + c.chapter + '장</span><a href="' + c.gae + '" target="_blank" rel="noopener">개역개정으로 보기 ↗</a></h2>';
+      var b = books[c.book];
+      if (!b) { h += loadErr ? '' : '<p class="small">불러오는 중…</p>'; return; }
+      b.c[c.chapter - 1].forEach(function (v, i) { h += '<p><sup>' + (i + 1) + '</sup>' + esc(v) + '</p>'; });
+    });
+    h += '</div><div class="src">성경전서 개역한글판 (대한성서공회) · 개역개정은 대한성서공회 웹사이트에서 열려요</div>';
     if (d <= state.today) {
       h += '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + d + '" data-done="' + (done ? 0 : 1) + '">' +
         (done ? '읽었어요 ✅' : '읽기 완료') + '</button>';
     }
-    return h + '</div></div>';
+    h += '<div class="hint" style="margin-top:14px"><button class="linkbtn" data-act="close-read">‹ 돌아가기</button></div></div>';
+    return h;
   }
 
   function allHtml() {
@@ -259,7 +280,7 @@
     var t = state.today;
     if (t < Core.START) return '<div class="card small">' + dateLabel(Core.START, true) + '부터 시작해요.</div>';
     var m = mine(me), last = t > Core.END ? Core.END : t, h = '';
-    h += '<p class="small">날짜를 누르면 읽음 / 안 읽음이 바뀌어요. 📖 를 누르면 그날 말씀이 열려요.</p>';
+    h += '<p class="small">날짜를 누르면 읽음 / 안 읽음이 바뀌어요. 📖 를 누르면 그날 말씀을 읽어요.</p>';
     for (var d = last; d >= Core.START; d = Core.addDays(d, -1)) {
       var done = m.done.has(d), missed = !done && d < t;
       h += '<div class="dayrow"><button class="day' + (done ? ' done' : missed ? ' missed' : '') + '" data-act="mark" data-date="' + d + '" data-done="' + (done ? 0 : 1) + '">' +
@@ -285,6 +306,11 @@
     if (b.dataset.tab) { tab = b.dataset.tab; render(); window.scrollTo(0, 0); return; }
     if (b.dataset.act === 'read') { openReader(b.dataset.date); return; }
     if (b.dataset.act === 'close-read') { reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return; }
+    if (b.dataset.act === 'font') {
+      setFont(Math.max(14, Math.min(34, fontSize() + +b.dataset.n)));
+      var tx = document.querySelector('.reader .text'); if (tx) tx.style.fontSize = fontSize() + 'px';
+      return;
+    }
     var act = b.dataset.act;
     if (act === 'alarm-none') { setAlarm('none'); render(); return; }
     if (act === 'alarm-change') {
