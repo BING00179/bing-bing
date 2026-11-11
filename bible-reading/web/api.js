@@ -95,7 +95,7 @@ var Push = (function () {
   function on(vapidKey) {
     return Notification.requestPermission().then(function (p) {
       if (p !== 'granted') {
-        var err = new Error(p === 'denied' ? '알림이 막혀 있어요. 아래 순서대로 설정에서 허용해 주세요.' : '"허용" 을 눌러야 알림이 와요. 다시 눌러 주세요.');
+        var err = new Error(p === 'denied' ? '🔕 알림 비활성 · 아래 순서대로 허용' : '알림 허용 필요 · 다시 눌러 "허용"');
         err.code = p; // 'denied' (막힘 — 설정에서만 풀 수 있음) / 'default' (창을 그냥 닫음)
         throw err;
       }
