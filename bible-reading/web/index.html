@@ -183,6 +183,25 @@
       '<div class="small">' + p.chapters.toLocaleString() + '장 / ' + Core.TOTAL.toLocaleString() + '장 (' + p.percent + '%)</div>';
   }
 
+  // ── 보던 자리 기억 ── 휴대폰이 내린 앱을 새로 띄워도 읽다 만 말씀·위치·들은 절로 돌아오게
+  var VIEW = 'bible.view';
+  function saveView() {
+    try {
+      localStorage.setItem(VIEW, JSON.stringify({ me: me, tab: tab, reading: reading, readFrom: readFrom,
+        y: Math.round(window.scrollY), tts: Tts.where(), at: Date.now() }));
+    } catch (e) {}
+  }
+  function loadView() {
+    try {
+      var v = JSON.parse(localStorage.getItem(VIEW));
+      return v && v.me === me && Date.now() - v.at < 12 * 3600 * 1000 ? v : null; // 12시간 안이면
+    } catch (e) { return null; }
+  }
+  window.addEventListener('pagehide', saveView);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveView(); });
+  var scrollTimer = null;
+  window.addEventListener('scroll', function () { clearTimeout(scrollTimer); scrollTimer = setTimeout(saveView, 400); }, { passive: true });
+
   function render() {
     var who = document.getElementById('who');
     var main = document.getElementById('main');
@@ -382,19 +401,19 @@
       }).then(function (j) { books[n] = j; });
     }));
   }
-  function openReader(d) {
-    Tts.reset();
-    readFrom = tab; reading = d; loadErr = '';
-    render(); window.scrollTo(0, 0);
+  function openReader(d, restoring, y) {
+    if (!restoring) { Tts.reset(); readFrom = tab; }
+    reading = d; loadErr = '';
+    render(); window.scrollTo(0, y || 0);
     loadBooks(Core.chaptersOf(P.portionFor(d))).catch(function () {
       loadErr = '말씀을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.';
-    }).then(function () { if (reading === d) render(); });
+    }).then(function () { if (reading === d) { render(); if (y) window.scrollTo(0, y); } });
   }
   // ── 말씀 듣기 (휴대폰 한국어 음성, Web Speech) ──
   // 절마다 하나씩 읽음 (긴 글을 한 번에 넘기면 크롬이 중간에 끊는 일이 있어서). 장이 바뀌면 장 이름부터.
   var Tts = (function () {
     var ok = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
-    var queue = [], pos = 0, playing = false, token = 0, cur = null;
+    var queue = [], pos = 0, playing = false, token = 0, cur = null, resume = null;
     function rate() { try { return +localStorage.getItem('bible.rate') || 1; } catch (e) { return 1; } }
     // 듣는 동안 화면이 절전으로 꺼지지 않게 (꺼지면 브라우저가 음성을 멈춤). 멈추면 놓아 줌.
     var lock = null;
@@ -438,12 +457,18 @@
       u.onend = function () { if (my !== token) return; pos++; speak(); };
       u.onerror = function () { if (my !== token) return; pos++; speak(); };
       mark(item);
+      if (pos % 3 === 0) saveView();
       try { speechSynthesis.speak(u); }
       catch (e) { stop(false); toast('🔇 이 휴대폰에서 음성을 낼 수 없어요'); }
     }
     function play() {
       if (!ok) return;
       if (!queue.length) build();
+      // 앱을 다시 띄웠을 때 기억해 둔 절부터 이어 듣기
+      if (resume && queue.length) {
+        for (var i = 0; i < queue.length; i++) if (queue[i].ci === resume.ci && queue[i].vi === resume.vi) { pos = i; break; }
+        resume = null;
+      }
       if (!queue.length) { toast('말씀을 불러오는 중이에요'); return; }
       playing = true; token++;
       speechSynthesis.cancel();
@@ -455,6 +480,10 @@
     function reset() { playing = false; token++; releaseScreen(); if (ok) speechSynthesis.cancel(); queue = []; pos = 0; cur = null; }
     function refresh() { var bar = document.getElementById('ttsbar'); if (bar) bar.outerHTML = ttsBar(); }
     return { ok: ok, play: play, pause: pause, reset: reset, rate: rate, playing: function () { return playing; },
+      // 지금 듣던 절 (보던 자리 기억용)과 그 자리부터 다시 듣기
+      where: function () { return cur ? { ci: cur.ci, vi: cur.vi } : (pos > 0 && queue[pos] ? { ci: queue[pos].ci, vi: queue[pos].vi } : resume); },
+      resumeFrom: function (w) { reset(); resume = w && typeof w.ci === 'number' ? w : null; if (resume) cur = resume; },
+      resumable: function () { return !!resume || (pos > 0 && !playing); },
       at: function (ci, vi) { return !!cur && cur.ci === ci && cur.vi === vi; },
       setRate: function (r) { try { localStorage.setItem('bible.rate', String(r)); } catch (e) {} if (playing) { token++; speechSynthesis.cancel(); playing = true; speak(); } } };
   })();
@@ -465,7 +494,7 @@
     var r = Tts.rate(), on = Tts.playing();
     return '<div id="ttsbar" class="ttsbar">' +
       '<button class="ttsplay' + (on ? ' on' : '') + '" data-act="' + (on ? 'tts-pause' : 'tts-play') + '" aria-label="' + (on ? '멈춤' : '듣기') + '">' +
-      (on ? ICON_PAUSE : ICON_PLAY) + '</button><span class="ttslabel">' + (on ? '듣는 중' : '듣기') + '</span>' +
+      (on ? ICON_PAUSE : ICON_PLAY) + '</button><span class="ttslabel">' + (on ? '듣는 중' : Tts.resumable() ? '이어 듣기' : '듣기') + '</span>' +
       '<span class="seg" role="group" aria-label="빠르기">' +
       [[0.8, '느리게'], [1, '보통'], [1.2, '빠르게']].map(function (x) {
         return '<button class="' + (x[0] === r ? 'sel' : '') + '" data-act="tts-rate" data-r="' + x[0] + '">' + x[1] + '</button>';
@@ -704,7 +733,18 @@
       setState(s);
       var saved = load();
       me = saved && s.members.indexOf(saved) >= 0 ? saved : null;
+      var v = me && loadView();
+      if (v) {
+        tab = v.tab || 'today';
+        if (v.reading && P.portionFor(v.reading)) {
+          readFrom = v.readFrom || 'today';
+          Tts.resumeFrom(v.tts);
+          openReader(v.reading, true, v.y);
+          return;
+        }
+      }
       render();
+      if (v && v.y) window.scrollTo(0, v.y);
     }).catch(function (e) {
       document.getElementById('main').innerHTML = '<div class="card">' + esc(errMsg(e)) +
         '<br><button class="big" style="margin-top:12px" onclick="location.reload()">다시 열기</button></div>';
