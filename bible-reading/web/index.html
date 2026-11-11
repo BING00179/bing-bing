@@ -238,9 +238,9 @@
           return '<button data-act="pick" data-name="' + esc(n) + '">' + esc(n) + '</button>';
         }).join('') + '</div>'
       : '<p class="small">아직 등록한 분이 없어요. 첫 번째로 이름을 적어 주세요.</p>';
-    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">누구세요?</div>' +
+    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">이름 선택</div>' +
       '<div class="small">내 이름을 눌러 주세요. 이 휴대폰에서는 다음부터 기억해요.</div>' + list +
-      '<div style="font-weight:700">처음이에요</div>' +
+      '<div style="font-weight:700">새로 등록</div>' +
       '<input type="text" id="newname" maxlength="20" placeholder="이름 (예: 김영희)" autocomplete="name">' +
       '<button class="big" data-act="register">이름 등록하기</button></div>';
   }
@@ -249,10 +249,10 @@
     var t = state.today, m = mine(me), p = Core.portionFor(t), h = '';
     if (t < Core.START) {
       h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div>' +
-        '<div class="portion">' + dateLabel(Core.START, true) + '<br>' + Core.portionLabel(Core.portionFor(Core.START)) + '으로 시작해요</div>' +
+        '<div class="small" style="margin-top:6px">시작</div><div class="portion" style="margin-top:0">' + dateLabel(Core.START, true) + '<br>' + Core.portionLabel(Core.portionFor(Core.START)) + '</div>' +
         '<div class="small">평일·토요일·공휴일 3장, 주일 5장씩 읽어요. ' + dateLabel(Core.END, true) + '에 요한계시록까지 마칩니다.</div></div>';
     } else if (!p) {
-      h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div><div class="portion">올해 읽기표를 모두 마쳤어요</div></div>';
+      h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div><div class="portion">2027 읽기표 완료</div></div>';
     } else {
       var done = m.done.has(t);
       h += '<div class="card"><div class="date">오늘 · ' + dateLabel(t) + '</div>' +
@@ -278,7 +278,7 @@
   function myHour() { try { return Core.alarmHour(localStorage.getItem('bible.alarmHour')) || Core.DEFAULT_ALARM_HOUR; } catch (e) { return Core.DEFAULT_ALARM_HOUR; } }
   function setHour(h) { try { localStorage.setItem('bible.alarmHour', String(h)); } catch (e) {} }
   function hourPicker() {
-    return '<label class="small" style="display:block;margin-bottom:12px">몇 시에 받을까요? ' +
+    return '<label class="small" style="display:block;margin-bottom:12px">알림 시각 ' +
       '<select id="alarmHour" class="hoursel">' + Core.ALARM_HOURS.map(function (h) {
         return '<option value="' + h + '"' + (h === myHour() ? ' selected' : '') + '>' + Core.hourLabel(h) + '</option>';
       }).join('') + '</select></label>';
@@ -301,7 +301,7 @@
     } else {
       steps = ['주소창 왼쪽 <b>아이콘</b> (자물쇠 또는 ⚙) 을 누르세요', '<b>권한</b> → <b>알림</b>', '<b>허용</b> 으로 바꾸세요'];
     }
-    return '<div class="small miss" style="margin-bottom:8px">🔕 이 휴대폰에서 알림이 막혀 있어요</div>' +
+    return '<div class="small miss" style="margin-bottom:8px">🔕 알림 차단됨</div>' +
       '<div class="small">웹 앱은 설정 화면을 직접 열 수 없어서, 아래 순서로 한 번만 풀어 주세요.</div>' +
       '<ol class="steps">' + steps.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ol>' +
       '<div class="small" style="margin:-6px 0 12px">그래도 안 오면: 휴대폰 <b>설정 → 애플리케이션 → ' +
@@ -323,7 +323,7 @@
     else if (push === 'ios-home') pushPart = '<div class="small"><b>🔔 앱 알림 (아이폰)</b><br>' +
       '아래 가운데 <b>공유 버튼(□↑)</b> → <b>홈 화면에 추가</b> → 홈 화면의 <b>성경통독</b> 아이콘으로 열고 여기를 다시 눌러 주세요.</div>';
     else pushPart = '<div class="small">🔔 이 휴대폰(브라우저)에서는 앱 알림이 안 돼요. 달력 알림을 써 주세요.</div>';
-    return '<div class="card"><div style="font-weight:700">매일 알림, 고르세요</div>' +
+    return '<div class="card"><div style="font-weight:700">매일 알림</div>' +
       '<div class="small" style="margin:4px 0 12px">원하는 분만, 원하는 시각에 받으시면 돼요.</div>' +
       hourPicker() + pushPart + calLink('📅 내 달력에 넣기') +
       '<div class="small" style="margin-top:6px">달력: 362일치 읽을 곳이 달력에 들어가요. 카톡 안에서 안 되면 ⋮ → 다른 브라우저로 열기.</div>' +
@@ -536,7 +536,7 @@
 
   function kakaoHtml() {
     var where = Install.isAndroid() ? '크롬' : Install.isIOS() ? 'Safari' : '외부 브라우저';
-    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">' + where + '(으)로 여는 중…</div>' +
+    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">' + where + '(으)로 이동</div>' +
       '<div class="small" style="margin-bottom:12px">카톡 안에서는 앱 설치와 알림이 안 돼요. 자동으로 안 넘어가면 아래를 눌러 주세요.</div>' +
       '<button class="big" data-act="kakao-out">' + where + '(으)로 열기</button>' +
       '<div class="small" style="margin-top:14px"><b>그래도 안 되면</b><br>' +
@@ -544,7 +544,7 @@
   }
 
   function samsungHtml() {
-    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">크롬으로 여는 중…</div>' +
+    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">크롬으로 이동</div>' +
       '<div class="small" style="margin-bottom:12px">삼성 인터넷보다 크롬에서 앱 설치·알림이 잘 돼요. 자동으로 안 넘어가면 아래를 눌러 주세요.</div>' +
       '<button class="big" data-act="chrome-out">크롬으로 열기</button>' +
       '<div class="hint"><button class="linkbtn" data-act="stay-samsung">크롬이 없어요 · 여기서 계속</button></div></div>';
