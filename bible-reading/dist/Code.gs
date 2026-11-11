@@ -503,7 +503,7 @@ function joins_() {
   var sh = sheet_('참여', ['시각', '이름', '회차', '팀', '동작']);
   // 팀을 넣기 전에 만든 시트에는 넷째·다섯째 칸 제목이 없음 (빈 칸 = 읽기·참여)
   // 비어 있을 때만 채움 (회장님이 제목 글자를 고쳐도 되돌리지 않음)
-  if (sh.getRange(1, 4, 1, 1).getDisplayValues()[0][0] === '') sh.getRange(1, 4, 1, 2).setValues([['팀', '동작']]);
+  if (!sh.getRange(1, 4, 1, 1).getDisplayValues()[0][0]) sh.getRange(1, 4, 1, 2).setValues([['팀', '동작']]);
   return sh;
 }
 
@@ -521,7 +521,7 @@ function openTerm_() { var tn = Core.termsNow(terms_(), today_()); return tn.nex
 function pushes_() {
   var sh = sheet_('알림', ['시각', '이름', '알림 주소', '동작', '알림 시간']);
   // 시각 고르기 전에 만든 시트에는 다섯째 칸 제목이 없음
-  if (sh.getRange(1, 5, 1, 1).getDisplayValues()[0][0] === '') sh.getRange(1, 5, 1, 1).setValues([['알림 시간']]);
+  if (!sh.getRange(1, 5, 1, 1).getDisplayValues()[0][0]) sh.getRange(1, 5, 1, 1).setValues([['알림 시간']]);
   return sh;
 }
 function now_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
