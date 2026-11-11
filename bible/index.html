@@ -396,6 +396,18 @@
     var ok = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
     var queue = [], pos = 0, playing = false, token = 0, cur = null;
     function rate() { try { return +localStorage.getItem('bible.rate') || 1; } catch (e) { return 1; } }
+    // 듣는 동안 화면이 절전으로 꺼지지 않게 (꺼지면 브라우저가 음성을 멈춤). 멈추면 놓아 줌.
+    var lock = null;
+    function holdScreen() {
+      if (lock || !('wakeLock' in navigator)) return;
+      navigator.wakeLock.request('screen').then(function (l) {
+        lock = l; l.addEventListener('release', function () { lock = null; });
+        if (!playing) releaseScreen();
+      }).catch(function () {});
+    }
+    function releaseScreen() { if (lock) { try { lock.release(); } catch (e) {} lock = null; } }
+    // 다른 앱에 갔다 오면 화면 붙잡기가 풀리므로 다시
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && playing) holdScreen(); });
     function voice() {
       var vs = ok ? speechSynthesis.getVoices() : [];
       return vs.filter(function (v) { return /^ko/i.test(v.lang); })[0] || null;
@@ -435,11 +447,12 @@
       if (!queue.length) { toast('말씀을 불러오는 중이에요'); return; }
       playing = true; token++;
       speechSynthesis.cancel();
+      holdScreen();
       speak(); refresh();
     }
-    function pause() { playing = false; token++; if (ok) speechSynthesis.cancel(); refresh(); }
-    function stop(done) { playing = false; token++; if (ok) speechSynthesis.cancel(); if (done) pos = 0; queue = done ? [] : queue; mark(null); refresh(); }
-    function reset() { playing = false; token++; if (ok) speechSynthesis.cancel(); queue = []; pos = 0; cur = null; }
+    function pause() { playing = false; token++; releaseScreen(); if (ok) speechSynthesis.cancel(); refresh(); }
+    function stop(done) { playing = false; token++; releaseScreen(); if (ok) speechSynthesis.cancel(); if (done) pos = 0; queue = done ? [] : queue; mark(null); refresh(); }
+    function reset() { playing = false; token++; releaseScreen(); if (ok) speechSynthesis.cancel(); queue = []; pos = 0; cur = null; }
     function refresh() { var bar = document.getElementById('ttsbar'); if (bar) bar.outerHTML = ttsBar(); }
     return { ok: ok, play: play, pause: pause, reset: reset, rate: rate, playing: function () { return playing; },
       at: function (ci, vi) { return !!cur && cur.ci === ci && cur.vi === vi; },
