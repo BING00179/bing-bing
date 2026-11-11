@@ -19,6 +19,11 @@ var Core = (function () {
     ['베드로전서', 5], ['베드로후서', 3], ['요한1서', 5], ['요한2서', 1], ['요한3서', 1],
     ['유다서', 1], ['요한계시록', 22]
   ];
+  // 대한성서공회 웹사이트(개역개정) 책 약어 — BOOKS 와 같은 순서.
+  // gen·jhn·1jn·ezk 는 실제 주소로 확인(2026-11-11 검색), 나머지는 같은 규칙(USFM 소문자)으로 짐작.
+  var GAE_CODES = ('gen exo lev num deu jos jdg rut 1sa 2sa 1ki 2ki 1ch 2ch ezr neh est job psa pro ' +
+    'ecc sng isa jer lam ezk dan hos jol amo oba jon mic nam hab zep hag zec mal mat mrk luk jhn act ' +
+    'rom 1co 2co gal eph php col 1th 2th 1ti 2ti tit phm heb jas 1pe 2pe 1jn 2jn 3jn jud rev').split(' ');
   var START = '2027-01-01';
   // 화면 주소 (GitHub Pages, 공개). 시트 쪽 주소는 링크 뒤 ?s= 로만 다닙니다.
   var APP_BASE = 'https://bing00179.github.io/bing-bing/bible/';
@@ -60,6 +65,18 @@ var Core = (function () {
       if (BOOKS[CHAPTERS[i][0]][0] === book && CHAPTERS[i][1] === ch) return i;
     }
     return -1;
+  }
+
+  // 그날 분량의 장 목록: [{book: 1~66, name: '창세기', chapter: 1, gae: '개역개정 링크'}, …]
+  function chaptersOf(p) {
+    var out = [];
+    if (!p) return out;
+    for (var i = p.from; i <= p.to; i++) {
+      var c = CHAPTERS[i];
+      out.push({ book: c[0] + 1, name: BOOKS[c[0]][0], chapter: c[1],
+        gae: 'https://www.bskorea.or.kr/bible/korbibReadpage.php?version=GAE&book=' + GAE_CODES[c[0]] + '&chap=' + c[1] });
+    }
+    return out;
   }
 
   function portionLabel(p) {
@@ -172,7 +189,7 @@ var Core = (function () {
     icsFor: icsFor, icsEscape: icsEscape,
     APP_BASE: APP_BASE, BOOKS: BOOKS, TOTAL: TOTAL, START: START, END: END, DAY_COUNT: DAY_COUNT,
     addDays: addDays, weekday: weekday, portionFor: portionFor, chapterIndex: chapterIndex,
-    portionLabel: portionLabel, doneSet: doneSet, progress: progress,
+    portionLabel: portionLabel, chaptersOf: chaptersOf, GAE_CODES: GAE_CODES, doneSet: doneSet, progress: progress,
     missedDays: missedDays, lastReadLabel: lastReadLabel, validName: validName
   };
 })();
