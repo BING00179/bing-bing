@@ -120,6 +120,7 @@
     padding: 12px 16px; border-radius: 12px; font-size: 16px; display: none; }
   .loading { text-align: center; color: var(--muted); padding: 40px 0; }
   button:disabled { opacity: .6; cursor: wait; }
+  .big[disabled], .copybtn[disabled] { opacity: .4; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -333,7 +334,11 @@
         '<div class="small" style="margin-top:6px">시작</div><div class="portion" style="margin-top:0">' + dateLabel(P.START, true) + '<br>' +
         '<button class="portionlink" data-act="read" data-date="' + P.START + '">' + Core.portionLabel(P.portionFor(P.START)) + '</button></div>' +
         '<button class="readbtn" data-act="read" data-date="' + P.START + '">📖 말씀 미리 보기</button>' +
-        '<div class="small">평일·토요일·공휴일 3장, 주일 5장씩 읽어요. ' + dateLabel(P.END, true) + '에 요한계시록까지 마칩니다.</div></div>';
+        // 시작 전에는 내 팀 버튼을 흐리게 미리 보여 줌 (누를 수 없음)
+        (inTeam('읽기') ? '<button class="big" disabled>읽기 완료</button>' : '') +
+        (inTeam('필사') ? '<button class="copybtn" disabled>✍️ 필사 완료</button>' : '') +
+        (inTeam('읽기') || inTeam('필사') ? '<div class="hint">' + dateLabel(P.START) + '부터 누를 수 있어요</div>' : '') +
+        '<div class="small" style="margin-top:10px">평일·토요일·공휴일 3장, 주일 5장씩 읽어요. ' + dateLabel(P.END, true) + '에 요한계시록까지 마칩니다.</div></div>';
     } else if (!p) {
       h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div><div class="portion">' + TN.cur.n + '기 통독 완료</div>' + (TN.next ? '<div class="small">' + TN.next.n + '기 시작 · ' + dateLabel(TN.next.start, true) + '</div>' : '<div class="small">다음 회차는 리더가 정하면 열려요.</div>') + '</div>';
     } else {
