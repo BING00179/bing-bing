@@ -38,3 +38,19 @@ self.addEventListener('notificationclick', function (e) {
 });
 
 if (typeof module !== 'undefined') module.exports = { morningNotice: morningNotice };
+
+// 화면 파일을 저장해 두었다가 인터넷이 끊겨도 앱이 열리게 (같은 주소의 파일만, 최신 우선).
+// 크롬은 이 처리가 있어야 앱이 '설치 창' 을 직접 띄울 수 있습니다.
+var CACHE = 'bible-v1';
+self.addEventListener('fetch', function (e) {
+  var req = e.request;
+  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  e.respondWith(fetch(req).then(function (res) {
+    if (res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(req, copy); }); }
+    return res;
+  }).catch(function () {
+    return caches.match(req, { ignoreSearch: req.mode === 'navigate' }).then(function (hit) {
+      return hit || new Response('인터넷 연결을 확인해 주세요.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    });
+  }));
+});

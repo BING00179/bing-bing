@@ -86,6 +86,9 @@
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   .dayrow .day { margin-bottom: 0; }
   .dayrow .open { font: inherit; font-size: 20px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+  ol.steps { margin: 6px 0 14px; padding-left: 22px; line-height: 1.7; }
+  ol.steps li { margin-bottom: 6px; }
+  .key { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; font-size: .9em; }
   .toast { position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 488px; margin: 0 auto; background: var(--ink); color: var(--bg);
     padding: 12px 16px; border-radius: 12px; font-size: 16px; display: none; }
   .loading { text-align: center; color: var(--muted); padding: 40px 0; }
@@ -149,11 +152,59 @@
       return;
     }
     who.innerHTML = esc(me) + ' 님 · <button class="linkbtn" data-act="switch">다른 이름</button>';
+    if (!setupDone()) { main.innerHTML = setupHtml(); return; }
     var tabs = [['today', '오늘'], ['all', '함께 읽기'], ['past', '지난 날']];
     if (reading) { main.innerHTML = readerHtml(); return; }
     main.innerHTML = '<nav role="tablist">' + tabs.map(function (t) {
       return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + '</button>';
     }).join('') + '</nav>' + (tab === 'today' ? todayHtml() : tab === 'all' ? allHtml() : pastHtml());
+  }
+
+  // ── 처음 한 번: 홈 화면 설치 → 알림 켜기 (원스톱) ──
+  function setupDone() { try { return localStorage.getItem('bible.setup') === 'done' || !!alarmChoice(); } catch (e) { return true; } }
+  function finishSetup() { try { localStorage.setItem('bible.setup', 'done'); } catch (e) {} tab = 'today'; render(); window.scrollTo(0, 0); }
+  function skipInstall() { try { localStorage.setItem('bible.installSkip', '1'); } catch (e) {} }
+  function installSkipped() { try { return localStorage.getItem('bible.installSkip') === '1'; } catch (e) { return false; } }
+  function stepHead(n, title) {
+    return '<div class="small" style="margin-bottom:4px">' + n + ' / 2 단계</div><div class="portion" style="font-size:24px;margin-top:0">' + title + '</div>';
+  }
+  function setupHtml() {
+    var h = '<div class="card">';
+    if (!Install.installed() && !installSkipped()) {
+      h += stepHead(1, '📲 홈 화면에 앱 설치');
+      if (Install.canPrompt()) {
+        h += '<div class="small" style="margin-bottom:12px">한 번 설치하면 앱처럼 아이콘을 눌러 바로 열려요.</div>' +
+          '<button class="big" data-act="install">홈 화면에 설치하기</button>';
+      } else if (Install.isIOS()) {
+        h += '<ol class="steps"><li>화면 아래 가운데 <b>공유 버튼</b> <span class="key">□↑</span> 을 누르세요</li>' +
+          '<li>목록을 올려 <b>홈 화면에 추가</b> 를 누르세요</li>' +
+          '<li>오른쪽 위 <b>추가</b> 를 누르세요</li>' +
+          '<li>홈 화면에 생긴 <b>성경통독</b> 아이콘으로 다시 열면 <b>알림 켜기</b> 가 이어져요</li></ol>' +
+          '<div class="small">아이폰은 홈 화면 아이콘으로 연 앱에서만 알림을 받을 수 있어요. 이름은 한 번 더 골라 주세요.</div>';
+      } else {
+        h += '<ol class="steps"><li>오른쪽 위 <b>⋮</b> (또는 아래 <b>≡</b>) 메뉴를 누르세요</li>' +
+          '<li><b>홈 화면에 추가</b> 또는 <b>앱 설치</b> 를 누르세요</li>' +
+          '<li><b>설치</b> / <b>추가</b> 를 누르세요</li></ol>' +
+          '<button class="big" data-act="installed">설치했어요</button>';
+      }
+      h += '<div class="hint"><button class="linkbtn" data-act="install-skip">설치는 나중에</button></div>';
+    } else {
+      h += stepHead(2, '🔔 매일 아침 6시 알림');
+      var push = Push.status();
+      if (state.vapidKey && push === 'ok') {
+        h += '<div class="small" style="margin-bottom:12px">아침 6시에 "📖 오늘 읽을 곳" 알림이 와요. 누르면 바로 이 앱이 열려요.</div>' +
+          '<button class="big" data-act="setup-push">알림 켜기</button>' +
+          '<div class="small" style="margin-top:8px">휴대폰이 "알림 허용?" 을 물으면 <b>허용</b> 을 눌러 주세요.</div>';
+      } else if (push === 'ios-home') {
+        h += '<div class="small" style="margin-bottom:12px">아이폰은 홈 화면 아이콘으로 연 앱에서만 앱 알림이 돼요. 대신 달력 알림을 쓰실 수 있어요.</div>';
+      } else {
+        h += '<div class="small" style="margin-bottom:12px">이 휴대폰에서는 앱 알림이 안 돼요. 대신 달력 알림을 쓰실 수 있어요.</div>';
+      }
+      h += '<a class="big" style="display:block;text-align:center;text-decoration:none;margin-top:10px;background:var(--card);color:var(--accent);border:2px solid var(--accent)"' +
+        ' target="_blank" rel="noopener" href="' + esc(Api.calendarUrl()) + '" data-act="cal-get">📅 달력 알림으로 받기</a>' +
+        '<div class="hint"><button class="linkbtn" data-act="setup-none">알림 없이 시작하기</button></div>';
+    }
+    return h + '</div>';
   }
 
   function pickerHtml() {
@@ -320,6 +371,19 @@
       else render();
       return;
     }
+    if (act === 'kakao-out') { Install.openExternal(); return; }
+    if (act === 'install') {
+      Install.prompt().then(function (ok) { if (!ok) toast('설치를 취소했어요. 다시 누르거나 "설치는 나중에" 를 눌러 주세요.'); render(); });
+      return;
+    }
+    if (act === 'installed') { try { localStorage.setItem('bible.installed', '1'); } catch (e2) {} render(); return; }
+    if (act === 'install-skip') { skipInstall(); render(); return; }
+    if (act === 'setup-none') { setAlarm('none'); finishSetup(); return; }
+    if (act === 'setup-push') {
+      run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u); }),
+        function () { setAlarm('push'); try { localStorage.setItem('bible.setup', 'done'); } catch (e3) {} tab = 'today'; toast('알림을 켰어요. 아침 6시에 만나요 🔔'); });
+      return;
+    }
     if (act === 'push-on') {
       run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u); }),
         function () { setAlarm('push'); toast('내일 아침 6시부터 알림이 와요 🔔'); });
@@ -341,13 +405,27 @@
   // 달력 링크(<a>)는 버튼이 아니라 따로 받음 — 연 뒤에는 고른 것으로 기억
   document.addEventListener('click', function (e) {
     var a = e.target.closest('a[data-act=cal-get]');
-    if (a) setTimeout(function () { setAlarm('cal'); render(); }, 500);
+    if (a) setTimeout(function () { setAlarm('cal'); if (!setupDone()) finishSetup(); else render(); }, 500);
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target.id === 'newname') document.querySelector('[data-act=register]').click();
   });
 
+  function kakaoHtml() {
+    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">바깥 브라우저로 여는 중…</div>' +
+      '<div class="small" style="margin-bottom:12px">카톡 안에서는 앱 설치와 알림이 안 돼요. 자동으로 안 넘어가면 아래를 눌러 주세요.</div>' +
+      '<button class="big" data-act="kakao-out">바깥 브라우저로 열기</button>' +
+      '<div class="small" style="margin-top:14px"><b>그래도 안 되면</b><br>' +
+      (Install.isIOS() ? '오른쪽 아래 <b>공유 버튼</b> → <b>Safari로 열기</b>' : '오른쪽 위 <b>⋮</b> → <b>다른 브라우저로 열기</b>') + '</div></div>';
+  }
+
   function start() {
+    if (Install.isKakao()) {
+      document.getElementById('main').innerHTML = kakaoHtml();
+      Install.openExternal();
+      return;
+    }
+    Install.onChange(function () { if (state && me && !setupDone()) render(); });
     if (!Api.ready) {
       document.getElementById('main').innerHTML = '<div class="card">단톡방에 올라온 <b>링크</b>를 눌러 들어와 주세요.<br>' +
         '<span class="small">(링크 끝에 우리 모임 주소가 붙어 있어야 열려요)</span></div>';
@@ -364,6 +442,11 @@
         '<br><button class="big" style="margin-top:12px" onclick="location.reload()">다시 열기</button></div>';
     });
   }
+  // 앱으로 돌아올 때마다(닫았다 열기·다른 앱에서 복귀) 최신 기록으로 새로고침
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible' || !state || busy || !Api.ready) return;
+    Api.state().then(function (s) { state = s; if (!busy) render(); }).catch(function () {});
+  });
   start();
 })();
 </script>

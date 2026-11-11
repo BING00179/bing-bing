@@ -111,3 +111,43 @@ var Push = (function () {
   }
   return { status: status, on: on, off: off };
 })();
+
+// ── 홈 화면 설치 ──
+// 안드로이드 크롬·삼성 인터넷: 설치 창을 앱이 직접 띄울 수 있음(beforeinstallprompt).
+// 아이폰: 앱이 띄울 수 없어서 Safari 공유 버튼 → 홈 화면에 추가 를 안내.
+var Install = (function () {
+  var deferred = null;
+  var listeners = [];
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferred = e;
+    listeners.forEach(function (f) { f(); });
+  });
+  window.addEventListener('appinstalled', function () {
+    deferred = null;
+    try { localStorage.setItem('bible.installed', '1'); } catch (e) {}
+    listeners.forEach(function (f) { f(); });
+  });
+  var ua = navigator.userAgent;
+  return {
+    isKakao: function () { return /KAKAOTALK/i.test(ua); },
+    isIOS: function () { return /iPhone|iPad|iPod/.test(ua); },
+    standalone: function () { return navigator.standalone === true || matchMedia('(display-mode: standalone)').matches; },
+    installed: function () {
+      if (this.standalone()) return true;
+      try { return localStorage.getItem('bible.installed') === '1'; } catch (e) { return false; }
+    },
+    canPrompt: function () { return !!deferred; },
+    prompt: function () {
+      var d = deferred; deferred = null;
+      d.prompt();
+      return d.userChoice.then(function (c) {
+        if (c.outcome === 'accepted') { try { localStorage.setItem('bible.installed', '1'); } catch (e) {} }
+        return c.outcome === 'accepted';
+      });
+    },
+    onChange: function (f) { listeners.push(f); },
+    // 카톡 안 브라우저 → 바깥 브라우저 (카카오 비공식 주소, 안 되는 경우가 있어 안내 화면을 같이 보여 줌)
+    openExternal: function () { location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href); }
+  };
+})();
