@@ -84,9 +84,15 @@
   .reader .text sup { color: var(--muted); font-size: .65em; margin-right: 4px; vertical-align: .35em; }
   .reader .src { font-size: 13px; color: var(--muted); margin: 18px 0 14px; }
   .portionlink { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
-  .ttsbar { display: flex; gap: 8px; align-items: center; margin: 8px -16px 4px; padding: 8px 16px; position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
-  .ttsbtn { font: inherit; font-size: 18px; font-weight: 700; padding: 10px 16px; border-radius: 12px; border: 2px solid var(--accent); background: var(--card); color: var(--accent); cursor: pointer; }
-  .ttsbtn.on { background: var(--accent); color: var(--accent-ink); }
+  .ttsbar { display: flex; gap: 8px; align-items: center; margin: 6px -16px 4px; padding: 6px 16px; position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .ttsplay { width: 38px; height: 38px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
+    background: var(--accent); color: var(--accent-ink); flex: none; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+  .ttsplay svg { margin-left: 2px; }
+  .ttsplay.on svg { margin-left: 0; }
+  .ttslabel { font-size: 14px; color: var(--muted); min-width: 52px; }
+  .seg { margin-left: auto; display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--card); }
+  .seg button { font: inherit; font-size: 13px; border: 0; background: none; color: var(--muted); padding: 4px 9px; border-radius: 999px; cursor: pointer; }
+  .seg button.sel { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
   .reader .text p.speaking, .reader h2.speaking { background: var(--done-bg); border-radius: 8px; box-shadow: 0 0 0 4px var(--done-bg); }
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
   .dayrow .day { margin-bottom: 0; }
@@ -439,15 +445,20 @@
       at: function (ci, vi) { return !!cur && cur.ci === ci && cur.vi === vi; },
       setRate: function (r) { try { localStorage.setItem('bible.rate', String(r)); } catch (e) {} if (playing) { token++; speechSynthesis.cancel(); playing = true; speak(); } } };
   })();
+  var ICON_PLAY = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>';
+  var ICON_PAUSE = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><rect x="6.5" y="5.5" width="4" height="13" rx="1.2" fill="currentColor"/><rect x="13.5" y="5.5" width="4" height="13" rx="1.2" fill="currentColor"/></svg>';
   function ttsBar() {
-    if (!Tts.ok) return '<div id="ttsbar" class="small" style="margin:6px 0 4px">🔇 이 휴대폰은 말씀 듣기를 지원하지 않아요</div>';
-    var r = Tts.rate();
+    if (!Tts.ok) return '<div id="ttsbar" class="small" style="margin:6px 0 4px">이 휴대폰은 말씀 듣기를 지원하지 않아요</div>';
+    var r = Tts.rate(), on = Tts.playing();
     return '<div id="ttsbar" class="ttsbar">' +
-      (Tts.playing() ? '<button class="ttsbtn on" data-act="tts-pause">⏸ 멈춤</button>' : '<button class="ttsbtn" data-act="tts-play">🔊 듣기</button>') +
-      '<select id="ttsRate" class="hoursel" aria-label="빠르기">' +
-      [[0.8, '느리게'], [1, '보통'], [1.2, '빠르게']].map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === r ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') +
-      '</select></div>';
+      '<button class="ttsplay' + (on ? ' on' : '') + '" data-act="' + (on ? 'tts-pause' : 'tts-play') + '" aria-label="' + (on ? '멈춤' : '듣기') + '">' +
+      (on ? ICON_PAUSE : ICON_PLAY) + '</button><span class="ttslabel">' + (on ? '듣는 중' : '듣기') + '</span>' +
+      '<span class="seg" role="group" aria-label="빠르기">' +
+      [[0.8, '느리게'], [1, '보통'], [1.2, '빠르게']].map(function (x) {
+        return '<button class="' + (x[0] === r ? 'sel' : '') + '" data-act="tts-rate" data-r="' + x[0] + '">' + x[1] + '</button>';
+      }).join('') + '</span></div>';
   }
+
 
   function readerHtml() {
     var d = reading, p = P.portionFor(d), list = Core.chaptersOf(p), m = mine(me), done = m.done.has(d);
@@ -552,6 +563,7 @@
     if (b.dataset.tab) { tab = b.dataset.tab; render(); window.scrollTo(0, 0); return; }
     if (b.dataset.act === 'read') { openReader(b.dataset.date); return; }
     if (b.dataset.act === 'tts-play') { Tts.play(); return; }
+    if (b.dataset.act === 'tts-rate') { Tts.setRate(+b.dataset.r); var bar = document.getElementById('ttsbar'); if (bar) bar.outerHTML = ttsBar(); return; }
     if (b.dataset.act === 'tts-pause') { Tts.pause(); return; }
     if (b.dataset.act === 'close-read') { Tts.reset(); reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return; }
     if (b.dataset.act === 'font') {
