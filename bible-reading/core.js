@@ -20,6 +20,8 @@ var Core = (function () {
     ['유다서', 1], ['요한계시록', 22]
   ];
   var START = '2027-01-01';
+  // 화면 주소 (GitHub Pages, 공개). 시트 쪽 주소는 링크 뒤 ?s= 로만 다닙니다.
+  var APP_BASE = 'https://bing00179.github.io/bing-bing/bible/';
   var SUNDAY_CHAPTERS = 5;
   var OTHER_CHAPTERS = 3; // 평일·토요일·공휴일
 
@@ -168,7 +170,7 @@ var Core = (function () {
 
   return {
     icsFor: icsFor, icsEscape: icsEscape,
-    BOOKS: BOOKS, TOTAL: TOTAL, START: START, END: END, DAY_COUNT: DAY_COUNT,
+    APP_BASE: APP_BASE, BOOKS: BOOKS, TOTAL: TOTAL, START: START, END: END, DAY_COUNT: DAY_COUNT,
     addDays: addDays, weekday: weekday, portionFor: portionFor, chapterIndex: chapterIndex,
     portionLabel: portionLabel, doneSet: doneSet, progress: progress,
     missedDays: missedDays, lastReadLabel: lastReadLabel, validName: validName

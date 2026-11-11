@@ -1,24 +1,45 @@
-// 성경통독 — 앱스 스크립트 서버. build.js 가 이 파일 앞에 core.js 를 붙여
-// dist/Code.gs 를 만듭니다. 시트 주소나 배포 주소는 여기 적지 않습니다(공개 저장소).
+// 성경통독 — 앱스 스크립트 서버(기록·알림 담당). 화면은 GitHub Pages 에 있습니다.
+// build.js 가 core.js·webpush.js 를 앞에 붙여 dist/Code.gs 를 만듭니다.
+// 시트 주소·배포 주소·알림 개인키는 저장소에 적지 않습니다(공개 저장소).
+//   개인키는 setupPush() 가 만들어 '스크립트 속성'에만 둡니다.
 //
-// 시트 두 장 (없으면 처음 열 때 만듦)
+// 시트 세 장 (없으면 처음 쓸 때 만듦) — 전부 지우지 않고 덧쌓기만
 //   회원   이름 | 등록 시각
-//   기록   시각 | 이름 | 날짜 | 동작(완료/취소)   ← 지우지 않고 덧쌓기만
+//   기록   시각 | 이름 | 날짜 | 동작(완료/취소)
+//   알림   시각 | 이름 | 알림 주소 | 동작(등록/해제/만료)
 
 var TZ = 'Asia/Seoul';
 
+// ── 문 ─────────────────────────────────────────────
 function doGet(e) {
-  // ?cal=1 → 매일 아침 6시 알림이 들어 있는 달력 파일(.ics)
-  if (e && e.parameter && e.parameter.cal) {
-    return ContentService.createTextOutput(Core.icsFor(appUrl_()))
+  var p = (e && e.parameter) || {};
+  if (p.cal) {
+    // 매일 아침 6시 알림이 들어 있는 달력 파일
+    return ContentService.createTextOutput(Core.icsFor(appLink_()))
       .setMimeType(ContentService.MimeType.ICAL)
       .downloadAsFile('bible-2027.ics');
   }
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('함께 읽는 성경')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  return json_(function () { return getState(); });
 }
 
+// 화면은 text/plain 으로 {"fn": "...", "args": [...]} 를 보냅니다 (CORS 사전 요청을 피함).
+function doPost(e) {
+  return json_(function () {
+    var req = JSON.parse(e.postData.contents);
+    var fns = { register: register, mark: mark, subscribe: subscribe, unsubscribe: unsubscribe };
+    if (!fns[req.fn]) throw new Error('모르는 요청입니다.');
+    return fns[req.fn].apply(null, req.args || []);
+  });
+}
+
+function json_(f) {
+  var out;
+  try { out = { ok: true, data: f() }; }
+  catch (err) { out = { ok: false, error: String(err && err.message || err) }; }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── 시트 ───────────────────────────────────────────
 function sheet_(name, header) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(name);
@@ -26,14 +47,12 @@ function sheet_(name, header) {
     sh = ss.insertSheet(name);
     sh.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold');
     sh.setFrozenRows(1);
-    // 날짜가 시트에서 날짜형으로 바뀌지 않게 전부 글자로
-    sh.getRange('A:D').setNumberFormat('@');
   }
   return sh;
 }
 function members_() { return sheet_('회원', ['이름', '등록 시각']); }
 function records_() { return sheet_('기록', ['시각', '이름', '날짜', '동작']); }
-function appUrl_() { return ScriptApp.getService().getUrl(); }
+function pushes_() { return sheet_('알림', ['시각', '이름', '알림 주소', '동작']); }
 function now_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
 function today_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd'); }
 
@@ -42,48 +61,114 @@ function rows_(sh, cols) {
   if (n < 1) return [];
   return sh.getRange(2, 1, n, cols).getDisplayValues();
 }
-
 function append_(sh, row) {
   var r = sh.getRange(sh.getLastRow() + 1, 1, 1, row.length);
-  r.setNumberFormat('@');
+  r.setNumberFormat('@'); // 날짜가 날짜형으로 바뀌지 않게 글자로
   r.setValues([row]);
 }
+function locked_(f) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try { return f(); } finally { lock.releaseLock(); }
+}
+function memberNames_() { return rows_(members_(), 1).map(function (r) { return r[0]; }).filter(String); }
 
-// 화면이 처음 열릴 때와 버튼을 누른 뒤 부릅니다.
+// 이 배포의 주소 조각(…/macros/s/<여기>/exec) → 화면 주소 뒤에 붙임
+function deploymentId_() {
+  var m = String(ScriptApp.getService().getUrl()).match(/\/s\/([A-Za-z0-9_-]+)\//);
+  return m ? m[1] : '';
+}
+function appLink_() { return Core.APP_BASE + '?s=' + deploymentId_(); }
+
+// ── 화면이 부르는 것 ────────────────────────────────
 function getState() {
-  var names = rows_(members_(), 1).map(function (r) { return r[0]; }).filter(String);
   var recs = rows_(records_(), 4).map(function (r) { return [r[1], r[2], r[3]]; });
-  return { today: today_(), members: names, records: recs, appUrl: appUrl_() };
+  var pub = PropertiesService.getScriptProperties().getProperty('VAPID_PUBLIC') || '';
+  return { today: today_(), members: memberNames_(), records: recs, vapidKey: pub };
 }
 
 function register(name) {
   var n = Core.validName(name);
   if (!n) throw new Error('이름은 1~20자로 적어 주세요.');
-  var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    var exists = rows_(members_(), 1).some(function (r) { return r[0] === n; });
-    if (!exists) append_(members_(), [n, now_()]);
-  } finally {
-    lock.releaseLock();
-  }
+  locked_(function () {
+    if (memberNames_().indexOf(n) < 0) append_(members_(), [n, now_()]);
+  });
   var s = getState();
   s.name = n;
   return s;
 }
 
 function mark(name, date, done) {
-  var today = today_();
   if (!Core.portionFor(date)) throw new Error('읽기표에 없는 날짜입니다.');
-  if (date > today) throw new Error('아직 오지 않은 날은 체크할 수 없어요.');
-  var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    var known = rows_(members_(), 1).some(function (r) { return r[0] === name; });
-    if (!known) throw new Error('등록되지 않은 이름입니다.');
+  if (date > today_()) throw new Error('아직 오지 않은 날은 체크할 수 없어요.');
+  locked_(function () {
+    if (memberNames_().indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
     append_(records_(), [now_(), name, date, done ? '완료' : '취소']);
-  } finally {
-    lock.releaseLock();
-  }
+  });
   return getState();
+}
+
+function subscribe(name, endpoint) {
+  if (!WebPush.allowedEndpoint(endpoint)) throw new Error('이 휴대폰의 알림 주소를 받을 수 없어요.');
+  locked_(function () {
+    if (memberNames_().indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
+    append_(pushes_(), [now_(), name, endpoint, '등록']);
+  });
+  return getState();
+}
+
+function unsubscribe(endpoint) {
+  if (!WebPush.allowedEndpoint(endpoint)) throw new Error('이 휴대폰의 알림 주소를 받을 수 없어요.');
+  locked_(function () { append_(pushes_(), [now_(), '', endpoint, '해제']); });
+  return getState();
+}
+
+// 알림 주소별 마지막 동작이 '등록' 인 것
+function activeEndpoints_() {
+  var last = {};
+  rows_(pushes_(), 4).forEach(function (r) { last[r[2]] = r[3]; });
+  return Object.keys(last).filter(function (u) { return last[u] === '등록'; });
+}
+
+// ── 아침 알림 ───────────────────────────────────────
+// 회장님이 편집기에서 한 번 실행: ▶ setupPush
+function setupPush() {
+  var props = PropertiesService.getScriptProperties();
+  if (!props.getProperty('VAPID_PRIVATE')) {
+    var keys = WebPush.newKeys(function () { return Utilities.getUuid(); });
+    props.setProperties({ VAPID_PRIVATE: keys.privateKey, VAPID_PUBLIC: keys.publicKey });
+  }
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'sendMorning') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sendMorning').timeBased().atHour(6).nearMinute(0).everyDays(1).inTimezone(TZ).create();
+  Logger.log('알림 준비 끝. 매일 아침 6시 무렵 sendMorning 이 돕니다. 알림 받는 휴대폰: ' + activeEndpoints_().length + '대');
+}
+
+// 매일 아침 트리거가 부릅니다. 빈 알림을 보내면 휴대폰이 그날 분량을 계산해 띄웁니다.
+function sendMorning() {
+  if (!Core.portionFor(today_())) return 0; // 시작 전·끝난 뒤
+  var props = PropertiesService.getScriptProperties();
+  var priv = props.getProperty('VAPID_PRIVATE');
+  if (!priv) throw new Error('setupPush 를 먼저 실행해 주세요.');
+  var keys = { privateKey: priv, publicKey: props.getProperty('VAPID_PUBLIC') };
+  var urls = activeEndpoints_();
+  if (!urls.length) return 0;
+  var nowSec = Math.floor(Date.now() / 1000);
+  var reqs = urls.map(function (u) {
+    return {
+      url: u, method: 'post', muteHttpExceptions: true,
+      headers: { Authorization: WebPush.vapidHeader(u, keys, Core.APP_BASE, nowSec), TTL: '43200', Urgency: 'high' }
+    };
+  });
+  var res = UrlFetchApp.fetchAll(reqs), sent = 0, gone = [];
+  res.forEach(function (r, i) {
+    var c = r.getResponseCode();
+    if (c >= 200 && c < 300) sent++;
+    else if (c === 404 || c === 410) gone.push(urls[i]); // 앱을 지웠거나 알림을 끈 휴대폰
+    else Logger.log('알림 실패 ' + c + ' ' + urls[i].slice(0, 40) + '… ' + r.getContentText().slice(0, 200));
+  });
+  if (gone.length) locked_(function () { gone.forEach(function (u) { append_(pushes_(), [now_(), '', u, '만료']); }); });
+  Logger.log('보냄 ' + sent + ' / ' + urls.length + ', 만료 ' + gone.length);
+  return sent;
 }

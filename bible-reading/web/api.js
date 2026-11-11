@@ -1,0 +1,113 @@
+// 화면 ↔ 구글 시트(앱스 스크립트) 연결.
+// 시트 쪽 주소는 저장소에 없습니다. 단톡방 링크 뒤 ?s=<배포 아이디> 로 들어와
+// 이 휴대폰에 기억됩니다. ?s=preview 는 가짜 서버(이 브라우저에만 기록)로 미리보기.
+var Api = (function () {
+  var params = new URLSearchParams(location.search);
+  var KEY = 'bible.s';
+  var s = params.get('s');
+  try {
+    if (s) localStorage.setItem(KEY, s);
+    else s = localStorage.getItem(KEY);
+  } catch (e) {}
+  if (s && s !== 'preview' && !/^[A-Za-z0-9_-]{20,150}$/.test(s)) s = null;
+
+  var base = s && s !== 'preview' ? 'https://script.google.com/macros/s/' + s + '/exec' : null;
+
+  function unwrap(r) {
+    if (!r.ok) throw new Error('연결이 원활하지 않아요 (' + r.status + '). 잠시 뒤 다시 눌러 주세요.');
+    return r.json().then(function (j) {
+      if (!j.ok) throw new Error(j.error);
+      return j.data;
+    });
+  }
+  var real = {
+    state: function () { return fetch(base, { cache: 'no-store' }).then(unwrap); },
+    call: function (fn, args) {
+      return fetch(base, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ fn: fn, args: args }) }).then(unwrap);
+    },
+    calendarUrl: function () { return base + '?cal=1'; }
+  };
+
+  // ── 미리보기용 가짜 서버: server.gs 와 같은 규칙. ?today=2027-01-05 로 날짜 바꾸기 ──
+  var fake = (function () {
+    var K = 'bible.preview.db';
+    function db() { try { return JSON.parse(localStorage.getItem(K)) || { members: [], records: [] }; } catch (e) { return { members: [], records: [] }; } }
+    function put(d) { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) {} }
+    function today() { return params.get('today') || new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); }
+    function state(d) { return { today: today(), members: d.members.slice(), records: d.records.slice(), vapidKey: params.get('vapid') || '' }; }
+    var fns = {
+      register: function (name) {
+        var n = Core.validName(name);
+        if (!n) throw new Error('이름은 1~20자로 적어 주세요.');
+        var d = db(); if (d.members.indexOf(n) < 0) d.members.push(n); put(d);
+        var st = state(d); st.name = n; return st;
+      },
+      mark: function (name, date, done) {
+        if (!Core.portionFor(date)) throw new Error('읽기표에 없는 날짜입니다.');
+        if (date > today()) throw new Error('아직 오지 않은 날은 체크할 수 없어요.');
+        var d = db();
+        if (d.members.indexOf(name) < 0) throw new Error('등록되지 않은 이름입니다.');
+        d.records.push([name, date, done ? '완료' : '취소']); put(d); return state(d);
+      }
+    };
+    function later(f) { return new Promise(function (ok) { setTimeout(ok, 150); }).then(f); }
+    var blob = null;
+    return {
+      state: function () { return later(function () { return state(db()); }); },
+      call: function (fn, args) { return later(function () { return fns[fn].apply(null, args); }); },
+      calendarUrl: function () {
+        if (!blob) blob = URL.createObjectURL(new Blob([Core.icsFor(Core.APP_BASE + '?s=preview')], { type: 'text/calendar' }));
+        return blob;
+      }
+    };
+  })();
+
+  var impl = s === 'preview' ? fake : base ? real : null;
+  return {
+    ready: !!impl,
+    preview: s === 'preview',
+    sw: 'sw.js' + (s ? '?s=' + encodeURIComponent(s) : ''),
+    state: function () { return impl.state(); },
+    call: function (fn) { return impl.call(fn, Array.prototype.slice.call(arguments, 1)); },
+    calendarUrl: function () { return impl.calendarUrl(); }
+  };
+})();
+
+// ── 앱 알림(웹 푸시) ──
+var Push = (function () {
+  function supported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent); }
+  function standalone() { return navigator.standalone === true || matchMedia('(display-mode: standalone)').matches; }
+  function keyBytes(b64) {
+    var s = atob(b64.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((b64.length + 3) % 4));
+    var a = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i); return a;
+  }
+  function reg() { return navigator.serviceWorker.register(Api.sw).then(function () { return navigator.serviceWorker.ready; }); }
+
+  // 무엇을 안내해야 하는지: 'ok' | 'ios-home' (아이폰은 홈 화면에 추가해야 함) | 'no'
+  function status() {
+    if (supported()) return 'ok';
+    if (isIOS() && !standalone()) return 'ios-home';
+    return 'no';
+  }
+  function on(vapidKey) {
+    return Notification.requestPermission().then(function (p) {
+      if (p !== 'granted') throw new Error('알림이 허용되지 않았어요. 휴대폰 설정에서 이 앱의 알림을 켜 주세요.');
+      return reg();
+    }).then(function (r) {
+      return r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(vapidKey) });
+    }).then(function (sub) { return sub.endpoint; });
+  }
+  function off() {
+    if (!supported()) return Promise.resolve(null);
+    return navigator.serviceWorker.getRegistration(Api.sw).then(function (r) {
+      return r && r.pushManager.getSubscription();
+    }).then(function (sub) {
+      if (!sub) return null;
+      var u = sub.endpoint;
+      return sub.unsubscribe().then(function () { return u; });
+    });
+  }
+  return { status: status, on: on, off: off };
+})();
