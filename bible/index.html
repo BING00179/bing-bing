@@ -307,7 +307,7 @@
       if (state.vapidKey && push === 'ok' && Push.permission() === 'denied') {
         h += deniedHtml();
       } else if (state.vapidKey && push === 'ok') {
-        h += '<div class="small" style="margin-bottom:12px">고른 시각에 "📖 오늘 읽을 곳" 알림이 와요. 누르면 바로 이 앱이 열려요.</div>' +
+        h += '<div class="small" style="margin-bottom:12px">고른 시간에 "📖 오늘 읽을 곳" 알림이 와요. 누르면 바로 이 앱이 열려요.</div>' +
           '<button class="big" data-act="setup-push">알림 켜기</button>' +
           '<div class="small" style="margin-top:8px">휴대폰이 "알림 허용?" 을 물으면 <b>허용</b> 을 눌러 주세요.</div>';
       } else if (push === 'ios-home') {
@@ -375,7 +375,7 @@
   function myHour() { try { return Core.alarmHour(localStorage.getItem('bible.alarmHour')) || Core.DEFAULT_ALARM_HOUR; } catch (e) { return Core.DEFAULT_ALARM_HOUR; } }
   function setHour(h) { try { localStorage.setItem('bible.alarmHour', String(h)); } catch (e) {} }
   function hourPicker() {
-    return '<label class="small" style="display:block;margin-bottom:12px">알림 시각 ' +
+    return '<label class="small" style="display:block;margin-bottom:12px">알림 시간 ' +
       '<select id="alarmHour" class="hoursel">' + Core.ALARM_HOURS.map(function (h) {
         return '<option value="' + h + '"' + (h === myHour() ? ' selected' : '') + '>' + Core.hourLabel(h) + '</option>';
       }).join('') + '</select></label>';
@@ -421,7 +421,7 @@
       '아래 가운데 <b>공유 버튼(□↑)</b> → <b>홈 화면에 추가</b> → 홈 화면의 <b>성경통독</b> 아이콘으로 열고 여기를 다시 눌러 주세요.</div>';
     else pushPart = '<div class="small">🔔 이 휴대폰(브라우저)에서는 앱 알림이 안 돼요. 달력 알림을 써 주세요.</div>';
     return '<div class="card"><div style="font-weight:700">매일 알림</div>' +
-      '<div class="small" style="margin:4px 0 12px">원하는 분만, 원하는 시각에 받으시면 돼요.</div>' +
+      '<div class="small" style="margin:4px 0 12px">원하는 분만, 원하는 시간에 받으시면 돼요.</div>' +
       hourPicker() + pushPart + calLink('📅 내 달력에 넣기') +
       '<div class="small" style="margin-top:6px">달력: 362일치 읽을 곳이 달력에 들어가요. 카톡 안에서 안 되면 ⋮ → 다른 브라우저로 열기.</div>' +
       '<div class="hint"><button class="linkbtn" data-act="alarm-none">알림 필요 없어요</button></div></div>';
@@ -594,9 +594,9 @@
     else if (Push.permission() === 'denied') a += deniedHtml();
     else a += '<button class="switch' + (on ? ' on' : '') + '" data-act="push-toggle" role="switch" aria-checked="' + on + '">' +
       '<span class="knob"></span><span>' + (on ? '앱 알림 켜짐' : '앱 알림 꺼짐') + '</span></button>' +
-      '<div class="small" style="margin-top:6px">' + (on ? '시각을 바꾸면 바로 적용돼요.' : '누르면 켜져요. 휴대폰이 물으면 <b>허용</b>.') + '</div>';
+      '<div class="small" style="margin-top:6px">' + (on ? '시간을 바꾸면 바로 적용돼요.' : '누르면 켜져요. 휴대폰이 물으면 <b>허용</b>.') + '</div>';
     a += calLink('📅 달력에 넣기') +
-      '<div class="small" style="margin-top:6px">달력 알림은 휴대폰 달력에 들어가요. 시각을 바꾸려면 달력에서 "함께 읽는 성경" 일정을 지우고 다시 넣어 주세요.</div>';
+      '<div class="small" style="margin-top:6px">달력 알림은 휴대폰 달력에 들어가요. 시간을 바꾸려면 달력에서 "함께 읽는 성경" 일정을 지우고 다시 넣어 주세요.</div>';
     h += sect('🔔 매일 알림', a);
     // 홈 화면 앱
     if (Install.standalone()) a = '<div class="small">✅ 지금 홈 화면 앱으로 열려 있어요.</div>';
@@ -784,7 +784,7 @@
     document.querySelectorAll('a[data-act=cal-get]').forEach(function (a) { a.href = Api.calendarUrl(myHour()); });
     if (tab === 'set' && alarmChoice() === 'push' && !busy) {
       run(Push.on(state.vapidKey).then(function (u) { return call('subscribe', me, u, myHour()); }),
-        function () { toast('🔔 알림 시각 변경 · 매일 ' + Core.hourLabel(myHour())); });
+        function () { toast('🔔 알림 시간 변경 · 매일 ' + Core.hourLabel(myHour())); });
     } else if (tab === 'set') render();
   });
   document.addEventListener('keydown', function (e) {
