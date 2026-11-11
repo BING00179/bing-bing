@@ -214,10 +214,21 @@
   // 개역개정은 저작권이 있어 본문을 앱에 넣지 않고 링크만 둡니다.
   var reading = null;      // 링크 목록을 보고 있는 지난 날짜
   var readFrom = 'today';
+  // 버튼 하나로 그날 첫 장을 엶 — 다음 장은 대한성서공회 화면 안에서 넘김.
+  // 장별 버튼은 접어 둠 (필요한 분만 펼침).
   function chapterLinks(d) {
-    return '<div class="chlinks">' + Core.chaptersOf(Core.portionFor(d)).map(function (c) {
-      return '<a class="chlink" href="' + c.gae + '" target="_blank" rel="noopener">📖 ' + c.name + ' ' + c.chapter + '장</a>';
-    }).join('') + '</div><div class="small" style="margin:-2px 0 12px">누르면 대한성서공회 성경(개역개정)이 열려요. 다 읽고 이 화면으로 돌아와 주세요.</div>';
+    var list = Core.chaptersOf(Core.portionFor(d)), first = list[0];
+    var h = '<a class="big" style="display:block;text-align:center;text-decoration:none;margin-bottom:6px;background:var(--card);color:var(--accent);border:2px solid var(--accent)"' +
+      ' href="' + first.gae + '" target="_blank" rel="noopener">📖 오늘 말씀 열기</a>' +
+      '<div class="small" style="margin-bottom:10px">' + first.name + ' ' + first.chapter + '장이 열려요 (대한성서공회 개역개정). ' +
+      (list.length > 1 ? '다음 장은 그 화면에서 넘겨 읽어 주세요.' : '') + '</div>';
+    if (list.length > 1) {
+      h += '<details style="margin-bottom:12px"><summary class="small" style="cursor:pointer">장별로 열기</summary><div class="chlinks" style="margin-top:8px">' +
+        list.map(function (c) {
+          return '<a class="chlink" href="' + c.gae + '" target="_blank" rel="noopener">' + c.name + ' ' + c.chapter + '장</a>';
+        }).join('') + '</div></details>';
+    }
+    return h;
   }
   function openReader(d) { readFrom = tab; reading = d; render(); window.scrollTo(0, 0); }
   function readerHtml() {
