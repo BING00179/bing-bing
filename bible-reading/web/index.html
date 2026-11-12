@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>함께 읽는 성경</title>
+<!-- 카톡·문자에 링크를 올리면 뜨는 미리보기 카드 -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="함께 읽는 성경">
+<meta property="og:description" content="2027년 성경통독 · 날마다 읽을 곳, 함께 읽는 진도">
+<meta property="og:image" content="https://bing00179.github.io/bing-bing/bible/hero.jpg">
+<meta property="og:image:width" content="1200">
+<meta name="description" content="2027년 성경통독 · 날마다 읽을 곳, 함께 읽는 진도">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#6b4f2a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -156,6 +163,7 @@
   .big[disabled], .copybtn[disabled] { opacity: .4; cursor: not-allowed; }
   .grp { font-size: .6em; font-weight: 600; color: #6b7280; margin-left: 4px; }
   .grp:empty { display: none; }
+  .hero { display: block; width: 100%; max-height: 46vh; object-fit: cover; object-position: center 30%; border-radius: 18px; margin: 0 0 14px; }
   .admrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee; }
   .admbtn { width: auto !important; margin: 0 !important; padding: 6px 14px !important; }
 </style>
@@ -283,7 +291,7 @@
     }
     if (!me) {
       who.innerHTML = '';
-      main.innerHTML = pickerHtml();
+      main.innerHTML = heroHtml() + pickerHtml();
       return;
     }
     who.innerHTML = esc(me) + ' 님 · <button class="linkbtn" data-act="switch">다른 이름</button>';
@@ -360,6 +368,8 @@
     return h + '</div>';
   }
 
+  // 처음 들어오는 화면 위쪽 그림 (파일이 없으면 그냥 빠짐)
+  function heroHtml() { return '<img class="hero" src="hero.jpg" alt="" onerror="this.remove()">'; }
   function pickerHtml() {
     var list = state.members.length
       ? '<div class="names">' + state.members.map(function (n) {
