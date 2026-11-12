@@ -113,9 +113,11 @@
   .reader .mk svg { width: .8em; height: .8em; vertical-align: -.05em; color: var(--accent); }
   .reader .mk.bm svg { fill: var(--accent); }
   /* 묵상 표시: 글자색과 다른 색 동그라미 안에 연필 — 한눈에 보이게 */
-  .reader .mk.memo { display: inline-flex; align-items: center; justify-content: center; width: 1.35em; height: 1.35em;
-    border-radius: 50%; background: var(--accent); vertical-align: -.2em; margin-left: 2px; }
-  .reader .mk.memo svg { width: .8em; height: .8em; color: #fff; vertical-align: 0; }
+  .reader .text p.hasmemo { border-left: 4px solid #d8b27a; padding-left: 10px; border-radius: 0 6px 6px 0; }
+  .reader .mk.memo svg { color: #b8894a; }
+  .reader .mk.mprev { display: block; margin: 6px 0 4px; background: #f1e9dc; color: #6b4f2a; border-radius: 10px;
+    padding: 6px 10px; font-size: .75em; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (prefers-color-scheme: dark) { .reader .mk.mprev { background: #3a332a; color: #e7cfa6; } }
   body.hasbar .reader { padding-bottom: 240px; }
   #versebar { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--card); border-top: 1px solid var(--line);
     box-shadow: 0 -4px 16px rgba(0,0,0,.12); padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); }
@@ -681,6 +683,12 @@
     bar.innerHTML = h; bar.style.display = 'block'; document.body.classList.add('hasbar');
     if (memoOpen) { var ta = document.getElementById('memotext'); if (ta) ta.focus(); }
   }
+  // 묵상 표시: 왼쪽 금색 줄(hasmemo) + 연필 + 절 아래 묵상 첫 줄
+  function memoMark(k) {
+    var m = Notes.memoOf(k); if (!m) return '';
+    var t = String(m.text || '').split('\n')[0];
+    return ' <span class="mk memo">' + ICON.memo + '</span><span class="mk mprev">✎ ' + esc(t) + '</span>';
+  }
   // 절 다시 그리기 (화면 전체를 다시 그리면 읽던 자리가 흔들리므로 그 절만)
   function refreshVerses(ks) {
     ks.forEach(function (k) {
@@ -690,7 +698,8 @@
       if (Sel.has(k)) el.classList.add('sel');
       el.querySelectorAll('.mk').forEach(function (m) { m.remove(); });
       if (Notes.bm(k)) el.insertAdjacentHTML('beforeend', ' <span class="mk bm">' + ICON.bm + '</span>');
-      if (Notes.memoOf(k)) el.insertAdjacentHTML('beforeend', ' <span class="mk memo">' + ICON.memo + '</span>');
+      el.classList.toggle('hasmemo', !!Notes.memoOf(k));
+      if (Notes.memoOf(k)) el.insertAdjacentHTML('beforeend', memoMark(k));
     });
   }
   function shareVerses(ks) {
@@ -729,8 +738,9 @@
         if (Tts.at(ci, i)) cls.push('speaking');
         if (hl) cls.push('hl' + hl);
         if (Sel.has(k)) cls.push('sel');
+        if (Notes.memoOf(k)) cls.push('hasmemo');
         h += '<p id="tts-' + ci + '-' + i + '" data-k="' + k + '" data-ci="' + ci + '"' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '><sup>' + (i + 1) + '</sup>' + esc(v) +
-          (Notes.bm(k) ? ' <span class="mk bm">' + ICON.bm + '</span>' : '') + (Notes.memoOf(k) ? ' <span class="mk memo">' + ICON.memo + '</span>' : '') + '</p>';
+          (Notes.bm(k) ? ' <span class="mk bm">' + ICON.bm + '</span>' : '') + memoMark(k) + '</p>';
       });
     });
     h += '</div><div class="src">성경전서 개역한글판 (대한성서공회) · 개역개정은 대한성서공회 웹사이트에서 열려요</div>';
