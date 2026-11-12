@@ -487,7 +487,9 @@
   function openReader(d, restoring, y) {
     Sel.clear(); memoOpen = false; verseBarHide();
     if (!restoring) { Tts.reset(); readFrom = tab; }
+    var was = reading;
     reading = d; loadErr = '';
+    if (!restoring && was !== d) pushNav();
     render(); window.scrollTo(0, y || 0);
     loadBooks(Core.chaptersOf(P.portionFor(d))).catch(function () {
       loadErr = '말씀을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.';
@@ -1000,16 +1002,48 @@
       .then(function () { busy = false; render(); });
   }
 
+  // ── 휴대폰 '뒤로' 버튼 ── 화면(탭·말씀)을 옮길 때마다 기록을 남겨, 뒤로 가면 앞 화면으로.
+  //   맨 처음 화면에서 뒤로 가면 "한 번 더 누르면 닫혀요" — 2초 안에 한 번 더 누르면 닫힘.
+  function pushNav() { try { history.pushState({ bnav: 1, tab: tab, reading: reading }, ''); } catch (e) {} }
+  var lastBack = 0;
+  try {
+    if (!(history.state && (history.state.bnav || history.state.broot))) {
+      history.replaceState({ broot: 1 }, '');
+      history.pushState({ bnav: 1, tab: 'today', reading: null }, '');
+    }
+  } catch (e) {}
+  window.addEventListener('popstate', function (e) {
+    var st = e.state || {};
+    var bar = Sel.list().length || memoOpen;
+    if (bar) { var ks0 = Sel.list(); Sel.clear(); memoOpen = false; verseBarHide(); refreshVerses(ks0); }
+    if (st.bar && !bar) { history.back(); return; } // 절 메뉴를 이미 닫은 자리는 건너뜀
+    if (st.broot) {
+      if (Date.now() - lastBack < 2000) { history.back(); return; }
+      lastBack = Date.now();
+      toast('한 번 더 누르면 닫혀요');
+      try { history.pushState({ bnav: 1, tab: tab, reading: reading }, ''); } catch (e2) {}
+      return;
+    }
+    if (!st.bnav) return;
+    if (reading && reading !== st.reading) Tts.reset();
+    tab = st.tab || 'today';
+    if (st.reading) { if (reading !== st.reading) openReader(st.reading, true); }
+    else { reading = null; render(); window.scrollTo(0, 0); }
+  });
+
   document.addEventListener('click', function (e) {
     var b = e.target.closest('button');
     if (!b || busy) return;
-    if (b.dataset.tab) { tab = b.dataset.tab; render(); window.scrollTo(0, 0); return; }
+    if (b.dataset.tab) { if (tab !== b.dataset.tab || reading) { tab = b.dataset.tab; reading = null; pushNav(); } render(); window.scrollTo(0, 0); return; }
     if (b.dataset.act === 'read') { openReader(b.dataset.date); return; }
     if (b.dataset.act === 'open-verse') { openVerse(b.dataset.k); return; }
     if (b.dataset.act === 'tts-play') { Tts.play(); return; }
     if (b.dataset.act === 'tts-rate') { Tts.setRate(+b.dataset.r); var bar = document.getElementById('ttsbar'); if (bar) bar.outerHTML = ttsBar(); return; }
     if (b.dataset.act === 'tts-pause') { Tts.pause(); return; }
-    if (b.dataset.act === 'close-read') { Tts.reset(); Sel.clear(); memoOpen = false; verseBarHide(); reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return; }
+    if (b.dataset.act === 'close-read') {
+      if (history.state && history.state.bnav && history.state.reading) { history.back(); return; } // 뒤로 가기와 같게
+      Tts.reset(); Sel.clear(); memoOpen = false; verseBarHide(); reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return;
+    }
     if (b.dataset.act === 'font') {
       setFont(Math.max(14, Math.min(34, fontSize() + +b.dataset.n)));
       document.querySelectorAll('.reader .text, .fontsample').forEach(function (tx) { tx.style.fontSize = fontSize() + 'px'; });
@@ -1121,7 +1155,10 @@
     // 절 누르기: 고르기/빼기
     var pEl = e.target.closest('.reader p[data-k]');
     if (pEl && !e.target.closest('button, a')) {
-      Sel.toggle(pEl.dataset.k); memoOpen = false; refreshVerses([pEl.dataset.k]); verseBar(); return;
+      var wasEmpty = !Sel.list().length;
+      Sel.toggle(pEl.dataset.k); memoOpen = false; refreshVerses([pEl.dataset.k]); verseBar();
+      if (wasEmpty && Sel.list().length) try { history.pushState({ bnav: 1, tab: tab, reading: reading, bar: 1 }, ''); } catch (e9) {} // 뒤로 = 절 메뉴 닫기
+      return;
     }
     var b = e.target.closest('#versebar button'); if (!b) return;
     var ks = Sel.list(), act = b.dataset.act;
@@ -1196,10 +1233,12 @@
       var v = me && loadView();
       if (v) {
         tab = v.tab || 'today';
+        if (tab !== 'today') pushNav();
         if (v.reading && P.portionFor(v.reading)) {
           readFrom = v.readFrom || 'today';
           Tts.resumeFrom(v.tts);
           openReader(v.reading, true, v.y);
+          try { history.pushState({ bnav: 1, tab: tab, reading: v.reading }, ''); } catch (e) {}
           return;
         }
       }
