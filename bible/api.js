@@ -24,7 +24,10 @@ var Api = (function () {
   var AKEY = 'bible.admin', adminKey = params.get('admin');
   if (adminKey && /^[a-f0-9]{32}$/.test(adminKey)) {
     try { localStorage.setItem(AKEY, adminKey); } catch (e) {}
-    try { params.delete('admin'); history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '')); } catch (e) {}
+    // 카톡·삼성 인터넷은 곧 크롬으로 넘기므로 주소에 열쇠를 남겨 둠 (지우면 크롬에 열쇠 없는 주소가 감)
+    var willMove = /KAKAOTALK|SamsungBrowser/i.test(navigator.userAgent) &&
+      !(navigator.standalone === true || matchMedia('(display-mode: standalone)').matches);
+    if (!willMove) try { params.delete('admin'); history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '')); } catch (e) {}
   }
   function admin() { try { return localStorage.getItem(AKEY) || ''; } catch (e) { return ''; } }
 
