@@ -1005,6 +1005,14 @@
   // ── 휴대폰 '뒤로' 버튼 ── 화면(탭·말씀)을 옮길 때마다 기록을 남겨, 뒤로 가면 앞 화면으로.
   //   맨 처음 화면에서 뒤로 가면 "한 번 더 누르면 닫혀요" — 2초 안에 한 번 더 누르면 닫힘.
   function pushNav() { try { history.pushState({ bnav: 1, tab: tab, reading: reading }, ''); } catch (e) {} }
+  function goTab(to) {
+    try {
+      var st = { bnav: 1, tab: to, reading: null };
+      if (to === 'today') { if (tab !== 'today') { tab = to; history.back(); return; } }
+      else if (tab === 'today') history.pushState(st, ''); else history.replaceState(st, '');
+    } catch (e) {}
+    tab = to; reading = null; render(); window.scrollTo(0, 0);
+  }
   var lastBack = 0;
   try {
     if (!(history.state && (history.state.bnav || history.state.broot))) {
@@ -1034,7 +1042,15 @@
   document.addEventListener('click', function (e) {
     var b = e.target.closest('button');
     if (!b || busy) return;
-    if (b.dataset.tab) { if (tab !== b.dataset.tab || reading) { tab = b.dataset.tab; reading = null; pushNav(); } render(); window.scrollTo(0, 0); return; }
+    if (b.dataset.tab) {
+      // 기본 홈 = 오늘. 다른 탭끼리 옮길 때는 기록을 덮어써서, 뒤로 한 번이면 언제나 오늘(홈)으로.
+      var to = b.dataset.tab;
+      if (to !== tab || reading) {
+        if (reading) { history.go(history.state && history.state.bar ? -2 : -1); setTimeout(function () { goTab(to); }, 60); return; }
+        goTab(to);
+      }
+      render(); window.scrollTo(0, 0); return;
+    }
     if (b.dataset.act === 'read') { openReader(b.dataset.date); return; }
     if (b.dataset.act === 'open-verse') { openVerse(b.dataset.k); return; }
     if (b.dataset.act === 'tts-play') { Tts.play(); return; }
