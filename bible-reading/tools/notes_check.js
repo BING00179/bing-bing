@@ -91,6 +91,27 @@ async function openMemo(p, k) { await p.click('.reader p[data-k="' + k + '"]'); 
   fs.writeFileSync(TMP + '/x.json', JSON.stringify({ app: 'bible-notes', v: 1, memo: { '1-1-5': { label: '<img src=x onerror=alert(1)>', y: { '2028': { text: '<b>x</b>', at: 9 } } } } }));
   await q.setInputFiles('#notesfile', TMP + '/x.json'); await q.waitForTimeout(300);
   ok('태그가 실행되지 않음', !(await q.$('.notelink img')) && (await q.textContent('body')).includes('<img'));
+  // 11) 작년 묵상 지우기 — 확인 창에서 '취소' 면 그대로, '확인' 이면 그 해만 지움
+  const r = await phone(b, '2028-03-01T09:00:00+09:00', { 'bible.memo': {
+    '1-1-6': { label: '창세기 1:6', y: { '2027': { text: '작년', at: 1 }, '2028': { text: '올해', at: 2 } } },
+    '1-1-7': { label: '창세기 1:7', y: { '2027': { text: '작년만', at: 1 } } } } });
+  await r.click('[data-act="read"]'); await r.waitForTimeout(600);
+  await openMemo(r, '1-1-6');
+  r.once('dialog', (dg) => dg.dismiss());
+  await r.click('[data-act="v-memo-delyr"][data-y="2027"]');
+  ok('취소하면 작년 그대로', (await memo(r))['1-1-6'].y['2027'].text === '작년');
+  r.once('dialog', (dg) => dg.accept());
+  await r.click('[data-act="v-memo-delyr"][data-y="2027"]');
+  m = await memo(r);
+  ok('작년만 지워지고 올해 남음', !m['1-1-6'].y['2027'] && m['1-1-6'].y['2028'].text === '올해', m);
+  ok('올해 입력칸 그대로', (await r.inputValue('#memotext')) === '올해');
+  await r.click('[data-act="v-memo-close"]'); await r.click('[data-act="v-clear"]').catch(() => {});
+  await openMemo(r, '1-1-7');
+  r.once('dialog', (dg) => dg.accept());
+  await r.click('[data-act="v-memo-delyr"][data-y="2027"]');
+  ok('작년만 있던 절은 묵상이 없어짐', !(await memo(r))['1-1-7']);
+  ok('그 절의 묵상 표시도 사라짐', !(await r.$('.reader p.hasmemo[data-k="1-1-7"]')));
+  ok('다른 절은 그대로', !!(await r.$('.reader p.hasmemo[data-k="1-1-6"]')));
   await b.close();
   console.log(results.join('\n'));
 })();

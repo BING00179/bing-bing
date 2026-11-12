@@ -130,6 +130,8 @@
   #versebar .dot { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer; font-size: 18px; background: var(--card); color: var(--muted); }
   #versebar .memopast { max-width: 520px; margin: 0 auto 6px; background: var(--bg); border-radius: 10px; padding: 8px 10px;
     font-size: 15px; white-space: pre-wrap; max-height: 30vh; overflow: auto; }
+  #versebar .memopast b { display: flex !important; justify-content: space-between; align-items: center; }
+  #versebar .memopast b .linkbtn { font-size: 13px; font-weight: 400; color: var(--muted); }
   #versebar .memopast b, #versebar .memoyr { display: block; font-size: 13px; color: var(--accent); margin-bottom: 2px; }
   #versebar .memoyr { max-width: 520px; margin: 0 auto 2px; font-weight: 700; }
   #versebar textarea { display: block; width: 100%; max-width: 520px; margin: 0 auto 8px; font: inherit; font-size: 17px; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
@@ -634,6 +636,11 @@
         }); });
         return out.sort(function (a, b) { return b.at - a.at; });
       },
+      delMemoYear: function (k, yr) {
+        var m = memoAll(); if (!m[k]) return;
+        delete m[k].y[yr]; if (!Object.keys(m[k].y).length) delete m[k];
+        put(MEMO, m);
+      },
       setMemo: function (k, label, text) {
         var m = memoAll(), yr = thisYear(), e = m[k] || { label: label, y: {} };
         if (text) { e.y[yr] = { text: text, at: Date.now() }; e.label = label; } else delete e.y[yr];
@@ -723,7 +730,7 @@
     var h = '<div class="vb-top"><b>' + esc(label) + '</b><button class="linkbtn" data-act="v-clear">닫기</button></div>';
     if (memoOpen) {
       if (memo) Object.keys(memo.y).sort().reverse().forEach(function (y) {
-        if (y !== yr) h += '<div class="memopast"><b>' + y + '년 묵상</b>' + esc(memo.y[y].text) + '</div>';
+        if (y !== yr) h += '<div class="memopast"><b>' + y + '년 묵상<button class="linkbtn" data-act="v-memo-delyr" data-y="' + y + '">지우기</button></b>' + esc(memo.y[y].text) + '</div>';
       });
       h += '<div class="memoyr">' + yr + '년 묵상</div>' +
         '<textarea id="memotext" rows="4" placeholder="이 말씀으로 묵상한 것을 적어 보세요">' + esc(mine) + '</textarea>' +
@@ -1125,6 +1132,10 @@
     }
     else if (act === 'v-memo') { memoOpen = true; verseBar(); }
     else if (act === 'v-memo-close') { memoOpen = false; verseBar(); }
+    else if (act === 'v-memo-delyr') {
+      if (!confirm(b.dataset.y + '년 묵상을 지울까요? 되돌릴 수 없어요.')) return;
+      Notes.delMemoYear(ks[0], b.dataset.y); refreshVerses(ks); verseBar(); toast(b.dataset.y + '년 묵상 지움');
+    }
     else if (act === 'v-memo-save' || act === 'v-memo-del') {
       var t = act === 'v-memo-save' ? (document.getElementById('memotext').value || '').trim() : '';
       Notes.setMemo(ks[0], selLabel(ks), t);
