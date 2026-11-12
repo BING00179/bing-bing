@@ -380,13 +380,15 @@
       ? (names.length > 9 ? '<input type="text" id="namefind" placeholder="🔍 이름 찾기" autocomplete="off">' : '') +
         '<div class="names" id="namelist">' + names.map(function (n) {
           return '<button data-act="pick" data-name="' + esc(n) + '">' + esc(n) + '</button>';
-        }).join('') + '</div><div class="small" id="namenone" style="display:none;margin:-6px 0 14px">찾는 이름이 없어요. 아래에서 새로 등록해 주세요.</div>'
+        }).join('') + '</div><div class="small" id="namenone" style="display:none;margin:-6px 0 14px">찾는 이름이 없어요. 위 새로 등록에 적어 주세요.</div>'
       : '<p class="small">아직 등록한 분이 없어요. 첫 번째로 이름을 적어 주세요.</p>';
-    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">이름 선택</div>' +
-      '<div class="small">내 이름을 눌러 주세요. 이 휴대폰에서는 다음부터 기억해요.</div>' + list +
-      '<div style="font-weight:700">새로 등록</div>' +
+    // 새로 등록을 위에, 이미 등록한 이름은 아래에 (이름이 많아져도 등록 칸이 묻히지 않게)
+    var reg = '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">새로 등록</div>' +
       '<input type="text" id="newname" maxlength="20" placeholder="이름 (예: 김영희)" autocomplete="name">' +
       '<button class="big" data-act="register">이름 등록하기</button></div>';
+    if (!names.length) return reg.replace('</div><input', '</div><div class="small">아직 등록한 분이 없어요. 첫 번째로 이름을 적어 주세요.</div><input');
+    return reg + '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">이름 선택</div>' +
+      '<div class="small">이미 등록했으면 내 이름을 눌러 주세요. 이 휴대폰에서는 다음부터 기억해요.</div>' + list + '</div>';
   }
 
   function todayHtml() {
