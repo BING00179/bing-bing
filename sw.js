@@ -6,7 +6,7 @@
  *   3) 화면이 스스로 한 번 새로고침되어 새 버전이 적용됩니다
  * 배포할 때 아래 VERSION 만 바꾸면 됩니다 (python3 bump-version.py).
  */
-var VERSION = "2026.08.29-16";
+var VERSION = "2026.11.12-1";
 var CACHE = "eng-words-" + VERSION;
 var ASSETS = [
   "./",
@@ -47,6 +47,10 @@ self.addEventListener("fetch", function(e){
   var req = e.request;
   if(req.method !== "GET") return;
   if(new URL(req.url).origin !== self.location.origin) return;  /* 글꼴 등 외부 요청은 그대로 통과 */
+  /* 같은 주소 아래 다른 앱(성경통독 bible/, 주식 stocks/, us-uk/ 등)은 건드리지 않음 —
+     전에는 그 화면까지 이 앱의 index.html 로 저장해 영어 단어장 아이콘에 성경이 뜨기도 했음 */
+  var rel = new URL(req.url).pathname.slice(new URL(self.registration.scope).pathname.length);
+  if(rel.indexOf("/") >= 0) return;
 
   /* 화면 이동: 인터넷이 되면 항상 최신 화면을, 안 되면 저장해 둔 화면을 */
   if(req.mode === "navigate"){
