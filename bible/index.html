@@ -128,6 +128,10 @@
   #versebar .vb-btn.on { color: var(--accent); font-weight: 700; background: var(--bg); }
   #versebar .colors { justify-content: space-between; }
   #versebar .dot { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer; font-size: 18px; background: var(--card); color: var(--muted); }
+  #versebar .memopast { max-width: 520px; margin: 0 auto 6px; background: var(--bg); border-radius: 10px; padding: 8px 10px;
+    font-size: 15px; white-space: pre-wrap; max-height: 30vh; overflow: auto; }
+  #versebar .memopast b, #versebar .memoyr { display: block; font-size: 13px; color: var(--accent); margin-bottom: 2px; }
+  #versebar .memoyr { max-width: 520px; margin: 0 auto 2px; font-weight: 700; }
   #versebar textarea { display: block; width: 100%; max-width: 520px; margin: 0 auto 8px; font: inherit; font-size: 17px; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
   .notelink { display: block; width: 100%; text-align: left; font: inherit; font-size: 16px; padding: 10px 4px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--ink); cursor: pointer; }
   .dayrow { display: flex; gap: 6px; align-items: stretch; margin-bottom: 8px; }
@@ -604,10 +608,12 @@
   // ── 절 고르기 · 형광펜 · 책갈피 · 묵상 ── 모두 이 휴대폰에만 저장 (서버·시트 안 씀)
   //   키: '권-장-절' (예 47-8-22). 묵상은 고른 절 묶음의 첫 절 키에 붙고, 범위를 같이 적어 둠.
   var Notes = (function () {
+    var api;
     function get(k, d) { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } }
     function put(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
     var HL = 'bible.hl', BM = 'bible.bm', MEMO = 'bible.memo';
-    return {
+    api = {
+      year: function () { return thisYear(); },
       hl: function (k) { return get(HL, {})[k] || 0; },
       setHl: function (keys, c) { var m = get(HL, {}); keys.forEach(function (k) { if (c) m[k] = c; else delete m[k]; }); put(HL, m); },
       bm: function (k) { return !!get(BM, {})[k]; },
@@ -617,10 +623,60 @@
         keys.forEach(function (k, i) { if (on) m[k] = { label: i === 0 ? label : '', at: Date.now() }; else delete m[k]; });
         put(BM, m); return on;
       },
-      memoOf: function (k) { return get(MEMO, {})[k] || null; },
-      memos: function () { return get(MEMO, {}); },
-      setMemo: function (k, label, text) { var m = get(MEMO, {}); if (text) m[k] = { label: label, text: text, at: Date.now() }; else delete m[k]; put(MEMO, m); }
+      // 묵상은 해마다 따로: { label, at, y: { '2027': { text, at }, '2028': … } }
+      // (예전 모양 { label, text, at } 은 쓴 해로 옮겨 읽음)
+      memoOf: function (k) { var e = memoAll()[k]; return e && Object.keys(e.y).length ? e : null; },
+      memoYear: function (k, yr) { var e = memoAll()[k]; return e && e.y[yr] ? e.y[yr].text : ''; },
+      memoList: function () {
+        var all = memoAll(), out = [];
+        Object.keys(all).forEach(function (k) { Object.keys(all[k].y).forEach(function (yr) {
+          out.push({ k: k, label: all[k].label, year: yr, text: all[k].y[yr].text, at: all[k].y[yr].at });
+        }); });
+        return out.sort(function (a, b) { return b.at - a.at; });
+      },
+      setMemo: function (k, label, text) {
+        var m = memoAll(), yr = thisYear(), e = m[k] || { label: label, y: {} };
+        if (text) { e.y[yr] = { text: text, at: Date.now() }; e.label = label; } else delete e.y[yr];
+        if (Object.keys(e.y).length) m[k] = e; else delete m[k];
+        put(MEMO, m);
+      },
+      // ── 내보내기·가져오기 ── 파일 하나(JSON)로. 가져오기는 합치기: 같은 해 같은 절은 나중에 쓴 쪽, 두 번 가져와도 그대로.
+      dump: function () { return { app: 'bible-notes', v: 1, made: new Date().toISOString(), hl: get(HL, {}), bm: get(BM, {}), memo: memoAll() }; },
+      load: function (d) {
+        if (!d || d.app !== 'bible-notes') throw new Error('성경통독에서 내보낸 파일이 아니에요');
+        var KEY_RE = /^\d{1,2}-\d{1,3}-\d{1,3}$/, n = 0;
+        var hl = get(HL, {}), bm = get(BM, {}), m = memoAll();
+        Object.keys(d.hl || {}).forEach(function (k) { var c = +d.hl[k]; if (KEY_RE.test(k) && c >= 1 && c <= 6 && hl[k] !== c) { hl[k] = c; n++; } });
+        Object.keys(d.bm || {}).forEach(function (k) { var x = d.bm[k]; if (KEY_RE.test(k) && x && !bm[k]) { bm[k] = { label: String(x.label || '').slice(0, 60), at: +x.at || Date.now() }; n++; } });
+        Object.keys(d.memo || {}).forEach(function (k) {
+          if (!KEY_RE.test(k)) return;
+          var src = norm(d.memo[k]); if (!src) return;
+          var e = m[k] || { label: src.label, y: {} };
+          Object.keys(src.y).forEach(function (yr) {
+            var x = src.y[yr];
+            if (!/^\d{4}$/.test(yr) || !x.text) return;
+            if (!e.y[yr] || (e.y[yr].text !== x.text && x.at > e.y[yr].at)) { e.y[yr] = { text: String(x.text).slice(0, 5000), at: +x.at || Date.now() }; n++; }
+          });
+          if (Object.keys(e.y).length) m[k] = e;
+        });
+        put(HL, hl); put(BM, bm); put(MEMO, m);
+        return n;
+      }
     };
+    function thisYear() { return String(new Date(Date.now() + 9 * 3600000).getUTCFullYear()); }
+    function norm(e) {
+      if (!e || typeof e !== 'object') return null;
+      if (e.y && typeof e.y === 'object') return { label: String(e.label || ''), y: e.y };
+      if (!e.text) return null;
+      var y = {}; y[String(new Date((+e.at || Date.now()) + 9 * 3600000).getUTCFullYear())] = { text: String(e.text), at: +e.at || Date.now() };
+      return { label: String(e.label || ''), y: y };
+    }
+    function memoAll() {
+      var raw = get(MEMO, {}), out = {};
+      Object.keys(raw).forEach(function (k) { var e = norm(raw[k]); if (e) out[k] = e; });
+      return out;
+    }
+    return api;
   })();
   // 고른 절: 누를 때마다 넣고 빼기 (여러 절 가능)
   var Sel = (function () {
@@ -662,12 +718,17 @@
     if (!bar) { bar = document.createElement('div'); bar.id = 'versebar'; document.body.appendChild(bar); }
     var ks = Sel.list();
     if (!reading || !ks.length) { bar.style.display = 'none'; bar.innerHTML = ''; document.body.classList.remove('hasbar'); return; }
-    var label = selLabel(ks), bmOn = ks.every(function (k) { return Notes.bm(k); }), memo = Notes.memoOf(ks[0]);
+    var label = selLabel(ks), bmOn = ks.every(function (k) { return Notes.bm(k); }), memo = Notes.memoOf(ks[0]),
+      yr = Notes.year(), mine = Notes.memoYear(ks[0], yr);
     var h = '<div class="vb-top"><b>' + esc(label) + '</b><button class="linkbtn" data-act="v-clear">닫기</button></div>';
     if (memoOpen) {
-      h += '<textarea id="memotext" rows="4" placeholder="이 말씀으로 묵상한 것을 적어 보세요">' + esc(memo ? memo.text : '') + '</textarea>' +
+      if (memo) Object.keys(memo.y).sort().reverse().forEach(function (y) {
+        if (y !== yr) h += '<div class="memopast"><b>' + y + '년 묵상</b>' + esc(memo.y[y].text) + '</div>';
+      });
+      h += '<div class="memoyr">' + yr + '년 묵상</div>' +
+        '<textarea id="memotext" rows="4" placeholder="이 말씀으로 묵상한 것을 적어 보세요">' + esc(mine) + '</textarea>' +
         '<div class="vb-row"><button class="vb-btn" data-act="v-memo-save">저장</button>' +
-        (memo ? '<button class="vb-btn" data-act="v-memo-del">삭제</button>' : '') +
+        (mine ? '<button class="vb-btn" data-act="v-memo-del">삭제</button>' : '') +
         '<button class="vb-btn" data-act="v-memo-close">취소</button></div>';
     } else {
       h += '<div class="vb-row">' +
@@ -790,6 +851,31 @@
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast('📋 링크 복사됨'); }, function () { toast('복사가 안 돼요'); });
     else toast('복사가 안 돼요');
   }
+  // 묵상·책갈피·형광펜 파일로: 폰이면 공유(카톡 나와의 채팅 등), 안 되면 내려받기
+  function notesExport() {
+    var name = 'bible-notes-' + new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10) + '.json';
+    var text = JSON.stringify(Notes.dump());
+    var file = null;
+    try { file = new File([text], name, { type: 'application/json' }); } catch (e) {}
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: name }).catch(function () {});
+      return;
+    }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { a.remove(); URL.revokeObjectURL(a.href); }, 2000);
+    toast('📥 ' + name + ' 저장');
+  }
+  function notesImport(f) {
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try { var n = Notes.load(JSON.parse(r.result)); toast(n ? '가져오기 완료 · ' + n + '개' : '새로 들어온 것 없음 (이미 다 있음)'); render(); }
+      catch (e) { toast(e.message && /파일/.test(e.message) ? e.message : '읽을 수 없는 파일이에요'); }
+    };
+    r.readAsText(f);
+  }
   function settingsHtml() {
     var h = '', on = alarmChoice() === 'push', push = Push.status(), a;
     // 알림
@@ -810,15 +896,19 @@
     else a = installBlock();
     h += sect('📲 홈 화면 앱', a);
     // 글씨
-    var bms = Notes.bms(), memos = Notes.memos();
+    var bms = Notes.bms(), memos = Notes.memoList();
     var bmKeys = Object.keys(bms).filter(function (k) { return bms[k].label; }).sort(function (a, b) { return bms[b].at - bms[a].at; });
-    var memoKeys = Object.keys(memos).sort(function (a, b) { return memos[b].at - memos[a].at; });
-    h += sect('🔖 책갈피 · 📝 묵상', (bmKeys.length || memoKeys.length ? '' : '<div class="small">말씀 화면에서 절을 누르면 책갈피·묵상을 남길 수 있어요.</div>') +
+    h += sect('🔖 책갈피 · 📝 묵상', (bmKeys.length || memos.length ? '' : '<div class="small">말씀 화면에서 절을 누르면 책갈피·묵상을 남길 수 있어요.</div>') +
       bmKeys.map(function (k) { return '<button class="notelink" data-act="open-verse" data-k="' + k + '">🔖 ' + esc(bms[k].label) + '</button>'; }).join('') +
-      memoKeys.map(function (k) {
-        return '<button class="notelink" data-act="open-verse" data-k="' + k + '">📝 ' + esc(memos[k].label) +
-          '<span class="small"> ' + esc(memos[k].text.slice(0, 40)) + (memos[k].text.length > 40 ? '…' : '') + '</span></button>';
-      }).join('') + '<div class="small" style="margin-top:6px">이 휴대폰에만 저장돼요.</div>');
+      memos.map(function (x) {
+        return '<button class="notelink" data-act="open-verse" data-k="' + x.k + '">📝 ' + esc(x.label) + ' · ' + x.year + '년' +
+          '<span class="small"> ' + esc(x.text.slice(0, 40)) + (x.text.length > 40 ? '…' : '') + '</span></button>';
+      }).join('') +
+      '<div class="small" style="margin-top:6px">이 휴대폰에만 저장돼요. 폰을 바꿀 때는 내보내기 → 새 폰에서 가져오기.</div>' +
+      '<div style="display:flex;gap:8px;margin-top:10px">' +
+      '<button class="readbtn" style="margin:0" data-act="notes-export">내보내기</button>' +
+      '<button class="readbtn" style="margin:0" data-act="notes-import">가져오기</button></div>' +
+      '<input type="file" id="notesfile" accept=".json,application/json,text/plain" style="display:none">');
     h += sect('🔤 말씀 글씨 크기', '<div class="sizes" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="-2">가−</button>' +
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="2">가+</button></div>' +
@@ -963,6 +1053,8 @@
     }
     if (act === 'switch') { Tts.reset(); me = null; reading = null; save(null); render(); }
     else if (act === 'pick') { me = b.dataset.name; save(me); tab = 'today'; render(); }
+    else if (act === 'notes-export') { notesExport(); }
+    else if (act === 'notes-import') { document.getElementById('notesfile').click(); }
     else if (act === 'admin-g0') { adminRun(call('adminSetGroup0', Api.admin(), document.getElementById('g0name').value), '저장 완료'); }
     else if (act === 'admin-new') {
       var gn = document.getElementById('gname').value;
@@ -1002,6 +1094,7 @@
     if (a) setTimeout(function () { setAlarm('cal'); if (!setupDone()) finishSetup(); else render(); }, 500);
   });
   document.addEventListener('change', function (e) {
+    if (e.target.id === 'notesfile') { notesImport(e.target.files && e.target.files[0]); e.target.value = ''; return; }
     if (e.target.id === 'ttsRate') { Tts.setRate(+e.target.value); return; }
     if (e.target.id !== 'alarmHour') return;
     setHour(+e.target.value);
