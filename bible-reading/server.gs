@@ -339,7 +339,24 @@ function newGroupMenu() {
   if (r.getSelectedButton() !== ui.Button.OK) return;
   var g;
   try { g = createGroup_(r.getResponseText()); } catch (err) { ui.alert(err.message); return; }
-  ui.alert('「' + g.name + '」 모임 링크', '이 링크를 그 모임 단톡방에 보내 주세요.\n\n' + appLink_(g.code), ui.ButtonSet.OK);
+  showLinks_('「' + g.name + '」 모임 링크', '이 링크를 그 모임 단톡방에 보내 주세요.', [{ name: g.name, link: appLink_(g.code) }]);
+}
+// 링크 창: 주소 전체 + [복사] 버튼 + QR (QR 은 이 창 안에서 그림 — 주소를 바깥에 보내지 않음)
+function htmlEsc_(t) { return String(t).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+function showLinks_(title, msg, items) {
+  var h = '<style>body{font-family:sans-serif;font-size:14px}textarea{width:100%;height:64px;font-size:12px}' +
+    'button{font-size:15px;padding:6px 18px;margin:4px 0 14px;cursor:pointer}.q{margin:6px 0}</style>' +
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>' +
+    '<p style="white-space:pre-wrap">' + htmlEsc_(msg) + '</p>';
+  items.forEach(function (x, i) {
+    h += '<b>' + htmlEsc_(x.name) + '</b><textarea id="t' + i + '" readonly>' + htmlEsc_(x.link) + '</textarea>' +
+      '<div class="q" id="q' + i + '"></div>' +
+      '<button onclick="var t=document.getElementById(\'t' + i + '\');t.select();document.execCommand(\'copy\');this.textContent=\'복사됨 ✓\'">복사</button>';
+  });
+  h += '<script>try{' + items.map(function (x, i) {
+    return 'new QRCode(document.getElementById("q' + i + '"),{text:document.getElementById("t' + i + '").value,width:160,height:160});';
+  }).join('') + '}catch(e){}</script>';
+  SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(h).setWidth(420).setHeight(items.length > 1 ? 560 : 440), title);
 }
 function createGroup_(raw) {
   var name = Core.validName(raw);
@@ -360,7 +377,8 @@ function adminPhoneMenu() {
   if (ok !== ui.Button.YES) return;
   var key = (Utilities.getUuid() + Utilities.getUuid()).replace(/[^a-f0-9]/g, '').slice(0, 32);
   PropertiesService.getScriptProperties().setProperties({ ADMIN_KEY: key });
-  ui.alert('관리자 링크', '카톡 "나와의 채팅" 으로 보내 회장님 폰·탭에서 각각 한 번씩 여세요 (같은 링크로 둘 다 됨).\n단톡방·다른 사람에게는 보내지 마세요.\n\n' + appLink_('') + '&admin=' + key, ui.ButtonSet.OK);
+  showLinks_('관리자 링크', '폰·탭 카메라로 아래 QR 을 찍어 크롬으로 여세요 (둘 다 같은 QR). 또는 [복사] → 카톡 나와의 채팅.\n단톡방·다른 사람에게는 보내지 마세요.',
+    [{ name: '관리자', link: appLink_('') + '&admin=' + key }]);
 }
 function adminCheck_(key) {
   var k = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
@@ -398,8 +416,8 @@ function newGroupCode_() {
 function groupLinksMenu() {
   var ui = SpreadsheetApp.getUi();
   var name0 = PropertiesService.getScriptProperties().getProperty('GROUP0_NAME') || '처음 모임';
-  var lines = [name0 + '\n' + appLink_('')].concat(groups_().map(function (x) { return x.name + '\n' + appLink_(x.code); }));
-  ui.alert('모임 링크', lines.join('\n\n'), ui.ButtonSet.OK);
+  showLinks_('모임 링크', '[복사] 를 눌러 그 모임 단톡방에 붙여 넣으세요.',
+    [{ name: name0, link: appLink_('') }].concat(groups_().map(function (x) { return { name: x.name, link: appLink_(x.code) }; })));
 }
 
 // 관리자 = 시트 주인. 리더(편집자로 공유받은 사람)는 회차만 열 수 있고 완전 삭제는 못 함.

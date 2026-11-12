@@ -22,6 +22,7 @@ function makeEnv(todayKST, timeKST) {
     ButtonSet: { OK_CANCEL: 'OK_CANCEL', YES_NO: 'YES_NO' },
     createMenu(title) { const m = { title, items: [], addItem(l, f) { m.items.push([l, f]); return m; }, addSeparator() { return m; }, addToUi() { ui.menus.push(m); } }; return m; },
     prompt(t, msg) { ui.prompts.push(msg); const a = ui.answers.shift(); return { getSelectedButton: () => a[0], getResponseText: () => a[1] }; },
+    showModalDialog(o, t) { ui.dialogs = (ui.dialogs || []).concat([o.html]); ui.alerts.push(t + '\n' + o.html.replace(/&#(\d+);/g, (m, n) => String.fromCharCode(+n))); },
     alert(t, msg, btns) { ui.alerts.push(msg || t); if (btns) { const a = ui.answers.shift(); return a[0]; } return 'OK'; },
   };
   const fetched = [];
@@ -85,6 +86,7 @@ function makeEnv(todayKST, timeKST) {
       return reqs.map((r) => { fetched.push(r); const c = fetchCode(r.url); return { getResponseCode: () => c, getContentText: () => '' }; });
     } },
     Logger: { log() {} },
+    HtmlService: { createHtmlOutput(h) { const o = { html: h, setWidth() { return o; }, setHeight() { return o; } }; return o; } },
     Session: { getEffectiveUser: () => ({ getEmail: () => who.email }) },
   };
   vm.createContext(g);

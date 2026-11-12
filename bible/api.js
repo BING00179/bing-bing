@@ -8,18 +8,17 @@ var Api = (function () {
   // ?s=demo 는 리더·임원 시연용: 2027년 1월 중순처럼, 예시 회원과 기록이 들어 있는 가짜 서버
   var DEMO = s === 'demo';
   if (DEMO) s = 'preview';
-  try {
-    if (s && s !== 'preview') localStorage.setItem(KEY, s); // 연습·시연 링크는 실제 열쇠를 덮어쓰지 않음
-    else if (!s) s = localStorage.getItem(KEY);
-  } catch (e) {}
-  if (s && s !== 'preview' && !/^[A-Za-z0-9_-]{20,150}$/.test(s)) s = null;
-  // 모임: 링크 끝 &g=코드 (처음 모임은 없음). 열쇠(s)가 링크에 있을 때만 같이 기억 — 처음 모임 링크로 열면 비워짐
-  var GKEY = 'bible.g', g = '';
-  try {
-    if (params.get('s') && s !== 'preview') { g = params.get('g') || ''; localStorage.setItem(GKEY, g); }
-    else if (s !== 'preview') g = localStorage.getItem(GKEY) || '';
-  } catch (e) {}
-  if (!/^[a-z0-9]{0,20}$/.test(g)) g = '';
+  // 링크의 열쇠(s)·모임(g)은 서버에 한 번 연결된 뒤에야 이 폰에 기억함.
+  // (잘린 링크로 열었다가 원래 연결까지 잃는 일을 막음 — 연결이 안 되면 예전 연결로 다시 시도)
+  var GKEY = 'bible.g', g = '', prevS = null, prevG = '', fromLink = false;
+  try { prevS = localStorage.getItem(KEY); prevG = localStorage.getItem(GKEY) || ''; } catch (e) {}
+  function okS(x) { return !!x && /^[A-Za-z0-9_-]{20,150}$/.test(x); }
+  function okG(x) { return /^[a-z0-9]{0,20}$/.test(x || ''); }
+  if (s && s !== 'preview') { fromLink = true; g = params.get('g') || ''; }
+  else if (!s) { s = prevS; g = prevG; }
+  if (s && s !== 'preview' && !okS(s)) { s = fromLink && okS(prevS) ? prevS : null; g = prevG; fromLink = false; }
+  if (!okG(g)) g = '';
+  if (!okS(prevS)) prevS = null;
   // 관리자 폰: 시트 메뉴 '관리자 폰 등록' 링크(&admin=열쇠)를 한 번 열면 이 폰에 기억. 주소창에서는 바로 지움.
   var AKEY = 'bible.admin', adminKey = params.get('admin');
   if (adminKey && /^[a-f0-9]{32}$/.test(adminKey)) {
@@ -32,6 +31,11 @@ var Api = (function () {
   function admin() { try { return localStorage.getItem(AKEY) || ''; } catch (e) { return ''; } }
 
   var base = s && s !== 'preview' ? 'https://script.google.com/macros/s/' + s + '/exec' : null;
+  function remember() { if (fromLink) try { localStorage.setItem(KEY, s); localStorage.setItem(GKEY, g); fromLink = false; } catch (e) {} }
+  function friendly(e) {
+    if (e && /fetch|network|load failed/i.test(e.message || '')) return new Error('연결 안 됨 · 링크가 잘렸거나 인터넷이 끊겼을 수 있어요');
+    return e;
+  }
 
   function unwrap(r) {
     if (!r.ok) throw new Error('연결이 원활하지 않아요 (' + r.status + '). 잠시 뒤 다시 눌러 주세요.');
@@ -41,10 +45,20 @@ var Api = (function () {
     });
   }
   var real = {
-    state: function () { return fetch(base + (g ? '?g=' + g : ''), { cache: 'no-store' }).then(unwrap); },
+    state: function () {
+      function once() { return fetch(base + (g ? '?g=' + g : ''), { cache: 'no-store' }).then(unwrap); }
+      return once().then(function (d) { remember(); return d; }, function (e) {
+        // 링크로 처음 열었는데 연결이 안 되면: 이 폰에 예전 연결이 있으면 그걸로 (잘린 링크 대비)
+        if (fromLink && prevS && prevS !== s) {
+          s = prevS; g = prevG; fromLink = false; base = 'https://script.google.com/macros/s/' + s + '/exec';
+          return once();
+        }
+        throw friendly(e);
+      });
+    },
     call: function (fn, args) {
       return fetch(base, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ g: g, fn: fn, args: args }) }).then(unwrap);
+        body: JSON.stringify({ g: g, fn: fn, args: args }) }).then(unwrap).catch(function (e) { throw friendly(e); });
     },
     calendarUrl: function (h) { return base + '?cal=1&h=' + (Core.alarmHour(h) || Core.DEFAULT_ALARM_HOUR) + (g ? '&g=' + g : ''); }
   };
