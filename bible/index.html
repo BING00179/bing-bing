@@ -201,6 +201,8 @@
   }
   function openTerm() { return TN.next || TN.cur; }
   // ── 팀 ── 읽기 팀·필사 팀 (같은 날짜 같은 분량, 멤버만 다름). 회차마다 고름.
+  // 화면 이름만 성경통독·성경필사 (시트·서버 값은 읽기·필사 그대로 — 예전 기록과 맞춤)
+  function teamName(t) { return t === '필사' ? '성경필사' : '성경통독'; }
   function inTeam(team, term, name) {
     return Core.participants(term || TN.cur, state.members, state.joins || [], team).indexOf(name || me) >= 0;
   }
@@ -208,7 +210,7 @@
   function teamChips(term) {
     return '<div class="chips">' + Core.TEAMS.map(function (team) {
       var on = inTeam(team, term);
-      return '<button class="chip' + (on ? ' on' : '') + '" data-act="team-toggle" data-team="' + team + '">' + (on ? '✓ ' : '') + team + ' 팀</button>';
+      return '<button class="chip' + (on ? ' on' : '') + '" data-act="team-toggle" data-team="' + team + '">' + (on ? '✓ ' : '') + teamName(team) + '</button>';
     }).join('') + '</div>';
   }
   // 처음이거나 새 회차면 팀 고르기 (둘 다 골라도 됨)
@@ -815,7 +817,7 @@
     if (Api.admin()) h += sect('🛠 관리자', adminHtml());
     // 이름
     h += sect('👥 참여 팀 · ' + openTerm().n + '기', teamChips(openTerm()) +
-      '<div class="small" style="margin-top:8px">읽기 팀: 읽기 완료·진도·밀린 날 / 필사 팀: 필사 완료 횟수. 둘 다 해도 돼요.</div>');
+      '<div class="small" style="margin-top:8px">성경통독: 읽기 완료·진도·밀린 날 / 성경필사: 필사 완료 횟수. 둘 다 해도 돼요.</div>');
     h += sect('👤 내 이름', '<div style="margin-bottom:8px">' + esc(me) + '</div><button class="linkbtn" data-act="switch">다른 이름으로 바꾸기</button>');
     // 정보
     h += sect('ℹ️ 정보', '<div class="small">' + TN.cur.n + '기 읽기표: ' + P.START + ' 창세기 ~ ' + P.END + ' 요한계시록, 평일·토요일·공휴일 3장, 주일 5장<br>' +
@@ -832,9 +834,9 @@
     Core.TEAMS.forEach(function (team) { lists[team] = Core.participants(TN.cur, state.members, state.joins || [], team); });
     var list = lists[boardTeam];
     var h = joinHtml() + '<div class="seg segwide" role="tablist">' + Core.TEAMS.map(function (team) {
-      return '<button class="' + (team === boardTeam ? 'sel' : '') + '" data-act="board-team" data-team="' + team + '">' + team + ' 팀 ' + lists[team].length + '</button>';
+      return '<button class="' + (team === boardTeam ? 'sel' : '') + '" data-act="board-team" data-team="' + team + '">' + teamName(team) + ' ' + lists[team].length + '</button>';
     }).join('') + '</div>';
-    if (!list.length) return h + '<div class="card small">' + TN.cur.n + '기 ' + boardTeam + ' 팀 참여자 없음</div>';
+    if (!list.length) return h + '<div class="card small">' + TN.cur.n + '기 ' + teamName(boardTeam) + ' 참여자 없음</div>';
     h += '<div class="card">' + (P.portionFor(t) ? '<div class="small" style="margin-bottom:10px">오늘 ' + Core.portionLabel(P.portionFor(t)) + '</div>' : '');
     if (boardTeam === '필사') {
       return h + list.map(function (n) {
@@ -971,7 +973,7 @@
     }
     else if (act === 'team-toggle') {
       var team = b.dataset.team, on = !inTeam(team, openTerm());
-      run(call('join', me, team, on), function () { toast((on ? '✓ ' : '') + team + ' 팀 ' + (on ? '참여' : '나감')); });
+      run(call('join', me, team, on), function () { toast((on ? '✓ ' : '') + teamName(team) + ' ' + (on ? '참여' : '나감')); });
     }
     else if (act === 'team-ok') {
       if (!Core.TEAMS.some(function (tm) { return inTeam(tm, openTerm()); })) { toast('팀을 하나 이상 골라 주세요'); return; }
