@@ -137,6 +137,11 @@ var Api = (function () {
     // 지금 연결이 되는 열쇠로 링크를 고쳐 씀 (서버가 시트 메뉴에서 만든 링크의 s 가 틀릴 수 있어서)
     fixLink: function (l) { try { var u = new URL(l); if (base) u.searchParams.set('s', s); return u.href; } catch (e) { return l; } },
     admin: function () { return base ? admin() : ''; },
+    // 이 기기의 관리자 열쇠를 담은 링크 (다른 기기 — 탭 등 — 에 관리자를 넘길 때)
+    adminLink: function () {
+      var k = admin(); if (!k || !base) return '';
+      return location.origin + location.pathname + '?s=' + s + (g ? '&g=' + g : '') + '&admin=' + k;
+    },
     adminOff: function () { try { localStorage.removeItem(AKEY); } catch (e) {} },
     sw: 'sw.js' + (s ? '?s=' + encodeURIComponent(s) + (g ? '&g=' + g : '') : ''),
     state: function () { return impl.state(); },

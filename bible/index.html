@@ -843,7 +843,10 @@
     h += '<div class="small" style="margin:12px 0 6px">새 모임</div>' +
       '<input type="text" id="gname" maxlength="20" placeholder="예: 29여 아비가일">' +
       '<button class="big" style="margin-top:8px" data-act="admin-new">만들기</button>' +
-      '<div class="small" style="margin-top:8px">이 칸은 관리자 폰에만 보여요. 새 회차·회원 삭제는 시트 메뉴에서.</div>' + off;
+      '<div class="small" style="margin-top:8px">이 칸은 관리자 폰에만 보여요. 새 회차·회원 삭제는 시트 메뉴에서.</div>' +
+      '<div class="small" style="margin:12px 0 6px">다른 기기(탭 등)도 관리자로</div>' +
+      '<button class="readbtn" style="margin:0" data-act="admin-give">관리자 링크 보내기</button>' +
+      '<div class="small" style="margin-top:6px">카톡 <b>나와의 채팅</b>으로 보내 그 기기에서 열기. 단톡방에는 보내지 마세요.</div>' + off;
     return h;
   }
   function adminRun(p, msg) {
@@ -1069,6 +1072,7 @@
       var gn = document.getElementById('gname').value;
       adminRun(call('adminNewGroup', Api.admin(), gn), '새 모임 완료 · 공유로 링크 보내기');
     }
+    else if (act === 'admin-give') { var al = Api.adminLink(); if (al) shareLink('관리자 (나만)', al); }
     else if (act === 'admin-share') { var gx = adminData.groups[+b.dataset.i]; shareLink(gx.name, Api.fixLink(gx.link)); }
     else if (act === 'admin-off') { if (confirm('이 폰에서 관리자 칸을 없앨까요? 다시 쓰려면 시트 메뉴에서 관리자 폰을 다시 등록해야 해요.')) { Api.adminOff(); adminData = null; render(); } }
     else if (act === 'register') {
