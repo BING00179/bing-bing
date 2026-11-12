@@ -112,6 +112,10 @@
   @keyframes flash { from { background: var(--done-bg); } }
   .reader .mk svg { width: .8em; height: .8em; vertical-align: -.05em; color: var(--accent); }
   .reader .mk.bm svg { fill: var(--accent); }
+  /* 묵상 표시: 글자색과 다른 색 동그라미 안에 연필 — 한눈에 보이게 */
+  .reader .mk.memo { display: inline-flex; align-items: center; justify-content: center; width: 1.35em; height: 1.35em;
+    border-radius: 50%; background: #2b7a78; vertical-align: -.2em; margin-left: 2px; }
+  .reader .mk.memo svg { width: .8em; height: .8em; color: #fff; vertical-align: 0; }
   body.hasbar .reader { padding-bottom: 240px; }
   #versebar { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--card); border-top: 1px solid var(--line);
     box-shadow: 0 -4px 16px rgba(0,0,0,.12); padding: 10px 16px calc(12px + env(safe-area-inset-bottom)); }
