@@ -46,7 +46,7 @@ var Api = (function () {
   }
   var real = {
     state: function () {
-      function once() { return fetch(base + (g ? '?g=' + g : ''), { cache: 'no-store' }).then(unwrap); }
+      function once() { return fetch(base + '?s=' + s + (g ? '&g=' + g : ''), { cache: 'no-store' }).then(unwrap); }
       return once().then(function (d) { remember(); return d; }, function (e) {
         // 링크로 처음 열었는데 연결이 안 되면: 이 폰에 예전 연결이 있으면 그걸로 (잘린 링크 대비)
         if (fromLink && prevS && prevS !== s) {
@@ -58,7 +58,7 @@ var Api = (function () {
     },
     call: function (fn, args) {
       return fetch(base, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ g: g, fn: fn, args: args }) }).then(unwrap).catch(function (e) { throw friendly(e); });
+        body: JSON.stringify({ s: s, g: g, fn: fn, args: args }) }).then(unwrap).catch(function (e) { throw friendly(e); });
     },
     calendarUrl: function (h) { return base + '?cal=1&h=' + (Core.alarmHour(h) || Core.DEFAULT_ALARM_HOUR) + (g ? '&g=' + g : ''); }
   };
@@ -134,6 +134,8 @@ var Api = (function () {
   return {
     ready: !!impl,
     preview: s === 'preview', demo: DEMO, group: g,
+    // 지금 연결이 되는 열쇠로 링크를 고쳐 씀 (서버가 시트 메뉴에서 만든 링크의 s 가 틀릴 수 있어서)
+    fixLink: function (l) { try { var u = new URL(l); if (base) u.searchParams.set('s', s); return u.href; } catch (e) { return l; } },
     admin: function () { return base ? admin() : ''; },
     adminOff: function () { try { localStorage.removeItem(AKEY); } catch (e) {} },
     sw: 'sw.js' + (s ? '?s=' + encodeURIComponent(s) + (g ? '&g=' + g : '') : ''),

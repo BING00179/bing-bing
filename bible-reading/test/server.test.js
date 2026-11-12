@@ -502,3 +502,15 @@ test('관리자 폰: 시트 주인 메뉴로 받은 열쇠가 있어야만 앱�
   e.g.adminPhoneMenu();
   assert.equal(e.props.ADMIN_KEY, k2);
 });
+
+test('배포 아이디: 앱이 보낸 열쇠를 기억해 링크에 씀 (시트 메뉴의 테스트용 아이디 대신)', () => {
+  const e = makeEnv('2027-01-05');
+  const REAL = 'AKfycbREAL_deployment_id_0123456789abcdef';
+  e.get({ s: REAL });
+  assert.equal(e.props.APP_S, REAL);
+  e.ui.answers.push(['YES']);
+  e.g.adminPhoneMenu();
+  assert.ok(e.ui.alerts.some((a) => a.includes('?s=' + REAL + '&admin=')), '관리자 링크가 진짜 열쇠로');
+  e.get({ s: '<script>' });
+  assert.equal(e.props.APP_S, REAL, '이상한 값은 무시');
+});

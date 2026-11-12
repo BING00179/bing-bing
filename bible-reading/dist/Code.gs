@@ -480,6 +480,7 @@ function groupName_() {
 function doGet(e) {
   var p = (e && e.parameter) || {};
   try { setGroup_(p.g); } catch (err) { return json_(function () { throw err; }); }
+  learnS_(p.s);
   if (p.cal) {
     // 매일 아침 6시 알림이 들어 있는 달력 파일
     return ContentService.createTextOutput(Core.makePlan(openTerm_().start).icsFor(appLink_(), p.h))
@@ -494,6 +495,7 @@ function doPost(e) {
   return json_(function () {
     var req = JSON.parse(e.postData.contents);
     setGroup_(req.g);
+    learnS_(req.s);
     var fns = { register: register, join: join, mark: mark, subscribe: subscribe, unsubscribe: unsubscribe,
       adminInfo: adminInfo, adminNewGroup: adminNewGroup, adminSetGroup0: adminSetGroup0 };
     if (!fns[req.fn]) throw new Error('모르는 요청입니다.');
@@ -582,7 +584,17 @@ function locked_(f) {
 function memberNames_() { return rowsG_(members_(), 1, 3).map(function (r) { return r[0]; }).filter(String); }
 
 // 이 배포의 주소 조각(…/macros/s/<여기>/exec) → 화면 주소 뒤에 붙임
+// 배포 아이디: 시트 메뉴 안에서는 구글이 '테스트용' 아이디를 돌려줘서(회원은 못 여는 주소) 믿을 수 없음.
+// 그래서 앱이 요청마다 실어 보내는 자기 열쇠(s)를 기억해 둠 — 요청이 여기 닿았다는 것이 그 열쇠가 맞다는 뜻.
+function learnS_(x) {
+  x = String(x || '');
+  if (!/^AKfyc[A-Za-z0-9_-]{20,150}$/.test(x)) return;
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('APP_S') !== x) props.setProperties({ APP_S: x });
+}
 function deploymentId_() {
+  var learned = PropertiesService.getScriptProperties().getProperty('APP_S');
+  if (learned) return learned;
   var m = String(ScriptApp.getService().getUrl()).match(/\/s\/([A-Za-z0-9_-]+)\//);
   return m ? m[1] : '';
 }

@@ -1067,7 +1067,7 @@
       var gn = document.getElementById('gname').value;
       adminRun(call('adminNewGroup', Api.admin(), gn), '새 모임 완료 · 공유로 링크 보내기');
     }
-    else if (act === 'admin-share') { var gx = adminData.groups[+b.dataset.i]; shareLink(gx.name, gx.link); }
+    else if (act === 'admin-share') { var gx = adminData.groups[+b.dataset.i]; shareLink(gx.name, Api.fixLink(gx.link)); }
     else if (act === 'admin-off') { if (confirm('이 폰에서 관리자 칸을 없앨까요? 다시 쓰려면 시트 메뉴에서 관리자 폰을 다시 등록해야 해요.')) { Api.adminOff(); adminData = null; render(); } }
     else if (act === 'register') {
       var n = Core.validName(document.getElementById('newname').value);
