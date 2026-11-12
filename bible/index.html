@@ -899,7 +899,9 @@
     h += sect('🔔 매일 알림', a);
     // 홈 화면 앱
     if (Install.standalone()) a = '<div class="small">✅ 지금 홈 화면 앱으로 열려 있어요.</div>';
-    else if (Install.installed()) a = '<div class="small">✅ 설치돼 있어요. 홈 화면의 <b>📖 성경통독</b> 아이콘으로 열면 알림이 앱 이름으로 와요.</div>';
+    else if (Install.installed()) a = '<div class="small">✅ 설치돼 있어요. 홈 화면의 <b>📖 성경통독</b> 아이콘으로 열면 알림이 앱 이름으로 와요.<br>' +
+      '홈 화면에 안 보이면 <b>앱 목록(모든 앱)</b>에 있을 수 있어요. 길게 눌러 홈 화면으로 끌어 놓으세요.</div>' +
+      '<div class="hint" style="text-align:left;margin-top:8px"><button class="linkbtn" data-act="not-installed">아직 설치 안 됨 · 다시 설치</button></div>';
     else a = installBlock();
     h += sect('📲 홈 화면 앱', a);
     // 글씨
