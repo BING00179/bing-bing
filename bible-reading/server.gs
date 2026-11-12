@@ -48,7 +48,8 @@ function doPost(e) {
   return json_(function () {
     var req = JSON.parse(e.postData.contents);
     setGroup_(req.g);
-    var fns = { register: register, join: join, mark: mark, subscribe: subscribe, unsubscribe: unsubscribe };
+    var fns = { register: register, join: join, mark: mark, subscribe: subscribe, unsubscribe: unsubscribe,
+      adminInfo: adminInfo, adminNewGroup: adminNewGroup, adminSetGroup0: adminSetGroup0 };
     if (!fns[req.fn]) throw new Error('모르는 요청입니다.');
     return fns[req.fn].apply(null, req.args || []);
   });
@@ -302,6 +303,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('📖 성경통독')
     .addItem('새 모임 만들기… (관리자)', 'newGroupMenu')
     .addItem('모임 링크 보기', 'groupLinksMenu')
+    .addItem('관리자 폰 등록… (관리자)', 'adminPhoneMenu')
     .addSeparator()
     .addItem('새 회차 시작…', 'newTermMenu')
     .addItem('회원 완전 삭제… (관리자)', 'deleteMemberMenu')
@@ -335,12 +337,55 @@ function newGroupMenu() {
   }
   var r = ui.prompt('새 모임 만들기', '새 모임 이름을 적어 주세요 (예: 3여전도회).', ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
-  var name = Core.validName(r.getResponseText());
-  if (!name) { ui.alert('이름은 1~20자로 적어 주세요.'); return; }
-  if (groups_().some(function (x) { return x.name === name; }) || props.getProperty('GROUP0_NAME') === name) { ui.alert('이미 있는 모임 이름입니다: ' + name); return; }
+  var g;
+  try { g = createGroup_(r.getResponseText()); } catch (err) { ui.alert(err.message); return; }
+  ui.alert('「' + g.name + '」 모임 링크', '이 링크를 그 모임 단톡방에 보내 주세요.\n\n' + appLink_(g.code), ui.ButtonSet.OK);
+}
+function createGroup_(raw) {
+  var name = Core.validName(raw);
+  if (!name) throw new Error('이름은 1~20자로 적어 주세요.');
+  if (groups_().some(function (x) { return x.name === name; }) || PropertiesService.getScriptProperties().getProperty('GROUP0_NAME') === name) throw new Error('이미 있는 모임 이름입니다: ' + name);
   var code = newGroupCode_();
   locked_(function () { append_(groupsSheet_(), [code, name, now_()]); });
-  ui.alert('「' + name + '」 모임 링크', '이 링크를 그 모임 단톡방에 보내 주세요.\n\n' + appLink_(code), ui.ButtonSet.OK);
+  return { code: code, name: name };
+}
+
+// ── 관리자 폰 ── 앱에는 로그인이 없어서 이름으로는 관리자를 가릴 수 없음.
+// 시트 주인이 메뉴로 관리자 링크(&admin=열쇠)를 만들어 자기 폰에서 한 번 열면, 그 폰 앱의 ⚙ 설정에 관리자 칸이 생김.
+// 메뉴를 다시 누르면 새 열쇠 — 예전 폰·링크는 그때부터 안 됨.
+function adminPhoneMenu() {
+  var ui = SpreadsheetApp.getUi();
+  if (!isOwner_()) { ui.alert('관리자 폰 등록은 관리자(시트 주인)만 할 수 있습니다.'); return; }
+  var ok = ui.alert('관리자 폰 등록', '새 관리자 링크를 만듭니다. 예전 링크로 등록한 폰·탭은 관리자 칸이 사라집니다 (새 링크로 다시 열면 됨). 계속할까요?', ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  var key = (Utilities.getUuid() + Utilities.getUuid()).replace(/[^a-f0-9]/g, '').slice(0, 32);
+  PropertiesService.getScriptProperties().setProperties({ ADMIN_KEY: key });
+  ui.alert('관리자 링크', '카톡 "나와의 채팅" 으로 보내 회장님 폰·탭에서 각각 한 번씩 여세요 (같은 링크로 둘 다 됨).\n단톡방·다른 사람에게는 보내지 마세요.\n\n' + appLink_('') + '&admin=' + key, ui.ButtonSet.OK);
+}
+function adminCheck_(key) {
+  var k = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+  if (!k || String(key || '') !== k) throw new Error('관리자 폰이 아닙니다. 시트 메뉴에서 관리자 폰을 다시 등록해 주세요.');
+}
+function adminInfo(key) {
+  adminCheck_(key);
+  var name0 = PropertiesService.getScriptProperties().getProperty('GROUP0_NAME') || '';
+  return { groups: [{ code: '', name: name0, link: appLink_('') }].concat(groups_().map(function (x) {
+    return { code: x.code, name: x.name, link: appLink_(x.code) };
+  })) };
+}
+function adminNewGroup(key, name) {
+  adminCheck_(key);
+  if (!PropertiesService.getScriptProperties().getProperty('GROUP0_NAME')) throw new Error('먼저 처음 모임 이름을 정해 주세요.');
+  createGroup_(name);
+  return adminInfo(key);
+}
+function adminSetGroup0(key, raw) {
+  adminCheck_(key);
+  var name = Core.validName(raw);
+  if (!name) throw new Error('이름은 1~20자로 적어 주세요.');
+  if (groups_().some(function (x) { return x.name === name; })) throw new Error('이미 있는 모임 이름입니다: ' + name);
+  PropertiesService.getScriptProperties().setProperties({ GROUP0_NAME: name });
+  return adminInfo(key);
 }
 function newGroupCode_() {
   var have = {};

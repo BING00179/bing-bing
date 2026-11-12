@@ -145,6 +145,8 @@
   .big[disabled], .copybtn[disabled] { opacity: .4; cursor: not-allowed; }
   .grp { font-size: .6em; font-weight: 600; color: #6b7280; margin-left: 4px; }
   .grp:empty { display: none; }
+  .admrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid #eee; }
+  .admbtn { width: auto !important; margin: 0 !important; padding: 6px 14px !important; }
 </style>
 </head>
 <body>
@@ -736,6 +738,47 @@
 
   // ── ⚙ 설정 ──
   function sect(title, body) { return '<div class="card"><div style="font-weight:700;margin-bottom:8px">' + title + '</div>' + body + '</div>'; }
+  // ── 관리자 칸 (관리자 폰에만) ──
+  var adminData = null, adminBusy = false;
+  function adminLoad() {
+    if (adminBusy) return;
+    adminBusy = true;
+    call('adminInfo', Api.admin()).then(function (d) { adminData = d; }, function (e) { adminData = { error: errMsg(e) }; })
+      .then(function () { adminBusy = false; if (tab === 'set') render(); });
+  }
+  function adminHtml() {
+    if (!adminData) { adminLoad(); return '<div class="small">불러오는 중…</div>'; }
+    var off = '<div class="hint" style="text-align:left;margin-top:10px"><button class="linkbtn" data-act="admin-off">이 폰 관리자 해제</button></div>';
+    if (adminData.error) return '<div class="small">' + esc(adminData.error) + '</div>' + off;
+    var gs = adminData.groups, h = '';
+    if (!gs[0].name) {
+      return '<div class="small" style="margin-bottom:6px">처음 모임 이름 (앱 맨 위에 보여요)</div>' +
+        '<input type="text" id="g0name" maxlength="20" placeholder="예: 30여 로데">' +
+        '<button class="big" style="margin-top:8px" data-act="admin-g0">저장</button>' + off;
+    }
+    h += '<div class="small" style="margin-bottom:6px">모임 ' + gs.length + '개 · 링크를 그 모임 단톡방에</div>';
+    gs.forEach(function (x, i) {
+      h += '<div class="admrow"><b>' + esc(x.name) + '</b>' +
+        '<button class="readbtn admbtn" data-act="admin-share" data-i="' + i + '">공유</button></div>';
+    });
+    h += '<div class="small" style="margin:12px 0 6px">새 모임</div>' +
+      '<input type="text" id="gname" maxlength="20" placeholder="예: 29여 아비가일">' +
+      '<button class="big" style="margin-top:8px" data-act="admin-new">만들기</button>' +
+      '<div class="small" style="margin-top:8px">이 칸은 관리자 폰에만 보여요. 새 회차·회원 삭제는 시트 메뉴에서.</div>' + off;
+    return h;
+  }
+  function adminRun(p, msg) {
+    if (busy) return;
+    busy = true;
+    p.then(function (d) { adminData = d; if (msg) toast(msg); }, function (e) { toast(errMsg(e)); })
+      .then(function () { busy = false; render(); });
+  }
+  function shareLink(name, link) {
+    var text = '📖 함께 읽는 성경 · ' + name + '\n' + link;
+    if (navigator.share) { navigator.share({ text: text }).catch(function () {}); return; }
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast('📋 링크 복사됨'); }, function () { toast('복사가 안 돼요'); });
+    else toast('복사가 안 돼요');
+  }
   function settingsHtml() {
     var h = '', on = alarmChoice() === 'push', push = Push.status(), a;
     // 알림
@@ -769,6 +812,7 @@
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="-2">가−</button>' +
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="2">가+</button></div>' +
       '<div class="fontsample" style="font-size:' + fontSize() + 'px;line-height:1.8">태초에 하나님이 천지를 창조하시니라</div>');
+    if (Api.admin()) h += sect('🛠 관리자', adminHtml());
     // 이름
     h += sect('👥 참여 팀 · ' + openTerm().n + '기', teamChips(openTerm()) +
       '<div class="small" style="margin-top:8px">읽기 팀: 읽기 완료·진도·밀린 날 / 필사 팀: 필사 완료 횟수. 둘 다 해도 돼요.</div>');
@@ -908,6 +952,13 @@
     }
     if (act === 'switch') { Tts.reset(); me = null; reading = null; save(null); render(); }
     else if (act === 'pick') { me = b.dataset.name; save(me); tab = 'today'; render(); }
+    else if (act === 'admin-g0') { adminRun(call('adminSetGroup0', Api.admin(), document.getElementById('g0name').value), '저장 완료'); }
+    else if (act === 'admin-new') {
+      var gn = document.getElementById('gname').value;
+      adminRun(call('adminNewGroup', Api.admin(), gn), '새 모임 완료 · 공유로 링크 보내기');
+    }
+    else if (act === 'admin-share') { var gx = adminData.groups[+b.dataset.i]; shareLink(gx.name, gx.link); }
+    else if (act === 'admin-off') { if (confirm('이 폰에서 관리자 칸을 없앨까요? 다시 쓰려면 시트 메뉴에서 관리자 폰을 다시 등록해야 해요.')) { Api.adminOff(); adminData = null; render(); } }
     else if (act === 'register') {
       var n = Core.validName(document.getElementById('newname').value);
       if (!n) { toast('이름을 1~20자로 적어 주세요.'); return; }

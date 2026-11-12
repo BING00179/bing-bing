@@ -245,7 +245,7 @@ test('회원 완전 삭제: 시트 메뉴에만 있고, 그 사람의 회원·�
   e.post('subscribe', '영희', EP1, 6); e.post('unsubscribe', EP1); e.post('subscribe', '영희', EP1, 7);
   e.post('subscribe', '철수', EP2, 6);
   e.g.onOpen();
-  assert.deepEqual(e.ui.menus[0].items.map((x) => x[1]), ['newGroupMenu', 'groupLinksMenu', 'newTermMenu', 'deleteMemberMenu']);
+  assert.deepEqual(e.ui.menus[0].items.map((x) => x[1]), ['newGroupMenu', 'groupLinksMenu', 'adminPhoneMenu', 'newTermMenu', 'deleteMemberMenu']);
   e.ui.answers.push(['OK', ' 영희 '], ['YES']);
   e.g.deleteMemberMenu();
   assert.ok(e.ui.alerts[0].includes('기록 2줄') && e.ui.alerts[0].includes('알림 3줄'), e.ui.alerts[0]);
@@ -463,4 +463,40 @@ test('아침 알림은 모든 모임에 감 (모임마다 자기 회차 기준)'
   e.g.sendMorning();
   const urls = e.fetched.map((r) => r.url).sort();
   assert.deepEqual(urls, [EP1, EP2].sort());
+});
+
+test('관리자 폰: 시트 주인 메뉴로 받은 열쇠가 있어야만 앱에서 모임을 만듦, 다시 등록하면 예전 열쇠는 안 됨', () => {
+  const e = makeEnv('2027-01-05');
+  assert.match(e.post('adminInfo', '').error, /관리자 폰이 아닙니다/, '등록 전에는 누구도 안 됨');
+  e.who.email = 'leader@example.com';
+  e.g.adminPhoneMenu();
+  assert.equal(e.props.ADMIN_KEY, undefined, '리더는 등록 못 함');
+  e.who.email = 'owner@example.com';
+  e.ui.answers.push(['YES']);
+  e.g.adminPhoneMenu();
+  const key = e.props.ADMIN_KEY;
+  assert.match(key, /^[a-f0-9]{32}$/);
+  assert.ok(e.ui.alerts.some((a) => a.includes('&admin=' + key) && a.includes('?s=' + DEPLOY)));
+  assert.match(e.post('adminInfo', 'x'.repeat(32)).error, /관리자 폰이 아닙니다/);
+  // 처음 모임 이름 → 새 모임
+  assert.match(e.post('adminNewGroup', key, '29여 아비가일').error, /처음 모임 이름/);
+  assert.equal(e.post('adminSetGroup0', key, '30여 로데').data.groups[0].name, '30여 로데');
+  const r = e.post('adminNewGroup', key, '29여 아비가일');
+  assert.equal(r.data.groups.length, 2);
+  assert.equal(r.data.groups[1].name, '29여 아비가일');
+  assert.match(r.data.groups[1].link, new RegExp('\\?s=' + DEPLOY + '&g=' + r.data.groups[1].code + '$'));
+  assert.equal(r.data.groups[0].link.includes('&g='), false);
+  assert.match(e.post('adminNewGroup', key, '29여 아비가일').error, /이미 있는/);
+  assert.equal(e.get({ g: r.data.groups[1].code }).data.groupName, '29여 아비가일');
+  assert.equal(e.get().data.groupName, '30여 로데');
+  // 다시 등록 → 예전 열쇠 무효
+  e.ui.answers.push(['YES']);
+  e.g.adminPhoneMenu();
+  assert.match(e.post('adminInfo', key).error, /관리자 폰이 아닙니다/);
+  assert.ok(e.post('adminInfo', e.props.ADMIN_KEY).ok);
+  // 아니오면 그대로
+  const k2 = e.props.ADMIN_KEY;
+  e.ui.answers.push(['NO']);
+  e.g.adminPhoneMenu();
+  assert.equal(e.props.ADMIN_KEY, k2);
 });

@@ -20,6 +20,13 @@ var Api = (function () {
     else if (s !== 'preview') g = localStorage.getItem(GKEY) || '';
   } catch (e) {}
   if (!/^[a-z0-9]{0,20}$/.test(g)) g = '';
+  // 관리자 폰: 시트 메뉴 '관리자 폰 등록' 링크(&admin=열쇠)를 한 번 열면 이 폰에 기억. 주소창에서는 바로 지움.
+  var AKEY = 'bible.admin', adminKey = params.get('admin');
+  if (adminKey && /^[a-f0-9]{32}$/.test(adminKey)) {
+    try { localStorage.setItem(AKEY, adminKey); } catch (e) {}
+    try { params.delete('admin'); history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '')); } catch (e) {}
+  }
+  function admin() { try { return localStorage.getItem(AKEY) || ''; } catch (e) { return ''; } }
 
   var base = s && s !== 'preview' ? 'https://script.google.com/macros/s/' + s + '/exec' : null;
 
@@ -110,6 +117,8 @@ var Api = (function () {
   return {
     ready: !!impl,
     preview: s === 'preview', demo: DEMO, group: g,
+    admin: function () { return base ? admin() : ''; },
+    adminOff: function () { try { localStorage.removeItem(AKEY); } catch (e) {} },
     sw: 'sw.js' + (s ? '?s=' + encodeURIComponent(s) + (g ? '&g=' + g : '') : ''),
     state: function () { return impl.state(); },
     call: function (fn) { return impl.call(fn, Array.prototype.slice.call(arguments, 1)); },
