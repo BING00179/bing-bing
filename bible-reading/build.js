@@ -21,7 +21,7 @@ function build() {
   const files = { 'core.js': Buffer.from(read('core.js')) };
   for (const f of WEB_FILES) files[f] = fs.readFileSync(path.join(here, 'web', f));
   // 그림(있을 때만): 카톡 링크 미리보기·처음 화면
-  for (const f of ['hero.jpg']) if (fs.existsSync(path.join(here, 'web', f))) files[f] = fs.readFileSync(path.join(here, 'web', f));
+  for (const f of ['hero.jpg', 'og.jpg']) if (fs.existsSync(path.join(here, 'web', f))) files[f] = fs.readFileSync(path.join(here, 'web', f));
   return { code, files };
 }
 
