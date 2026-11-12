@@ -1041,7 +1041,7 @@
     if (b.dataset.act === 'tts-rate') { Tts.setRate(+b.dataset.r); var bar = document.getElementById('ttsbar'); if (bar) bar.outerHTML = ttsBar(); return; }
     if (b.dataset.act === 'tts-pause') { Tts.pause(); return; }
     if (b.dataset.act === 'close-read') {
-      if (history.state && history.state.bnav && history.state.reading) { history.back(); return; } // 뒤로 가기와 같게
+      if (history.state && history.state.bnav && history.state.reading) { history.go(history.state.bar ? -2 : -1); return; } // 뒤로 가기와 같게
       Tts.reset(); Sel.clear(); memoOpen = false; verseBarHide(); reading = null; tab = readFrom; render(); window.scrollTo(0, 0); return;
     }
     if (b.dataset.act === 'font') {
@@ -1157,7 +1157,10 @@
     if (pEl && !e.target.closest('button, a')) {
       var wasEmpty = !Sel.list().length;
       Sel.toggle(pEl.dataset.k); memoOpen = false; refreshVerses([pEl.dataset.k]); verseBar();
-      if (wasEmpty && Sel.list().length) try { history.pushState({ bnav: 1, tab: tab, reading: reading, bar: 1 }, ''); } catch (e9) {} // 뒤로 = 절 메뉴 닫기
+      if (wasEmpty && Sel.list().length) try { // 뒤로 = 절 메뉴 닫기 (절 메뉴 기록은 하나만)
+        var bs = { bnav: 1, tab: tab, reading: reading, bar: 1 };
+        if (history.state && history.state.bar) history.replaceState(bs, ''); else history.pushState(bs, '');
+      } catch (e9) {}
       return;
     }
     var b = e.target.closest('#versebar button'); if (!b) return;
