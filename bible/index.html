@@ -923,7 +923,8 @@
       '<div class="chips2">' + [['all', '전체'], ['old', '구약'], ['new', '신약']].map(function (x) {
         return '<button class="' + (Find.scope === x[0] ? 'on' : '') + '" data-act="find-scope" data-s="' + x[0] + '">' + x[1] + '</button>';
       }).join('') + '</div>' +
-      '<button class="big" style="margin-top:8px" data-act="find-go">찾기</button></div>';
+      '<button class="big" style="margin-top:8px" data-act="find-go">찾기</button>' +
+      '<button class="readbtn" style="margin-top:8px" data-act="dict-go">📚 성경 사전에서 찾기 ↗</button></div>' + hymnHtml();
     if (Find.busy) return h + '<div class="card small">성경 불러오는 중… ' + Find.loaded + ' / 66권 (처음 한 번만)</div>';
     if (!Find.res) return h + '<div class="small" style="text-align:center">개역한글 · 결과를 누르면 그 말씀으로 가요</div>';
     if (!Find.res.length) return h + '<div class="card small">「' + esc(Find.q) + '」 가 나오는 절이 없어요.</div>';
@@ -935,6 +936,20 @@
       h += '<button class="findres" data-act="find-open" data-k="' + k + '"><b>' + esc(selLabel([k])) + '</b>' + t + '</button>';
     });
     return h + '</div>';
+  }
+  // ── 찬송가·사전 ── 가사·악보·사전은 저작권이 있어 앱에 넣지 않고, 바깥 검색으로 연결만 함
+  function hymnHtml() {
+    return '<div class="card"><div style="font-weight:700;margin-bottom:6px">🎵 찬송가 (새찬송가)</div>' +
+      '<input type="text" id="hymnno" inputmode="numeric" maxlength="3" placeholder="장 번호 (예: 305)" style="margin:0 0 8px">' +
+      '<div style="display:flex;gap:8px"><button class="readbtn" style="margin:0;white-space:nowrap" data-act="hymn-see">가사·악보 ↗</button>' +
+      '<button class="readbtn" style="margin:0;white-space:nowrap" data-act="hymn-hear">듣기 ↗</button></div>' +
+      '<div class="small" style="margin-top:6px">바깥 사이트(검색·유튜브)로 열려요. 가사·악보는 저작권이 있어 앱에 넣지 않았어요.</div></div>';
+  }
+  function openOut(url) { window.open(url, '_blank', 'noopener'); }
+  function hymnNo() {
+    var n = parseInt(((document.getElementById('hymnno') || {}).value || '').trim(), 10);
+    if (!(n >= 1 && n <= 645)) { toast('찬송가 장 번호(1~645)를 적어 주세요'); return 0; }
+    return n;
   }
   function findRun() {
     var q = (document.getElementById('findq') || {}).value;
@@ -1245,6 +1260,13 @@
     if (act === 'switch') { Tts.reset(); me = null; reading = null; save(null); render(); }
     else if (act === 'pick') { me = b.dataset.name; save(me); tab = 'today'; render(); }
     else if (act === 'find-go') { findRun(); }
+    else if (act === 'dict-go') {
+      var dq = String(((document.getElementById('findq') || {}).value || '')).trim();
+      if (!dq) { toast('사전에서 찾을 낱말을 위 칸에 적어 주세요'); return; }
+      openOut('https://terms.naver.com/search.naver?query=' + encodeURIComponent(dq + ' 성경'));
+    }
+    else if (act === 'hymn-see') { var hn = hymnNo(); if (hn) openOut('https://www.google.com/search?q=' + encodeURIComponent('새찬송가 ' + hn + '장 가사 악보')); }
+    else if (act === 'hymn-hear') { var hn2 = hymnNo(); if (hn2) openOut('https://www.youtube.com/results?search_query=' + encodeURIComponent('새찬송가 ' + hn2 + '장')); }
     else if (act === 'find-scope') { Find.scope = b.dataset.s; var fq = document.getElementById('findq'); if (fq) Find.q = fq.value; if (Find.q) findRun(); else render(); }
     else if (act === 'find-open') { openVerse(b.dataset.k); }
     else if (act === 'notes-export') { notesExport(); }
