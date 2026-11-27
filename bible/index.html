@@ -45,7 +45,13 @@
   header .who { font-size: 15px; color: var(--muted); }
   header .who button { font-size: 15px; }
   .linkbtn { background: none; border: 0; color: var(--accent); text-decoration: underline; padding: 4px; cursor: pointer; font: inherit; }
-  nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 16px; }
+  nav { display: grid; grid-template-columns: repeat(4, 1fr) 44px; gap: 6px; margin-bottom: 16px; }
+  .findres { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 2px; color: var(--ink); cursor: pointer; line-height: 1.6; }
+  .findres b { display: block; font-size: 14px; color: var(--accent); }
+  .findres mark { background: #fde68a; color: inherit; border-radius: 3px; padding: 0 1px; }
+  .chips2 { display: flex; gap: 6px; margin: 8px 0 4px; }
+  .chips2 button { font: inherit; font-size: 15px; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+  .chips2 button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   nav button {
     font: inherit; font-size: 16px; padding: 10px 2px; border-radius: 12px; white-space: nowrap; letter-spacing: -0.02em;
     border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer;
@@ -300,11 +306,11 @@
     // 브라우저로 열었으면 예전 기록과 상관없이 설치부터 (이번에 '설치 없이' 를 누른 때만 건너뜀).
     // 설치한 앱으로 열었으면 알림 설정이 끝날 때까지 알림 단계.
     if (!Install.standalone() ? !installSkipped() : !setupDone()) { main.innerHTML = setupHtml(); return; }
-    var tabs = [['today', '오늘'], ['all', '함께 읽기'], ['past', '지난 날'], ['set', '⚙ 설정']];
+    var tabs = [['today', '오늘'], ['all', '함께 읽기'], ['past', '지난 날'], ['set', '⚙ 설정'], ['find', '🔍']];
     if (reading) { main.innerHTML = readerHtml(); return; }
     main.innerHTML = '<nav role="tablist">' + tabs.map(function (t) {
-      return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '">' + t[1] + '</button>';
-    }).join('') + '</nav>' + (tab === 'today' ? todayHtml() : tab === 'all' ? allHtml() : tab === 'set' ? settingsHtml() : pastHtml());
+      return '<button role="tab" data-tab="' + t[0] + '" aria-selected="' + (tab === t[0]) + '"' + (t[0] === 'find' ? ' aria-label="말씀 찾기"' : '') + '>' + t[1] + '</button>';
+    }).join('') + '</nav>' + (tab === 'today' ? todayHtml() : tab === 'all' ? allHtml() : tab === 'set' ? settingsHtml() : tab === 'find' ? findHtml() : pastHtml());
   }
 
   // ── 처음 한 번: 홈 화면 설치 → 알림 켜기 (원스톱) ──
@@ -737,7 +743,8 @@
     share: svg('<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/>'),
     play: svg('<circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5z" fill="currentColor"/>'),
     bm: svg('<path d="M7 3.5h10v17l-5-3.5-5 3.5z"/>'),
-    memo: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>')
+    memo: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
+    img: svg('<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M4 17l5-4.5 4 3.5 3-2.5 4 3.5"/>')
   };
   var HL_COLORS = ['#c7d2fe', '#f5c2e7', '#fdba74', '#fde68a', '#a5f3fc', '#bbf7d0'];
   function verseBar() {
@@ -760,6 +767,7 @@
     } else {
       h += '<div class="vb-row">' +
         '<button class="vb-btn" data-act="v-share">' + ICON.share + '공유</button>' +
+        '<button class="vb-btn" data-act="v-img">' + ICON.img + '이미지</button>' +
         '<button class="vb-btn" data-act="v-listen">' + ICON.play + '듣기</button>' +
         '<button class="vb-btn' + (bmOn ? ' on' : '') + '" data-act="v-bm">' + ICON.bm + '책갈피</button>' +
         '<button class="vb-btn' + (memo ? ' on' : '') + '" data-act="v-memo">' + ICON.memo + '묵상</button></div>' +
@@ -905,6 +913,109 @@
       catch (e) { toast(e.message && /파일/.test(e.message) ? e.message : '읽을 수 없는 파일이에요'); }
     };
     r.readAsText(f);
+  }
+  // ── 말씀 찾기 ── 앱 안 개역한글 66권에서 낱말 찾기 (처음 한 번 66권을 받아 기억). 띄어 쓴 낱말은 모두 들어간 절만.
+  var Find = { q: '', scope: 'all', res: null, total: 0, busy: false, loaded: 0 };
+  var FIND_MAX = 300;
+  function findHtml() {
+    var h = '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">말씀 찾기</div>' +
+      '<input type="text" id="findq" placeholder="예: 사랑, 목자, 두려워 말라" value="' + esc(Find.q) + '" enterkeyhint="search">' +
+      '<div class="chips2">' + [['all', '전체'], ['old', '구약'], ['new', '신약']].map(function (x) {
+        return '<button class="' + (Find.scope === x[0] ? 'on' : '') + '" data-act="find-scope" data-s="' + x[0] + '">' + x[1] + '</button>';
+      }).join('') + '</div>' +
+      '<button class="big" style="margin-top:8px" data-act="find-go">찾기</button></div>';
+    if (Find.busy) return h + '<div class="card small">성경 불러오는 중… ' + Find.loaded + ' / 66권 (처음 한 번만)</div>';
+    if (!Find.res) return h + '<div class="small" style="text-align:center">개역한글 · 결과를 누르면 그 말씀으로 가요</div>';
+    if (!Find.res.length) return h + '<div class="card small">「' + esc(Find.q) + '」 가 나오는 절이 없어요.</div>';
+    var terms = Find.q.split(/\s+/).filter(String);
+    h += '<div class="small" style="margin:0 2px 6px">' + Find.total + '절' + (Find.total > FIND_MAX ? ' · 앞 ' + FIND_MAX + '절만 보여요. 낱말을 더 넣어 좁혀 보세요' : '') + '</div><div class="card">';
+    Find.res.forEach(function (k) {
+      var t = esc(verseText(k));
+      terms.forEach(function (w) { t = t.split(esc(w)).join('<mark>' + esc(w) + '</mark>'); });
+      h += '<button class="findres" data-act="find-open" data-k="' + k + '"><b>' + esc(selLabel([k])) + '</b>' + t + '</button>';
+    });
+    return h + '</div>';
+  }
+  function findRun() {
+    var q = (document.getElementById('findq') || {}).value;
+    q = String(q || '').trim().slice(0, 40); Find.q = q;
+    if (!q) { toast('찾을 낱말을 적어 주세요'); return; }
+    var from = Find.scope === 'new' ? 40 : 1, to = Find.scope === 'old' ? 39 : 66, need = [];
+    for (var n = from; n <= to; n++) need.push({ book: n });
+    Find.busy = true; Find.loaded = 0; render();
+    var todo = need.filter(function (c) { return !books[c.book]; });
+    Find.loaded = need.length - todo.length;
+    Promise.all(todo.map(function (c) { return loadBooks([c]).then(function () { Find.loaded++; var el = document.querySelector('.card.small'); if (el && Find.busy) el.textContent = '성경 불러오는 중… ' + Find.loaded + ' / 66권 (처음 한 번만)'; }); }))
+      .then(function () {
+        var terms = q.split(/\s+/).filter(String), out = [], total = 0;
+        for (var b = from; b <= to; b++) books[b].c.forEach(function (ch, ci) {
+          ch.forEach(function (v, vi) {
+            if (terms.every(function (w) { return v.indexOf(w) >= 0; })) { total++; if (out.length < FIND_MAX) out.push(b + '-' + (ci + 1) + '-' + (vi + 1)); }
+          });
+        });
+        Find.res = out; Find.total = total;
+      }, function () { toast('성경을 불러오지 못했어요. 인터넷을 확인해 주세요'); })
+      .then(function () { Find.busy = false; render(); });
+  }
+
+  // ── 말씀 이미지 ── 고른 절을 그림 카드(1080×1350)로 만들어 공유·저장
+  function verseImage(ks) {
+    var W = 1080, H = 1350, c = document.createElement('canvas'); c.width = W; c.height = H;
+    var g = c.getContext('2d'), img = new Image();
+    img.onload = function () { draw(true); }; img.onerror = function () { draw(false); };
+    img.src = 'hero.jpg';
+    function wrap(text, maxW) {
+      var lines = [], line = '';
+      text.split(' ').forEach(function (word) {
+        var t = line ? line + ' ' + word : word;
+        if (g.measureText(t).width <= maxW) { line = t; return; }
+        if (line) lines.push(line);
+        // 낱말 하나가 줄보다 길면 글자 단위로
+        line = '';
+        for (var i = 0; i < word.length; i++) {
+          if (g.measureText(line + word[i]).width > maxW) { lines.push(line); line = ''; }
+          line += word[i];
+        }
+      });
+      if (line) lines.push(line);
+      return lines;
+    }
+    function draw(ok) {
+      if (ok) { // 그림을 가득 채움 (얼굴이 위쪽에 오게)
+        var r = Math.max(W / img.width, H / img.height), iw = img.width * r, ih = img.height * r;
+        g.drawImage(img, (W - iw) / 2, 0, iw, ih);
+      } else { g.fillStyle = '#dff1ec'; g.fillRect(0, 0, W, H); }
+      // 아래쪽 흰 판 (글씨가 잘 보이게)
+      var top = H * 0.42, grd = g.createLinearGradient(0, top - 120, 0, top + 60);
+      grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(1, 'rgba(255,255,255,0.86)');
+      g.fillStyle = grd; g.fillRect(0, top - 120, W, 180); g.fillStyle = 'rgba(255,255,255,0.86)'; g.fillRect(0, top + 60, W, H);
+      var text = ks.map(function (k) { return verseText(k); }).join(' ');
+      var size = text.length > 260 ? 38 : text.length > 160 ? 44 : text.length > 80 ? 52 : 60, lines;
+      for (;;) {
+        g.font = '500 ' + size + 'px "Noto Serif KR", "Nanum Myeongjo", serif';
+        lines = wrap(text, W - 180);
+        if (lines.length * size * 1.6 < H - top - 260 || size <= 28) break;
+        size -= 4;
+      }
+      g.fillStyle = '#2a2622'; g.textAlign = 'center'; g.textBaseline = 'top';
+      var lh = size * 1.6, y = top + 40 + Math.max(0, (H - top - 260 - lines.length * lh) / 2);
+      lines.forEach(function (l) { g.fillText(l, W / 2, y); y += lh; });
+      g.font = '700 40px sans-serif'; g.fillStyle = '#6b4f2a';
+      g.fillText(selLabel(ks), W / 2, y + 30);
+      g.font = '28px sans-serif'; g.fillStyle = '#8a8178';
+      g.fillText('개역한글 · 함께 읽는 성경', W / 2, H - 70);
+      c.toBlob(function (blob) {
+        var name = 'verse-' + ks[0] + '.jpg', file = null;
+        try { file = new File([blob], name, { type: 'image/jpeg' }); } catch (e) {}
+        if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file] }).catch(function () {});
+          return;
+        }
+        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); URL.revokeObjectURL(a.href); }, 2000);
+        toast('🖼 이미지 저장');
+      }, 'image/jpeg', 0.9);
+    }
   }
   function settingsHtml() {
     var h = '', on = alarmChoice() === 'push', push = Push.status(), a;
@@ -1133,6 +1244,9 @@
     }
     if (act === 'switch') { Tts.reset(); me = null; reading = null; save(null); render(); }
     else if (act === 'pick') { me = b.dataset.name; save(me); tab = 'today'; render(); }
+    else if (act === 'find-go') { findRun(); }
+    else if (act === 'find-scope') { Find.scope = b.dataset.s; var fq = document.getElementById('findq'); if (fq) Find.q = fq.value; if (Find.q) findRun(); else render(); }
+    else if (act === 'find-open') { openVerse(b.dataset.k); }
     else if (act === 'notes-export') { notesExport(); }
     else if (act === 'notes-import') { document.getElementById('notesfile').click(); }
     else if (act === 'admin-g0') { adminRun(call('adminSetGroup0', Api.admin(), document.getElementById('g0name').value), '저장 완료'); }
@@ -1175,6 +1289,7 @@
     if (a) setTimeout(function () { setAlarm('cal'); if (!setupDone()) finishSetup(); else render(); }, 500);
   });
   // 이름 찾기: 친 글자가 들어간 이름만 보이게
+  document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.id === 'findq') { e.preventDefault(); findRun(); } });
   document.addEventListener('input', function (e) {
     if (e.target.id !== 'namefind') return;
     var q = e.target.value.trim(), shown = 0;
@@ -1213,6 +1328,7 @@
     else if (act === 'v-hl') { Notes.setHl(ks, +b.dataset.c); Sel.clear(); refreshVerses(ks); verseBar(); toast(+b.dataset.c ? '🖍 형광펜' : '형광펜 지움'); }
     else if (act === 'v-bm') { var on = Notes.toggleBm(ks, selLabel(ks)); refreshVerses(ks); verseBar(); toast(on ? '🔖 책갈피 저장' : '책갈피 지움'); }
     else if (act === 'v-share') { shareVerses(ks); }
+    else if (act === 'v-img') { verseImage(ks); }
     else if (act === 'v-listen') {
       var first = document.querySelector('.reader p[data-k="' + ks[0] + '"]');
       var at = first ? { ci: +first.dataset.ci, vi: keyParts(ks[0]).v - 1 } : null;
