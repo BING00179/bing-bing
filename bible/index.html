@@ -943,14 +943,9 @@
   //   앱이 그 주소를 못 받으면 크롬이 대신 웹(fallback)을 엶.
   //   (앱이 장 주소를 받지 않음 — 2026-11-27 확인, 웹으로 열림) → 오늘 화면 큰 단추는 앱을 그냥 엶, 장 링크는 웹
   function gaeHref(url) { return url; }
-  function appleHref(url) {
-    if (!/Android/.test(navigator.userAgent)) return url;
-    return 'intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=kr.co.GoodTVBible;S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
-  }
+  // 바이블 애플 앱으로 열기는 앱 팝업이 여러 개라 뺌 (2026-11-27 사장님). 웹으로 그날 장을 바로 엶 (팝업 한 번).
   function gaeButtons(url, label) {
-    var android = /Android/.test(navigator.userAgent);
-    return '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" href="' + esc(appleHref(url)) + '"' + (android ? '' : ' target="_blank" rel="noopener"') + '>📖 ' + (android ? '바이블 애플로 읽기' : label + ' ↗') + '</a>' +
-      (android ? '<div class="small" style="text-align:center;margin:-4px 0 8px">개역개정 · 앱에서 오늘 장을 골라 주세요<br><a style="color:var(--accent)" href="' + esc(url) + '" target="_blank" rel="noopener">웹에서 바로 그 장 열기 ↗</a></div>' : '');
+    return '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" href="' + esc(url) + '" target="_blank" rel="noopener">📖 ' + label + ' ↗</a>';
   }
   // ── 찬송가·사전 ── 가사·악보·사전은 저작권이 있어 앱에 넣지 않고, 바깥 검색으로 연결만 함
   function hymnHtml() {
