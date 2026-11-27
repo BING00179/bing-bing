@@ -400,10 +400,12 @@
 
   function ypCardHtml(t) {
     var y = YP.get(); if (!y) return '';
-    var end = YP.end(), n = YP.dayCount(), dc = YP.doneCount();
-    var h = '<div class="card"><div class="date">📅 따로 통독 · ' + (t < y.start ? dateLabel(y.start) + '부터' : t > end ? '끝 ' + dateLabel(end) : '오늘 · ' + dateLabel(t)) + '</div>';
-    var d = t < y.start ? y.start : t > end ? '' : t, missed = [];
-    for (var x = y.start; x <= end && x < t; x = Core.addDays(x, 1)) if (!YP.isDone(x)) missed.push(x);
+    var all = YP.days(), st = YP.start(), end = YP.end(), n = all.length, dc = YP.doneCount();
+    var todayP = YP.portion(t), nextDay = all.filter(function (e) { return e.d >= t; })[0];
+    var label = t < st ? dateLabel(st) + '부터' : t > end ? '끝 ' + dateLabel(end) : todayP ? '오늘 · ' + dateLabel(t) : '오늘은 쉬는 날 · 다음 ' + (nextDay ? dateLabel(nextDay.d) : '');
+    var h = '<div class="card"><div class="date">📅 따로 통독 · ' + label + '</div>';
+    var d = t < st ? st : todayP ? t : nextDay ? nextDay.d : '';
+    var missed = all.filter(function (e) { return e.d < t && !YP.isDone(e.d); }).map(function (e) { return e.d; });
     if (d) {
       var yd = YP.isDone(d);
       h += '<div class="portion">' + Core.portionLabel(YP.portion(d)) + '</div>' +
@@ -560,26 +562,55 @@
   //   (2026-11-27 사장님: 올해 로데 통독이 히브리서 6장부터 남아 내일부터 앱에서) 읽기 키 'y:날짜'
   var YP = (function () {
     var K = 'bible.ypl', DK = 'bible.ypl.done';
-    function get() { try { return JSON.parse(localStorage.getItem(K)) || null; } catch (e) { return null; } }
-    function days(a, b) { return Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 86400000); }
-    function shape(y) { var total = Core.TOTAL - y.from, n = Math.max(1, Math.floor(total / y.per)); return { n: n, extra: total - n * y.per }; }
-    function portion(d) {
-      var y = get(); if (!y) return null;
-      var i = days(y.start, d), sh = shape(y);
-      if (i < 0 || i >= sh.n) return null;
-      var f = y.from + i * y.per;
-      return { from: f, to: f + y.per - 1 + (i === sh.n - 1 ? sh.extra : 0) };
+    // { sun: true(주일 쉼), segs: [{ start, from, per }] } — 장 수를 바꾸면 그날부터 새 구간(seg). 지난 날은 그대로.
+    function get() {
+      var y = null; try { y = JSON.parse(localStorage.getItem(K)); } catch (e) {}
+      if (y && y.start && !y.segs) y = { sun: false, segs: [{ start: y.start, from: y.from, per: y.per }] };
+      return y && y.segs && y.segs.length ? y : null;
+    }
+    function off(y, d) { return y.sun && Core.weekday(d) === 0; }  // 쉬는 날
+    // 한 구간을 날짜순으로 펼침: [{d, from, to}] (마지막 구간은 요한계시록 끝까지, 남는 장은 마지막 날에)
+    function expand(y) {
+      var out = [];
+      y.segs.forEach(function (sg, si) {
+        var next = y.segs[si + 1], f = sg.from, d = sg.start, last = !next;
+        var stopAt = next ? next.from : Core.TOTAL;
+        while (f < stopAt && (!next || d < next.start)) {
+          if (!off(y, d)) {
+            var t = Math.min(f + sg.per - 1, stopAt - 1);
+            if (last && Core.TOTAL - 1 - t > 0 && Core.TOTAL - 1 - t < sg.per) t = Core.TOTAL - 1; // 남는 장은 마지막 날에
+            out.push({ d: d, from: f, to: t }); f = t + 1;
+          }
+          d = Core.addDays(d, 1);
+          if (out.length > 4000) break;
+        }
+      });
+      return out;
     }
     function done() { try { return JSON.parse(localStorage.getItem(DK)) || []; } catch (e) { return []; } }
+    function days() { var y = get(); return y ? expand(y) : []; }
     return {
-      get: get, portion: portion,
-      end: function () { var y = get(); return y ? Core.addDays(y.start, shape(y).n - 1) : ''; },
-      dayCount: function () { var y = get(); return y ? shape(y).n : 0; },
+      get: get, days: days,
+      portion: function (d) { var x = days().filter(function (e) { return e.d === d; })[0]; return x ? { from: x.from, to: x.to } : null; },
+      end: function () { var a = days(); return a.length ? a[a.length - 1].d : ''; },
+      dayCount: function () { return days().length; },
+      start: function () { var y = get(); return y ? y.segs[0].start : ''; },
+      per: function () { var y = get(); return y ? y.segs[y.segs.length - 1].per : 5; },
       set: function (y) { try { localStorage.setItem(K, JSON.stringify(y)); localStorage.removeItem(DK); } catch (e) {} },
+      // d 부터 하루 per 장으로 (d 전날까지 나눠 준 다음 장부터)
+      rebase: function (d, per) {
+        var y = get(); if (!y) return;
+        var before = expand(y).filter(function (e) { return e.d < d; });
+        var from = before.length ? before[before.length - 1].to + 1 : y.segs[0].from;
+        if (from >= Core.TOTAL) return;
+        y.segs = y.segs.filter(function (sg) { return sg.start < d; });
+        y.segs.push({ start: d, from: from, per: per });
+        try { localStorage.setItem(K, JSON.stringify(y)); } catch (e) {}
+      },
       off: function () { try { localStorage.removeItem(K); localStorage.removeItem(DK); } catch (e) {} },
       isDone: function (d) { return done().indexOf(d) >= 0; },
       mark: function (d, on) { var a = done().filter(function (x) { return x !== d; }); if (on) a.push(d); try { localStorage.setItem(DK, JSON.stringify(a)); } catch (e) {} },
-      doneCount: function () { return done().length; }
+      doneCount: function () { var ds = days().map(function (e) { return e.d; }); return done().filter(function (x) { return ds.indexOf(x) >= 0; }).length; }
     };
   })();
   function isY(r) { return typeof r === 'string' && r.indexOf('y:') === 0; }
@@ -1210,7 +1241,10 @@
       '<button class="readbtn" style="margin:0" data-act="notes-import">가져오기</button></div>' +
       '<input type="file" id="notesfile" accept=".json,application/json,text/plain" style="display:none">');
     var yy = YP.get();
-    if (yy) h += sect('📅 따로 통독', '<div>' + dateLabel(yy.start) + '부터 ' + Core.portionLabel({ from: yy.from, to: yy.from }) + ' · 하루 ' + yy.per + '장 · ' + dateLabel(YP.end()) + '까지</div>' +
+    if (yy) h += sect('📅 따로 통독', '<div>' + dateLabel(YP.start()) + '부터 · 하루 ' + YP.per() + '장' + (yy.sun ? ' · 주일 쉼' : '') + ' · ' + dateLabel(YP.end()) + ' 요한계시록까지</div>' +
+      '<div class="small" style="margin:10px 0 4px">남은 장 수에 맞춰 바꾸기 (지난 날은 그대로)</div>' +
+      '<div style="display:flex;gap:8px;align-items:center"><select id="ypper2" class="sel2" style="flex:1">' + [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (k) { return '<option' + (k === YP.per() ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' +
+      '<button class="readbtn" style="margin:0;flex:2" data-act="yp-rebase">내일부터 하루 이만큼</button></div>' +
       '<div class="hint" style="text-align:left;margin-top:8px"><button class="linkbtn" data-act="yp-off">따로 통독 그만하기</button></div>');
     else {
       var tm = Core.addDays(state.today, 1), bo2 = Core.BOOKS.map(function (b, i) { return '<option value="' + i + '"' + (i === 57 ? ' selected' : '') + '>' + b[0] + '</option>'; }).join('');
@@ -1218,6 +1252,7 @@
       h += sect('📅 따로 통독 (이어 읽기)', '<div class="small" style="margin-bottom:8px">다른 통독을 이어서 할 때. 정한 날부터 하루 몇 장씩 요한계시록 끝까지. 이 휴대폰에만 기록돼요.</div>' +
         '<div class="small">시작하는 날</div><input type="date" id="ypstart" class="sel2" style="width:100%;margin:4px 0 8px" value="' + tm + '">' +
         '<div class="small">시작하는 곳</div><div style="display:flex;gap:8px;margin:4px 0 8px"><select id="ypbook" class="sel2" style="flex:2">' + bo2 + '</select><select id="ypch" class="sel2" style="flex:1">' + co2 + '</select></div>' +
+        '<label class="small" style="display:flex;gap:8px;align-items:center;margin:0 0 8px"><input type="checkbox" id="ypsun" checked style="width:20px;height:20px"> 주일은 쉬기</label>' +
         '<div class="small">하루 장 수</div><select id="ypper" class="sel2" style="width:100%;margin:4px 0 8px">' + [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (k) { return '<option' + (k === 5 ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' +
         '<button class="big" data-act="yp-start">시작</button>');
     }
@@ -1431,8 +1466,12 @@
     else if (act === 'yp-start') {
       var ys = document.getElementById('ypstart').value, ybk = +document.getElementById('ypbook').value, ych = +document.getElementById('ypch').value, yper = +document.getElementById('ypper').value;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(ys)) { toast('시작하는 날을 골라 주세요'); return; }
-      YP.set({ start: ys, from: Core.chapterIndex(Core.BOOKS[ybk][0], ych), per: yper });
+      YP.set({ sun: document.getElementById('ypsun').checked, segs: [{ start: ys, from: Core.chapterIndex(Core.BOOKS[ybk][0], ych), per: yper }] });
       tab = 'today'; render(); window.scrollTo(0, 0); toast('📅 따로 통독 시작 · ' + dateLabel(ys) + '부터');
+    }
+    else if (act === 'yp-rebase') {
+      var np = +document.getElementById('ypper2').value; YP.rebase(Core.addDays(state.today, 1), np);
+      render(); toast('내일부터 하루 ' + np + '장 · ' + dateLabel(YP.end()) + ' 끝');
     }
     else if (act === 'yp-off') { if (confirm('따로 통독을 그만할까요? 이 기록은 지워져요.')) { YP.off(); render(); } }
     else if (act === 'find-go') { findRun(); }
