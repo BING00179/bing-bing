@@ -49,6 +49,7 @@
   .findres { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 2px; color: var(--ink); cursor: pointer; line-height: 1.6; }
   .findres b { display: block; font-size: 14px; color: var(--accent); }
   .findres mark { background: #fde68a; color: inherit; border-radius: 3px; padding: 0 1px; }
+  .sel2 { font: inherit; font-size: 18px; padding: 12px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); min-width: 0; }
   .chips2 { display: flex; gap: 6px; margin: 8px 0 4px; }
   .chips2 button { font: inherit; font-size: 15px; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
   .chips2 button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
@@ -430,6 +431,7 @@
     if (inTeam('읽기')) h += '<div class="card"><div style="font-weight:700">읽기 진도</div>' + progressHtml(m.prog) +
       (m.missed > 0 ? '<button class="missbtn" data-tab="past">밀린 날 ' + m.missed + '일 ›</button>' : '') + '</div>';
     if (inTeam('필사')) h += '<div class="card"><div style="font-weight:700">필사</div><div class="small">✍️ ' + TN.cur.n + '기 필사 ' + m.copied.size + '회</div></div>';
+    h += '<button class="readbtn" data-tab="find">📖 성경 보기 · 원하는 말씀부터 / 🔍 찾기</button>';
     return h;
   }
 
@@ -531,6 +533,18 @@
   var reading = null;      // 읽고 있는 날짜
   var readFrom = 'today';  // 돌아갈 탭
   var books = {};          // 권 번호 → {b, c} (한 번 받으면 기억)
+  // 자유 읽기(성경 보기): reading = 'b:권:장' — 통독 날짜와 따로, 원하는 책·장을 골라 읽음. 진도·기록과 무관.
+  function isFree(r) { return typeof r === 'string' && r.indexOf('b:') === 0; }
+  function freeKey(book, ch) { return 'b:' + book + ':' + ch; }
+  function freeParts(r) { var x = r.split(':'); return { book: +x[1], ch: +x[2] }; }
+  function chapterObj(book, ch) {
+    return { book: book, name: Core.BOOKS[book - 1][0], chapter: ch, gae: 'https://goodtvbible.goodtv.co.kr/onbibleread/0/' + book + '/' + ch };
+  }
+  function chaptersFor(r) { if (isFree(r)) { var f = freeParts(r); return [chapterObj(f.book, f.ch)]; } return Core.chaptersOf(P.portionFor(r)); }
+  function validRead(r) {
+    if (isFree(r)) { var f = freeParts(r); return f.book >= 1 && f.book <= 66 && f.ch >= 1 && f.ch <= Core.BOOKS[f.book - 1][1]; }
+    return !!P.portionFor(r);
+  }
   var loadErr = '';
   function fontSize() { try { return +localStorage.getItem('bible.font') || 20; } catch (e) { return 20; } }
   function setFont(n) { try { localStorage.setItem('bible.font', String(n)); } catch (e) {} }
@@ -555,7 +569,8 @@
     reading = d; loadErr = '';
     if (!restoring && was !== d) pushNav();
     render(); window.scrollTo(0, y || 0);
-    loadBooks(Core.chaptersOf(P.portionFor(d))).catch(function () {
+    if (isFree(d)) { try { localStorage.setItem('bible.freeLast', d); } catch (e0) {} }
+    loadBooks(chaptersFor(d)).catch(function () {
       loadErr = '말씀을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 열어 주세요.';
     }).then(function () {
       if (reading !== d) return;
@@ -592,7 +607,7 @@
     if (ok && speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = function () {};
     function build() {
       queue = [];
-      Core.chaptersOf(P.portionFor(reading)).forEach(function (c, ci) {
+      chaptersFor(reading).forEach(function (c, ci) {
         var b = books[c.book]; if (!b) return;
         queue.push({ ci: ci, vi: -1, text: c.name + ' ' + c.chapter + '장' });
         b.c[c.chapter - 1].forEach(function (v, i) { if (v) queue.push({ ci: ci, vi: i, text: v.replace(/[\[\]]/g, '') }); });
@@ -852,11 +867,12 @@
   }
 
   function readerHtml() {
-    var d = reading, p = P.portionFor(d), list = Core.chaptersOf(p), m = mine(me), done = m.done.has(d);
+    var d = reading, free = isFree(d), fp = free ? freeParts(d) : null, list = chaptersFor(d), m = mine(me), done = !free && m.done.has(d);
     var h = '<div class="reader"><div class="bar2"><button class="linkbtn" data-act="close-read">‹ 돌아가기</button>' +
       '<span class="sizes"><button data-act="font" data-n="-2" aria-label="글씨 작게">가−</button> ' +
       '<button data-act="font" data-n="2" aria-label="글씨 크게">가+</button></span></div>' +
-      '<div class="date">' + dateLabel(d) + '</div><div class="portion" style="margin-bottom:4px">' + Core.portionLabel(p) + '</div>' +
+      (free ? '<div class="date">성경 보기</div><div class="portion" style="margin-bottom:4px">' + list[0].name + ' ' + list[0].chapter + '장</div>'
+            : '<div class="date">' + dateLabel(d) + '</div><div class="portion" style="margin-bottom:4px">' + Core.portionLabel(P.portionFor(d)) + '</div>') +
       ttsBar();
     if (loadErr) h += '<div class="card miss">' + esc(loadErr) + '</div>';
     h += '<div class="text" style="font-size:' + fontSize() + 'px">';
@@ -876,7 +892,14 @@
       });
     });
     h += '</div><div class="src">' + (MyText.name() ? esc(MyText.name()) + ' · 이 휴대폰에 넣은 내 성경 파일' : '성경전서 개역한글판 (대한성서공회) · 개역개정은 장마다 링크') + '</div>';
-    if (d <= state.today) {
+    if (free) {
+      // 앞·뒤 장 (책 경계도 넘어감)
+      var prev = fp.ch > 1 ? freeKey(fp.book, fp.ch - 1) : fp.book > 1 ? freeKey(fp.book - 1, Core.BOOKS[fp.book - 2][1]) : '';
+      var next = fp.ch < Core.BOOKS[fp.book - 1][1] ? freeKey(fp.book, fp.ch + 1) : fp.book < 66 ? freeKey(fp.book + 1, 1) : '';
+      h += '<div style="display:flex;gap:8px;margin-top:10px">' +
+        (prev ? '<button class="readbtn" style="margin:0" data-act="free-go" data-r="' + prev + '">‹ 앞 장</button>' : '') +
+        (next ? '<button class="readbtn" style="margin:0" data-act="free-go" data-r="' + next + '">다음 장 ›</button>' : '') + '</div>';
+    } else if (d <= state.today) {
       h += '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + d + '" data-done="' + (done ? 0 : 1) + '">' +
         (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' + copyBtn(d);
     }
@@ -958,8 +981,20 @@
   // ── 말씀 찾기 ── 앱 안 개역한글 66권에서 낱말 찾기 (처음 한 번 66권을 받아 기억). 띄어 쓴 낱말은 모두 들어간 절만.
   var Find = { q: '', scope: 'all', res: null, total: 0, busy: false, loaded: 0 };
   var FIND_MAX = 300;
+  function freePickHtml() {
+    var last = ''; try { last = localStorage.getItem('bible.freeLast') || ''; } catch (e) {}
+    var cur = isFree(last) && validRead(last) ? freeParts(last) : { book: 1, ch: 1 };
+    var bo = Core.BOOKS.map(function (b, i) { return '<option value="' + (i + 1) + '"' + (i + 1 === cur.book ? ' selected' : '') + '>' + b[0] + '</option>'; }).join('');
+    var co = ''; for (var c = 1; c <= Core.BOOKS[cur.book - 1][1]; c++) co += '<option value="' + c + '"' + (c === cur.ch ? ' selected' : '') + '>' + c + '장</option>';
+    return '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">성경 보기</div>' +
+      '<div class="small" style="margin-bottom:8px">통독과 따로, 원하는 말씀부터 읽어요 (진도에는 안 들어가요)</div>' +
+      '<div style="display:flex;gap:8px"><select id="freebook" class="sel2" style="flex:2">' + bo + '</select>' +
+      '<select id="freech" class="sel2" style="flex:1">' + co + '</select></div>' +
+      '<button class="big" style="margin-top:10px" data-act="free-open">읽기</button>' +
+      (isFree(last) && validRead(last) ? '<div class="small" style="text-align:center;margin-top:6px">마지막에 본 곳: ' + Core.BOOKS[cur.book - 1][0] + ' ' + cur.ch + '장</div>' : '') + '</div>';
+  }
   function findHtml() {
-    var h = '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">말씀 찾기</div>' +
+    var h = freePickHtml() + '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">말씀 찾기</div>' +
       '<input type="text" id="findq" placeholder="예: 사랑, 목자, 두려워 말라" value="' + esc(Find.q) + '" enterkeyhint="search">' +
       '<div class="chips2">' + [['all', '전체'], ['old', '구약'], ['new', '신약']].map(function (x) {
         return '<button class="' + (Find.scope === x[0] ? 'on' : '') + '" data-act="find-scope" data-s="' + x[0] + '">' + x[1] + '</button>';
@@ -1332,6 +1367,12 @@
     }
     else if (act === 'gae-site') { try { localStorage.setItem('bible.gaeSite', b.dataset.s); } catch (e) {} render(); toast('개역개정: ' + (b.dataset.s === 'bskorea' ? '대한성서공회' : 'GOODTV')); }
     else if (act === 'find-go') { findRun(); }
+    else if (act === 'free-open') { openReader(freeKey(+document.getElementById('freebook').value, +document.getElementById('freech').value)); }
+    else if (act === 'free-go') { // 앞·뒤 장: 기록을 덮어써서 '뒤로' 는 성경 보기 고르는 곳으로
+      Tts.reset(); openReader(b.dataset.r, true);
+      try { history.replaceState({ bnav: 1, tab: tab, reading: b.dataset.r }, ''); } catch (e7) {}
+      window.scrollTo(0, 0);
+    }
     else if (act === 'dict-go') {
       var dq = String(((document.getElementById('findq') || {}).value || '')).trim();
       if (!dq) { toast('사전에서 찾을 낱말을 위 칸에 적어 주세요'); return; }
@@ -1340,7 +1381,7 @@
     else if (act === 'hymn-see') { var hn = hymnNo(); if (hn) openOut('https://www.google.com/search?q=' + encodeURIComponent('새찬송가 ' + hn + '장 가사 악보')); }
     else if (act === 'hymn-hear') { var hn2 = hymnNo(); if (hn2) openOut('https://www.youtube.com/results?search_query=' + encodeURIComponent('새찬송가 ' + hn2 + '장')); }
     else if (act === 'find-scope') { Find.scope = b.dataset.s; var fq = document.getElementById('findq'); if (fq) Find.q = fq.value; if (Find.q) findRun(); else render(); }
-    else if (act === 'find-open') { openVerse(b.dataset.k); }
+    else if (act === 'find-open') { var fk = keyParts(b.dataset.k); focusKey = b.dataset.k; openReader(freeKey(fk.book, fk.ch)); }
     else if (act === 'notes-export') { notesExport(); }
     else if (act === 'notes-import') { document.getElementById('notesfile').click(); }
     else if (act === 'admin-g0') { adminRun(call('adminSetGroup0', Api.admin(), document.getElementById('g0name').value), '저장 완료'); }
@@ -1393,6 +1434,10 @@
     var none = document.getElementById('namenone'); if (none) none.style.display = shown ? 'none' : '';
   });
   document.addEventListener('change', function (e) {
+    if (e.target.id === 'freebook') {
+      var n = +e.target.value, opts = ''; for (var c = 1; c <= Core.BOOKS[n - 1][1]; c++) opts += '<option value="' + c + '">' + c + '장</option>';
+      document.getElementById('freech').innerHTML = opts; return;
+    }
     if (e.target.id === 'mytextfile') {
       var mf = e.target.files && e.target.files[0]; e.target.value = '';
       if (!mf) return;
@@ -1499,7 +1544,7 @@
       if (v) {
         tab = v.tab || 'today';
         if (tab !== 'today') pushNav();
-        if (v.reading && P.portionFor(v.reading)) {
+        if (v.reading && validRead(v.reading)) {
           readFrom = v.readFrom || 'today';
           Tts.resumeFrom(v.tts);
           openReader(v.reading, true, v.y);
