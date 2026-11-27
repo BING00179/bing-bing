@@ -404,7 +404,7 @@
         '<div class="small" style="margin-top:6px">시작</div><div class="portion" style="margin-top:0">' + dateLabel(P.START, true) + '<br>' +
         '<button class="portionlink" data-act="read" data-date="' + P.START + '">' + Core.portionLabel(P.portionFor(P.START)) + '</button></div>' +
         gaeButtons(Core.chaptersOf(P.portionFor(P.START))[0].gae, '개역개정으로 미리 보기') +
-        '<button class="readbtn" data-act="read" data-date="' + P.START + '">개역한글로 미리 보기 · 듣기</button>' +
+        '<button class="readbtn" data-act="read" data-date="' + P.START + '">' + esc(textName()) + '로 미리 보기 · 듣기</button>' +
         // 시작 전에는 내 팀 버튼을 흐리게 미리 보여 줌 (누를 수 없음)
         (inTeam('읽기') ? '<button class="big" disabled>읽기 완료</button>' : '') +
         (inTeam('필사') ? '<button class="copybtn" disabled>✍️ 필사 완료</button>' : '') +
@@ -417,7 +417,7 @@
       h += '<div class="card"><div class="date">오늘 · ' + dateLabel(t) + '</div>' +
         '<div class="portion"><button class="portionlink" data-act="read" data-date="' + t + '">' + Core.portionLabel(p) + '</button></div>' +
         gaeButtons(Core.chaptersOf(p)[0].gae, '개역개정으로 읽기') +
-        '<button class="readbtn" data-act="read" data-date="' + t + '">개역한글로 읽기 · 듣기</button>' +
+        '<button class="readbtn" data-act="read" data-date="' + t + '">' + esc(textName()) + '로 읽기 · 듣기</button>' +
         (rd ? '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + t + '" data-done="' + (done ? 0 : 1) + '">' +
         (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' : '') + copyBtn(t) +
         (!rd && !inTeam('필사') ? '<div class="small" style="margin-top:8px">참여 팀 없음 · <button class="linkbtn" data-tab="set">설정</button></div>' : '') +
@@ -492,7 +492,40 @@
       '<div class="hint"><button class="linkbtn" data-act="alarm-none">알림 필요 없어요</button></div></div>';
   }
 
-  // ── 말씀 읽기 (개역한글, 앱 안) ──
+  // ── 내 성경 파일 ── 사용자가 가진 성경 파일(개역개정 등)을 이 휴대폰에만 넣어 앱 본문으로 씀.
+  //   파일은 저장소·서버에 올라가지 않음 (Cache Storage 'bible-mytext' 에만). 없으면 기본 개역한글.
+  var MyText = (function () {
+    var C = 'bible-mytext', name = '';
+    try { name = localStorage.getItem('bible.mytext') || ''; } catch (e) {}
+    function open() { return window.caches ? caches.open(C) : Promise.reject(new Error('이 브라우저는 파일을 저장할 수 없어요')); }
+    return {
+      name: function () { return name; },
+      get: function (n) {
+        if (!name || !window.caches) return Promise.resolve(null);
+        return open().then(function (c) { return c.match('mytext/' + n); }).then(function (r) { return r ? r.json() : null; }).catch(function () { return null; });
+      },
+      load: function (d) {
+        if (!d || d.app !== 'bible-text' || !d.books) throw new Error('성경 파일이 아니에요');
+        var ns = Object.keys(d.books);
+        if (ns.length !== 66) throw new Error('66권이 다 들어 있지 않아요 (' + ns.length + '권)');
+        var nm = String(d.name || '내 성경').slice(0, 20);
+        return open().then(function (c) {
+          return Promise.all(ns.map(function (n) {
+            var b = d.books[n];
+            if (!b || !Array.isArray(b.c)) throw new Error(n + '권을 읽을 수 없어요');
+            return c.put('mytext/' + n, new Response(JSON.stringify({ b: String(b.b || ''), c: b.c.map(function (ch) { return ch.map(String); }) })));
+          }));
+        }).then(function () { name = nm; try { localStorage.setItem('bible.mytext', nm); } catch (e) {} return nm; });
+      },
+      off: function () {
+        name = ''; try { localStorage.removeItem('bible.mytext'); } catch (e) {}
+        return window.caches ? caches.delete(C) : Promise.resolve();
+      }
+    };
+  })();
+  function textName() { return MyText.name() || '개역한글'; }
+
+  // ── 말씀 읽기 (앱 안) ──
   var reading = null;      // 읽고 있는 날짜
   var readFrom = 'today';  // 돌아갈 탭
   var books = {};          // 권 번호 → {b, c} (한 번 받으면 기억)
@@ -503,9 +536,12 @@
     var need = [];
     list.forEach(function (c) { if (!books[c.book] && need.indexOf(c.book) < 0) need.push(c.book); });
     return Promise.all(need.map(function (n) {
-      return fetch('text/' + (n < 10 ? '0' : '') + n + '.json').then(function (r) {
-        if (!r.ok) throw new Error(r.status);
-        return r.json();
+      return MyText.get(n).then(function (mine) {
+        if (mine) return mine;
+        return fetch('text/' + (n < 10 ? '0' : '') + n + '.json').then(function (r) {
+          if (!r.ok) throw new Error(r.status);
+          return r.json();
+        });
       }).then(function (j) { books[n] = j; });
     }));
   }
@@ -557,7 +593,7 @@
       Core.chaptersOf(P.portionFor(reading)).forEach(function (c, ci) {
         var b = books[c.book]; if (!b) return;
         queue.push({ ci: ci, vi: -1, text: c.name + ' ' + c.chapter + '장' });
-        b.c[c.chapter - 1].forEach(function (v, i) { queue.push({ ci: ci, vi: i, text: v.replace(/[\[\]]/g, '') }); });
+        b.c[c.chapter - 1].forEach(function (v, i) { if (v) queue.push({ ci: ci, vi: i, text: v.replace(/[\[\]]/g, '') }); });
       });
     }
     function mark(item) {
@@ -796,7 +832,7 @@
     });
   }
   function shareVerses(ks) {
-    var text = selLabel(ks) + '\n' + ks.map(function (k) { return keyParts(k).v + ' ' + verseText(k); }).join('\n') + '\n(개역한글)';
+    var text = selLabel(ks) + '\n' + ks.map(function (k) { return keyParts(k).v + ' ' + verseText(k); }).join('\n') + '\n(' + textName() + ')';
     if (navigator.share) { navigator.share({ text: text }).catch(function () {}); return; }
     var done = function () { toast('📋 복사됨 · 붙여넣기 하세요'); };
     if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () { toast('공유가 안 돼요'); });
@@ -827,6 +863,7 @@
       var b = books[c.book];
       if (!b) { h += loadErr ? '' : '<p class="small">불러오는 중…</p>'; return; }
       b.c[c.chapter - 1].forEach(function (v, i) {
+        if (!v) return; // 앞 절에 함께 묶인 절 (예: 신 6:18-19)
         var k = c.book + '-' + c.chapter + '-' + (i + 1), hl = Notes.hl(k), cls = [];
         if (Tts.at(ci, i)) cls.push('speaking');
         if (hl) cls.push('hl' + hl);
@@ -836,7 +873,7 @@
           (Notes.bm(k) ? ' <span class="mk bm">' + ICON.bm + '</span>' : '') + memoMark(k) + '</p>';
       });
     });
-    h += '</div><div class="src">성경전서 개역한글판 (대한성서공회) · 개역개정은 대한성서공회 웹사이트에서 열려요</div>';
+    h += '</div><div class="src">' + (MyText.name() ? esc(MyText.name()) + ' · 이 휴대폰에 넣은 내 성경 파일' : '성경전서 개역한글판 (대한성서공회) · 개역개정은 장마다 링크') + '</div>';
     if (d <= state.today) {
       h += '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + d + '" data-done="' + (done ? 0 : 1) + '">' +
         (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' + copyBtn(d);
@@ -928,7 +965,7 @@
       '<button class="big" style="margin-top:8px" data-act="find-go">찾기</button>' +
       '<button class="readbtn" style="margin-top:8px" data-act="dict-go">📚 성경 사전에서 찾기 ↗</button></div>' + hymnHtml();
     if (Find.busy) return h + '<div class="card small">성경 불러오는 중… ' + Find.loaded + ' / 66권 (처음 한 번만)</div>';
-    if (!Find.res) return h + '<div class="small" style="text-align:center">개역한글 · 결과를 누르면 그 말씀으로 가요</div>';
+    if (!Find.res) return h + '<div class="small" style="text-align:center">' + esc(textName()) + ' · 결과를 누르면 그 말씀으로 가요</div>';
     if (!Find.res.length) return h + '<div class="card small">「' + esc(Find.q) + '」 가 나오는 절이 없어요.</div>';
     var terms = Find.q.split(/\s+/).filter(String);
     h += '<div class="small" style="margin:0 2px 6px">' + Find.total + '절' + (Find.total > FIND_MAX ? ' · 앞 ' + FIND_MAX + '절만 보여요. 낱말을 더 넣어 좁혀 보세요' : '') + '</div><div class="card">';
@@ -1034,7 +1071,7 @@
       g.font = '700 40px sans-serif'; g.fillStyle = '#6b4f2a';
       g.fillText(selLabel(ks), W / 2, y + 30);
       g.font = '28px sans-serif'; g.fillStyle = '#8a8178';
-      g.fillText('개역한글 · 함께 읽는 성경', W / 2, H - 70);
+      g.fillText(textName() + ' · 함께 읽는 성경', W / 2, H - 70);
       c.toBlob(function (blob) {
         var name = 'verse-' + ks[0] + '.jpg', file = null;
         try { file = new File([blob], name, { type: 'image/jpeg' }); } catch (e) {}
@@ -1083,6 +1120,11 @@
       '<button class="readbtn" style="margin:0" data-act="notes-export">내보내기</button>' +
       '<button class="readbtn" style="margin:0" data-act="notes-import">가져오기</button></div>' +
       '<input type="file" id="notesfile" accept=".json,application/json,text/plain" style="display:none">');
+    h += sect('📕 내 성경 파일', '<div style="margin-bottom:6px">앱 안 말씀: <b>' + esc(textName()) + '</b>' + (MyText.name() ? ' (내 파일)' : ' (기본)') + '</div>' +
+      '<div style="display:flex;gap:8px"><button class="readbtn" style="margin:0" data-act="mytext-import">가져오기</button>' +
+      (MyText.name() ? '<button class="readbtn" style="margin:0" data-act="mytext-off">기본으로</button>' : '') + '</div>' +
+      '<input type="file" id="mytextfile" accept=".json,application/json" style="display:none">' +
+      '<div class="small" style="margin-top:6px">내가 가진 성경 파일을 넣으면 <b>이 휴대폰에서만</b> 그 번역으로 읽기·듣기·검색·묵상이 돼요. 파일은 다른 사람에게 가지 않아요.</div>');
     h += sect('📖 개역개정 여는 곳', '<div class="chips2">' + [['goodtv', 'GOODTV'], ['bskorea', '대한성서공회']].map(function (x) {
         return '<button class="' + (gaeSite() === x[0] ? 'on' : '') + '" data-act="gae-site" data-s="' + x[0] + '">' + x[1] + '</button>';
       }).join('') + '</div><div class="small" style="margin-top:6px">GOODTV: 폰 화면이 깔끔, 들어갈 때마다 앱 광고 창 · 대한성서공회: 광고 창 없음, 글씨가 작은 PC 화면(두 손가락으로 키우기)</div>');
@@ -1278,6 +1320,11 @@
     }
     if (act === 'switch') { Tts.reset(); me = null; reading = null; save(null); render(); }
     else if (act === 'pick') { me = b.dataset.name; save(me); tab = 'today'; render(); }
+    else if (act === 'mytext-import') { document.getElementById('mytextfile').click(); }
+    else if (act === 'mytext-off') {
+      if (!confirm('앱 안 말씀을 기본(개역한글)으로 되돌릴까요? 넣은 파일은 이 휴대폰에서 지워져요.')) return;
+      MyText.off().then(function () { books = {}; Find.res = null; render(); toast('기본(개역한글)으로 바꿈'); });
+    }
     else if (act === 'gae-site') { try { localStorage.setItem('bible.gaeSite', b.dataset.s); } catch (e) {} render(); toast('개역개정: ' + (b.dataset.s === 'bskorea' ? '대한성서공회' : 'GOODTV')); }
     else if (act === 'find-go') { findRun(); }
     else if (act === 'dict-go') {
@@ -1341,6 +1388,15 @@
     var none = document.getElementById('namenone'); if (none) none.style.display = shown ? 'none' : '';
   });
   document.addEventListener('change', function (e) {
+    if (e.target.id === 'mytextfile') {
+      var mf = e.target.files && e.target.files[0]; e.target.value = '';
+      if (!mf) return;
+      toast('성경 파일 넣는 중…');
+      mf.text().then(function (t) { return MyText.load(JSON.parse(t)); })
+        .then(function (nm) { books = {}; Find.res = null; render(); toast('📕 ' + nm + ' 넣음 · 앱 안 말씀이 바뀌었어요'); },
+              function (err) { toast(err && /성경|권|파일|저장/.test(err.message) ? err.message : '읽을 수 없는 파일이에요'); });
+      return;
+    }
     if (e.target.id === 'notesfile') { notesImport(e.target.files && e.target.files[0]); e.target.value = ''; return; }
     if (e.target.id === 'ttsRate') { Tts.setRate(+e.target.value); return; }
     if (e.target.id !== 'alarmHour') return;
