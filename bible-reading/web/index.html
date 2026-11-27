@@ -942,10 +942,16 @@
   // 개역개정 링크: 안드로이드면 GOODTV 「바이블 애플」 앱(kr.co.GoodTVBible)으로 그 장을 열어 봄 (광고 창 없음).
   //   앱이 그 주소를 못 받으면 크롬이 대신 웹(fallback)을 엶.
   //   (앱이 장 주소를 받지 않음 — 2026-11-27 확인, 웹으로 열림) → 오늘 화면 큰 단추는 앱을 그냥 엶, 장 링크는 웹
-  function gaeHref(url) { return url; }
+  // 개역개정 여는 곳 (⚙ 설정에서 고름): GOODTV(폰 화면, 팝업 있음) / 대한성서공회(팝업 없음, PC 화면)
+  function gaeSite() { try { return localStorage.getItem('bible.gaeSite') || 'goodtv'; } catch (e) { return 'goodtv'; } }
+  function gaeHref(url) {
+    if (gaeSite() !== 'bskorea') return url;
+    var m = String(url).match(/onbibleread\/0\/(\d+)\/(\d+)/);
+    return m ? 'https://www.bskorea.or.kr/bible/korbibReadpage.php?version=GAE&book=' + Core.GAE_CODES[+m[1] - 1] + '&chap=' + m[2] : url;
+  }
   // 바이블 애플 앱으로 열기는 앱 팝업이 여러 개라 뺌 (2026-11-27 사장님). 웹으로 그날 장을 바로 엶 (팝업 한 번).
   function gaeButtons(url, label) {
-    return '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" href="' + esc(url) + '" target="_blank" rel="noopener">📖 ' + label + ' ↗</a>';
+    return '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" href="' + esc(gaeHref(url)) + '" target="_blank" rel="noopener">📖 ' + label + ' ↗</a>';
   }
   // ── 찬송가·사전 ── 가사·악보·사전은 저작권이 있어 앱에 넣지 않고, 바깥 검색으로 연결만 함
   function hymnHtml() {
@@ -1077,6 +1083,9 @@
       '<button class="readbtn" style="margin:0" data-act="notes-export">내보내기</button>' +
       '<button class="readbtn" style="margin:0" data-act="notes-import">가져오기</button></div>' +
       '<input type="file" id="notesfile" accept=".json,application/json,text/plain" style="display:none">');
+    h += sect('📖 개역개정 여는 곳', '<div class="chips2">' + [['goodtv', 'GOODTV'], ['bskorea', '대한성서공회']].map(function (x) {
+        return '<button class="' + (gaeSite() === x[0] ? 'on' : '') + '" data-act="gae-site" data-s="' + x[0] + '">' + x[1] + '</button>';
+      }).join('') + '</div><div class="small" style="margin-top:6px">GOODTV: 폰 화면이 깔끔, 들어갈 때마다 앱 광고 창 · 대한성서공회: 광고 창 없음, 글씨가 작은 PC 화면(두 손가락으로 키우기)</div>');
     h += sect('🔤 말씀 글씨 크기', '<div class="sizes" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="-2">가−</button>' +
       '<button class="readbtn" style="width:auto;margin:0;padding:8px 16px" data-act="font" data-n="2">가+</button></div>' +
@@ -1269,6 +1278,7 @@
     }
     if (act === 'switch') { Tts.reset(); me = null; reading = null; save(null); render(); }
     else if (act === 'pick') { me = b.dataset.name; save(me); tab = 'today'; render(); }
+    else if (act === 'gae-site') { try { localStorage.setItem('bible.gaeSite', b.dataset.s); } catch (e) {} render(); toast('개역개정: ' + (b.dataset.s === 'bskorea' ? '대한성서공회' : 'GOODTV')); }
     else if (act === 'find-go') { findRun(); }
     else if (act === 'dict-go') {
       var dq = String(((document.getElementById('findq') || {}).value || '')).trim();
