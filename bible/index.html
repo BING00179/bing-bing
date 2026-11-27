@@ -403,7 +403,7 @@
       h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div>' +
         '<div class="small" style="margin-top:6px">시작</div><div class="portion" style="margin-top:0">' + dateLabel(P.START, true) + '<br>' +
         '<button class="portionlink" data-act="read" data-date="' + P.START + '">' + Core.portionLabel(P.portionFor(P.START)) + '</button></div>' +
-        '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(gaeHref(Core.chaptersOf(P.portionFor(P.START))[0].gae)) + '">📖 개역개정으로 미리 보기 ↗</a>' +
+        gaeButtons(Core.chaptersOf(P.portionFor(P.START))[0].gae, '개역개정으로 미리 보기') +
         '<button class="readbtn" data-act="read" data-date="' + P.START + '">개역한글로 미리 보기 · 듣기</button>' +
         // 시작 전에는 내 팀 버튼을 흐리게 미리 보여 줌 (누를 수 없음)
         (inTeam('읽기') ? '<button class="big" disabled>읽기 완료</button>' : '') +
@@ -416,7 +416,7 @@
       var done = m.done.has(t), rd = inTeam('읽기');
       h += '<div class="card"><div class="date">오늘 · ' + dateLabel(t) + '</div>' +
         '<div class="portion"><button class="portionlink" data-act="read" data-date="' + t + '">' + Core.portionLabel(p) + '</button></div>' +
-        '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(gaeHref(Core.chaptersOf(p)[0].gae)) + '">📖 개역개정으로 읽기 ↗</a>' +
+        gaeButtons(Core.chaptersOf(p)[0].gae, '개역개정으로 읽기') +
         '<button class="readbtn" data-act="read" data-date="' + t + '">개역한글로 읽기 · 듣기</button>' +
         (rd ? '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + t + '" data-done="' + (done ? 0 : 1) + '">' +
         (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' : '') + copyBtn(t) +
@@ -941,9 +941,16 @@
   }
   // 개역개정 링크: 안드로이드면 GOODTV 「바이블 애플」 앱(kr.co.GoodTVBible)으로 그 장을 열어 봄 (광고 창 없음).
   //   앱이 그 주소를 못 받으면 크롬이 대신 웹(fallback)을 엶.
-  function gaeHref(url) {
+  //   (앱이 장 주소를 받지 않음 — 2026-11-27 확인, 웹으로 열림) → 오늘 화면 큰 단추는 앱을 그냥 엶, 장 링크는 웹
+  function gaeHref(url) { return url; }
+  function appleHref(url) {
     if (!/Android/.test(navigator.userAgent)) return url;
-    return 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=kr.co.GoodTVBible;S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
+    return 'intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=kr.co.GoodTVBible;S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
+  }
+  function gaeButtons(url, label) {
+    var android = /Android/.test(navigator.userAgent);
+    return '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" href="' + esc(appleHref(url)) + '"' + (android ? '' : ' target="_blank" rel="noopener"') + '>📖 ' + (android ? '바이블 애플로 읽기' : label + ' ↗') + '</a>' +
+      (android ? '<div class="small" style="text-align:center;margin:-4px 0 8px">개역개정 · 앱에서 오늘 장을 골라 주세요<br><a style="color:var(--accent)" href="' + esc(url) + '" target="_blank" rel="noopener">웹에서 바로 그 장 열기 ↗</a></div>' : '');
   }
   // ── 찬송가·사전 ── 가사·악보·사전은 저작권이 있어 앱에 넣지 않고, 바깥 검색으로 연결만 함
   function hymnHtml() {
