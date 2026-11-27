@@ -1088,7 +1088,7 @@
   }
   function findHtml() {
     var h = freePickHtml() + '<div class="card"><div class="portion" style="font-size:24px;margin-top:0">말씀 찾기</div>' +
-      '<input type="text" id="findq" placeholder="예: 사랑, 목자, 두려워 말라" value="' + esc(Find.q) + '" enterkeyhint="search">' +
+      '<input type="text" id="findq" placeholder="낱말 또는 장절 (예: 목자, 요 3:16)" value="' + esc(Find.q) + '" enterkeyhint="search">' +
       '<div class="chips2">' + [['all', '전체'], ['old', '구약'], ['new', '신약']].map(function (x) {
         return '<button class="' + (Find.scope === x[0] ? 'on' : '') + '" data-act="find-scope" data-s="' + x[0] + '">' + x[1] + '</button>';
       }).join('') + '</div>' +
@@ -1137,10 +1137,25 @@
     if (!(n >= 1 && n <= 645)) { toast('찬송가 장 번호(1~645)를 적어 주세요'); return 0; }
     return n;
   }
+  // 장절로 바로 가기: '요 3:16', '요3:16', '요한복음 3장 16절', '시편 23편', '창 1'
+  var ABBR = ('창 출 레 민 신 수 삿 룻 삼상 삼하 왕상 왕하 대상 대하 스 느 에 욥 시 잠 전 아 사 렘 애 겔 단 호 욜 암 옵 욘 미 나 합 습 학 슥 말 ' +
+    '마 막 눅 요 행 롬 고전 고후 갈 엡 빌 골 살전 살후 딤전 딤후 딛 몬 히 약 벧전 벧후 요일 요이 요삼 유 계').split(' ');
+  function parseRef(q) {
+    var m = String(q).replace(/\s+/g, '').match(/^([가-힣]+?)(\d+)(?:[:장편](\d+)?절?)?$/);
+    if (!m) return null;
+    var name = m[1], bk = 0;
+    for (var i = 0; i < 66; i++) if (Core.BOOKS[i][0] === name || ABBR[i] === name) { bk = i + 1; break; }
+    if (!bk) for (var j = 0; j < 66; j++) if (Core.BOOKS[j][0].indexOf(name) === 0) { bk = j + 1; break; }
+    var ch = +m[2], v = m[3] ? +m[3] : 0;
+    if (!bk || ch < 1 || ch > Core.BOOKS[bk - 1][1]) return null;
+    return { book: bk, ch: ch, v: v };
+  }
   function findRun() {
     var q = (document.getElementById('findq') || {}).value;
     q = String(q || '').trim().slice(0, 40); Find.q = q;
     if (!q) { toast('찾을 낱말을 적어 주세요'); return; }
+    var ref = parseRef(q);
+    if (ref) { focusKey = ref.v ? ref.book + '-' + ref.ch + '-' + ref.v : null; openReader(freeKey(ref.book, ref.ch)); return; }
     var from = Find.scope === 'new' ? 40 : 1, to = Find.scope === 'old' ? 39 : 66, need = [];
     for (var n = from; n <= to; n++) need.push({ book: n });
     Find.busy = true; Find.loaded = 0; render();
@@ -1294,13 +1309,39 @@
   }
 
   var boardTeam = null;
+  // 따로 통독 — 함께 읽기·지난 날에도 보이게 (이 폰 기록)
+  function ypBoardHtml() {
+    if (!YP.get()) return '';
+    var all = YP.days(), total = 0, read = 0, lastLabel = '';
+    all.forEach(function (e) { var n = e.to - e.from + 1; total += n; if (YP.isDone(e.d)) { read += n; lastLabel = Core.portionLabel({ from: e.to, to: e.to }); } });
+    var pct = total ? Math.round(read * 100 / total) : 0;
+    return '<div class="card"><div class="date">📅 따로 통독 · ' + dateLabel(YP.start()) + ' ~ ' + dateLabel(YP.end()) + '</div>' +
+      '<div style="font-weight:700;font-size:20px;margin:4px 0 2px">' + esc(me) + '</div>' +
+      '<div class="small">' + (lastLabel ? lastLabel + '까지 읽음' : '읽은 곳 없음') + '</div>' +
+      '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+      '<div class="small">' + read + '장 / ' + total + '장 (' + pct + '%) · ' + YP.doneCount() + ' / ' + all.length + '일</div></div>';
+  }
+  function ypPastHtml() {
+    if (!YP.get()) return '';
+    var t = state.today, rows = YP.days().filter(function (e) { return e.d <= t; }).reverse();
+    var h = '<div class="small" style="font-weight:700;margin:4px 2px 6px">📅 따로 통독</div>';
+    if (!rows.length) return h + '<div class="card small">' + dateLabel(YP.start()) + '부터 시작해요.</div>';
+    rows.forEach(function (e) {
+      var done = YP.isDone(e.d), missed = !done && e.d < t;
+      h += '<div class="dayrow"><button class="day' + (done ? ' done' : missed ? ' missed' : '') + '" data-act="y-mark" data-date="' + e.d + '" data-done="' + (done ? 0 : 1) + '">' +
+        '<span class="d">' + dateLabel(e.d) + '</span><span class="p">' + Core.portionLabel({ from: e.from, to: e.to }) + '</span>' +
+        '<span class="s">' + (done ? '✅ 읽음' : missed ? '안 읽음' : '오늘') + '</span></button>' +
+        '<button class="open" data-act="read" data-date="y:' + e.d + '" aria-label="' + dateLabel(e.d) + ' 말씀 읽기">📖</button></div>';
+    });
+    return h + '<div style="height:10px"></div>';
+  }
   function allHtml() {
     var t = state.today;
     if (!boardTeam) boardTeam = inTeam('읽기') || !inTeam('필사') ? '읽기' : '필사';
     var lists = {};
     Core.TEAMS.forEach(function (team) { lists[team] = Core.participants(TN.cur, state.members, state.joins || [], team); });
     var list = lists[boardTeam];
-    var h = joinHtml() + '<div class="seg segwide" role="tablist">' + Core.TEAMS.map(function (team) {
+    var h = ypBoardHtml() + joinHtml() + '<div class="seg segwide" role="tablist">' + Core.TEAMS.map(function (team) {
       return '<button class="' + (team === boardTeam ? 'sel' : '') + '" data-act="board-team" data-team="' + team + '">' + teamName(team) + ' ' + lists[team].length + '</button>';
     }).join('') + '</div>';
     if (!list.length) return h + '<div class="card small">' + TN.cur.n + '기 ' + teamName(boardTeam) + ' 참여자 없음</div>';
@@ -1324,9 +1365,9 @@
 
 
   function pastHtml() {
-    var t = state.today;
-    if (t < P.START) return '<div class="card small">' + dateLabel(P.START, true) + '부터 시작해요.</div>';
-    var m = mine(me), last = t > P.END ? P.END : t, h = '', rd = inTeam('읽기'), cp = inTeam('필사');
+    var t = state.today, yph = ypPastHtml();
+    if (t < P.START) return yph + '<div class="card small">' + TN.cur.n + '기 통독은 ' + dateLabel(P.START, true) + '부터 시작해요.</div>';
+    var m = mine(me), last = t > P.END ? P.END : t, h = yph, rd = inTeam('읽기'), cp = inTeam('필사');
     h += '<p class="small">' + (rd ? '날짜를 누르면 읽음 / 안 읽음이 바뀌어요.' : '날짜를 누르면 필사 / 안 함이 바뀌어요.') + ' 📖 를 누르면 그날 말씀을 읽어요.</p>';
     for (var d = last; d >= P.START; d = Core.addDays(d, -1)) {
       if (!rd) { // 필사만 하는 사람: 날짜 줄이 필사 체크
