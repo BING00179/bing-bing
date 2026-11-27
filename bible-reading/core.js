@@ -179,7 +179,8 @@ var Core = (function () {
     for (var i = p.from; i <= p.to; i++) {
       var c = CHAPTERS[i];
       out.push({ book: c[0] + 1, name: BOOKS[c[0]][0], chapter: c[1],
-        gae: 'https://www.bskorea.or.kr/bible/korbibReadpage.php?version=GAE&book=' + GAE_CODES[c[0]] + '&chap=' + c[1] });
+        // 개역개정: GOODTV 성경 (폰 화면이 잘 나옴). 주소 = /onbibleread/0/권번호(1~66)/장
+        gae: 'https://goodtvbible.goodtv.co.kr/onbibleread/0/' + (c[0] + 1) + '/' + c[1] });
     }
     return out;
   }

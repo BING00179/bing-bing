@@ -38,7 +38,7 @@ test('그날 장 목록과 개역개정 링크 (확인된 주소 형식)', () =>
   const list = C.chaptersOf(C.portionFor('2027-01-03'));
   assert.deepEqual(list.map((x) => x.chapter), [7, 8, 9, 10, 11]);
   assert.equal(list[0].book, 1);
-  assert.equal(list[0].gae, 'https://www.bskorea.or.kr/bible/korbibReadpage.php?version=GAE&book=gen&chap=7');
+  assert.equal(list[0].gae, 'https://goodtvbible.goodtv.co.kr/onbibleread/0/1/7');
   assert.equal(C.GAE_CODES.length, 66);
   assert.equal(new Set(C.GAE_CODES).size, 66);
   // 실제 주소로 확인한 넷
