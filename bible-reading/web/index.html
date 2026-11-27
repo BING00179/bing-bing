@@ -45,7 +45,9 @@
   header .who { font-size: 15px; color: var(--muted); }
   header .who button { font-size: 15px; }
   .linkbtn { background: none; border: 0; color: var(--accent); text-decoration: underline; padding: 4px; cursor: pointer; font: inherit; }
-  nav { display: grid; grid-template-columns: repeat(4, 1fr) 44px; gap: 6px; margin-bottom: 16px; }
+  nav { display: grid; grid-template-columns: repeat(4, 1fr) 44px; gap: 6px; margin-bottom: 10px; }
+  .quick { display: block; width: 100%; font: inherit; font-size: 16px; font-weight: 700; padding: 9px; border-radius: 12px; margin-bottom: 10px;
+    background: var(--card); color: var(--accent); border: 1px solid var(--accent); cursor: pointer; }
   .findres { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 2px; color: var(--ink); cursor: pointer; line-height: 1.6; }
   .findres b { display: block; font-size: 14px; color: var(--accent); }
   .findres mark { background: #fde68a; color: inherit; border-radius: 3px; padding: 0 1px; }
@@ -58,11 +60,11 @@
     border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer;
   }
   nav button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-bottom: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; }
   .date { color: var(--muted); font-size: 17px; }
-  .portion { font-size: 30px; font-weight: 800; margin: 6px 0 16px; line-height: 1.3; word-break: keep-all; }
+  .portion { font-size: 27px; font-weight: 800; margin: 4px 0 12px; line-height: 1.25; word-break: keep-all; }
   .big {
-    width: 100%; font: inherit; font-size: 22px; font-weight: 700; padding: 18px; border-radius: 14px;
+    width: 100%; font: inherit; font-size: 20px; font-weight: 700; padding: 13px; border-radius: 14px;
     border: 0; background: var(--accent); color: var(--accent-ink); cursor: pointer;
   }
   .big.done { background: var(--done-bg); color: var(--done); border: 2px solid var(--done); }
@@ -88,7 +90,7 @@
   .names { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin: 12px 0 18px; }
   .names button { font: inherit; font-size: 19px; padding: 14px 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
   input[type=text] { width: 100%; font: inherit; font-size: 20px; padding: 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); margin: 8px 0 10px; }
-  .readbtn { width: 100%; font: inherit; font-size: 20px; font-weight: 700; padding: 14px; border-radius: 14px; margin-bottom: 10px;
+  .readbtn { width: 100%; font: inherit; font-size: 18px; font-weight: 700; padding: 11px; border-radius: 14px; margin-bottom: 8px;
     background: var(--card); color: var(--accent); border: 2px solid var(--accent); cursor: pointer; }
   .reader .bar2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
   .reader .sizes button { font: inherit; font-size: 16px; padding: 6px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; }
@@ -109,7 +111,7 @@
   .seg button { font: inherit; font-size: 13px; border: 0; background: none; color: var(--muted); padding: 4px 9px; border-radius: 999px; cursor: pointer; }
   .seg button.sel { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
   .reader .text p.speaking, .reader h2.speaking { background: var(--done-bg); border-radius: 8px; box-shadow: 0 0 0 4px var(--done-bg); }
-  .copybtn { width: 100%; font: inherit; font-size: 18px; font-weight: 700; padding: 12px; border-radius: 14px; margin-top: 8px;
+  .copybtn { width: 100%; font: inherit; font-size: 17px; font-weight: 700; padding: 9px; border-radius: 14px; margin-top: 8px;
     background: var(--card); color: var(--accent); border: 2px solid var(--accent); cursor: pointer; }
   .copybtn.done { background: var(--done-bg); color: var(--done); border-color: var(--done); }
   .dayrow .open.copied { background: var(--done-bg); border-color: var(--done); }
@@ -417,18 +419,15 @@
     return h + '</div>';
   }
   function todayHtml() {
-    var t = state.today, m = mine(me), p = P.portionFor(t), h = joinHtml() + ypCardHtml(t);
+    var t = state.today, m = mine(me), p = P.portionFor(t);
+    var h = '<button class="quick" data-tab="find">📖 성경 보기 · 원하는 말씀부터 / 🔍 찾기</button>' + joinHtml() + ypCardHtml(t);
     if (t < P.START) {
-      h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div>' +
-        '<div class="small" style="margin-top:6px">시작</div><div class="portion" style="margin-top:0">' + dateLabel(P.START, true) + '<br>' +
-        '<button class="portionlink" data-act="read" data-date="' + P.START + '">' + Core.portionLabel(P.portionFor(P.START)) + '</button></div>' +
+      // 시작 전: 짧게 (사장님 — 상자가 높다, 2026-11-27)
+      h += '<div class="card"><div class="date">' + TN.cur.n + '기 통독 · ' + dateLabel(P.START, true) + ' 시작</div>' +
+        '<div class="portion" style="font-size:22px;margin:4px 0 10px"><button class="portionlink" data-act="read" data-date="' + P.START + '">' + Core.portionLabel(P.portionFor(P.START)) + '</button></div>' +
         gaeButtons(Core.chaptersOf(P.portionFor(P.START))[0].gae, '개역개정으로 미리 보기') +
-        '<button class="readbtn" data-act="read" data-date="' + P.START + '">' + esc(ro(textName())) + ' 미리 보기 · 듣기</button>' +
-        // 시작 전에는 내 팀 버튼을 흐리게 미리 보여 줌 (누를 수 없음)
-        (inTeam('읽기') ? '<button class="big" disabled>읽기 완료</button>' : '') +
-        (inTeam('필사') ? '<button class="copybtn" disabled>✍️ 필사 완료</button>' : '') +
-        (inTeam('읽기') || inTeam('필사') ? '<div class="hint">' + dateLabel(P.START) + '부터 누를 수 있어요</div>' : '') +
-        '<div class="small" style="margin-top:10px">평일·토요일·공휴일 3장, 주일 5장씩 읽어요. ' + dateLabel(P.END, true) + '에 요한계시록까지 마칩니다.</div></div>';
+        '<button class="readbtn" style="margin-bottom:6px" data-act="read" data-date="' + P.START + '">' + esc(ro(textName())) + ' 미리 보기 · 듣기</button>' +
+        '<div class="small">평일·토·공휴일 3장, 주일 5장 · ' + dateLabel(P.END, true) + ' 요한계시록까지</div></div>';
     } else if (!p) {
       h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div><div class="portion">' + TN.cur.n + '기 통독 완료</div>' + (TN.next ? '<div class="small">' + TN.next.n + '기 시작 · ' + dateLabel(TN.next.start, true) + '</div>' : '<div class="small">다음 회차는 리더가 정하면 열려요.</div>') + '</div>';
     } else {
@@ -446,10 +445,9 @@
     h += '<div class="small" style="text-align:center;margin:-4px 0 12px">' +
       (ac === 'push' ? '🔔 매일 ' + Core.hourLabel(myHour()) + ' 알림' : ac === 'cal' ? '📅 달력 알림 · 매일 ' + Core.hourLabel(myHour()) : '🔕 알림 꺼짐') +
       ' · <button class="linkbtn" data-tab="set">설정</button></div>';
-    if (inTeam('읽기')) h += '<div class="card"><div style="font-weight:700">읽기 진도</div>' + progressHtml(m.prog) +
+    if (inTeam('읽기') && t >= P.START) h += '<div class="card"><div style="font-weight:700">읽기 진도</div>' + progressHtml(m.prog) +
       (m.missed > 0 ? '<button class="missbtn" data-tab="past">밀린 날 ' + m.missed + '일 ›</button>' : '') + '</div>';
-    if (inTeam('필사')) h += '<div class="card"><div style="font-weight:700">필사</div><div class="small">✍️ ' + TN.cur.n + '기 필사 ' + m.copied.size + '회</div></div>';
-    h += '<button class="readbtn" data-tab="find">📖 성경 보기 · 원하는 말씀부터 / 🔍 찾기</button>';
+    if (inTeam('필사') && t >= P.START) h += '<div class="card"><div style="font-weight:700">필사</div><div class="small">✍️ ' + TN.cur.n + '기 필사 ' + m.copied.size + '회</div></div>';
     return h;
   }
 
