@@ -1159,5 +1159,137 @@
   },
   "signals": [],
   "count": 0
+ },
+ {
+  "when": "2026-11-13 13:58 KST",
+  "date": "2026-11-13",
+  "market": {
+   "index_name": "코스피",
+   "close": 5342.73,
+   "sma_slow": 6520.7,
+   "above_sma_slow": false,
+   "rsi": 39.9,
+   "drawdown_pct": 41.38,
+   "volatility_pct": 54.38,
+   "verdict": "위험",
+   "reasons": [
+    "지수가 200일선 아래",
+    "고점대비 -41.4%",
+    "변동성 54.4%"
+   ],
+   "tradable": false
+  },
+  "signals": [],
+  "count": 0
+ },
+ {
+  "when": "2026-11-16 13:41 KST",
+  "date": "2026-11-16",
+  "market": {
+   "index_name": "코스피",
+   "close": 5290.53,
+   "sma_slow": 6522.63,
+   "above_sma_slow": false,
+   "rsi": 38.9,
+   "drawdown_pct": 41.96,
+   "volatility_pct": 53.83,
+   "verdict": "위험",
+   "reasons": [
+    "지수가 200일선 아래",
+    "고점대비 -42.0%",
+    "변동성 53.8%"
+   ],
+   "tradable": false
+  },
+  "signals": [],
+  "count": 0
+ },
+ {
+  "when": "2026-11-18 14:51 KST",
+  "date": "2026-11-18",
+  "market": {
+   "index_name": "코스피",
+   "close": 4968.48,
+   "sma_slow": 6523.99,
+   "above_sma_slow": false,
+   "rsi": 33.2,
+   "drawdown_pct": 45.49,
+   "volatility_pct": 53.73,
+   "verdict": "위험",
+   "reasons": [
+    "지수가 200일선 아래",
+    "고점대비 -45.5%",
+    "변동성 53.7%"
+   ],
+   "tradable": false
+  },
+  "signals": [],
+  "count": 0
+ },
+ {
+  "when": "2026-11-19 14:50 KST",
+  "date": "2026-11-19",
+  "market": {
+   "index_name": "코스피",
+   "close": 5067.44,
+   "sma_slow": 6524.57,
+   "above_sma_slow": false,
+   "rsi": 36.5,
+   "drawdown_pct": 44.4,
+   "volatility_pct": 52.7,
+   "verdict": "위험",
+   "reasons": [
+    "지수가 200일선 아래",
+    "고점대비 -44.4%",
+    "변동성 52.7%"
+   ],
+   "tradable": false
+  },
+  "signals": [],
+  "count": 0
+ },
+ {
+  "when": "2026-11-20 14:40 KST",
+  "date": "2026-11-20",
+  "market": {
+   "index_name": "코스피",
+   "close": 5137.89,
+   "sma_slow": 6525.31,
+   "above_sma_slow": false,
+   "rsi": 38.7,
+   "drawdown_pct": 43.63,
+   "volatility_pct": 51.93,
+   "verdict": "위험",
+   "reasons": [
+    "지수가 200일선 아래",
+    "고점대비 -43.6%",
+    "변동성 51.9%"
+   ],
+   "tradable": false
+  },
+  "signals": [],
+  "count": 0
+ },
+ {
+  "when": "2026-11-23 14:41 KST",
+  "date": "2026-11-23",
+  "market": {
+   "index_name": "코스피",
+   "close": 4869.96,
+   "sma_slow": 6524.91,
+   "above_sma_slow": false,
+   "rsi": 33.8,
+   "drawdown_pct": 46.57,
+   "volatility_pct": 54.67,
+   "verdict": "위험",
+   "reasons": [
+    "지수가 200일선 아래",
+    "고점대비 -46.6%",
+    "변동성 54.7%"
+   ],
+   "tradable": false
+  },
+  "signals": [],
+  "count": 0
  }
 ]

@@ -1,5 +1,5 @@
 {
- "as_of": "2026-11-12",
+ "as_of": "2026-11-26",
  "version": "1",
  "rules": {
   "capital": 5000000,
@@ -43,12 +43,12 @@
   "day_pnl": 0.0,
   "day_pnl_pct": 0.0,
   "halted": false,
-  "valued_on": "2026-11-12",
+  "valued_on": "2026-11-26",
   "n_positions": 0,
   "max_positions": 6,
-  "kosdaq_return_pct": -16.44,
+  "kosdaq_return_pct": -20.49,
   "kosdaq_from": "2026-10-14",
-  "kosdaq_to": "2026-11-12"
+  "kosdaq_to": "2026-11-26"
  },
  "curve": [
   {
@@ -160,6 +160,56 @@
    "date": "2026-11-12",
    "equity": 5000000.0,
    "kosdaq_close": 688.45
+  },
+  {
+   "date": "2026-11-13",
+   "equity": 5000000.0,
+   "kosdaq_close": 699.66
+  },
+  {
+   "date": "2026-11-16",
+   "equity": 5000000.0,
+   "kosdaq_close": 665.65
+  },
+  {
+   "date": "2026-11-17",
+   "equity": 5000000.0,
+   "kosdaq_close": 649.9
+  },
+  {
+   "date": "2026-11-18",
+   "equity": 5000000.0,
+   "kosdaq_close": 662.5
+  },
+  {
+   "date": "2026-11-19",
+   "equity": 5000000.0,
+   "kosdaq_close": 666.14
+  },
+  {
+   "date": "2026-11-20",
+   "equity": 5000000.0,
+   "kosdaq_close": 647.41
+  },
+  {
+   "date": "2026-11-23",
+   "equity": 5000000.0,
+   "kosdaq_close": 643.09
+  },
+  {
+   "date": "2026-11-24",
+   "equity": 5000000.0,
+   "kosdaq_close": 665.88
+  },
+  {
+   "date": "2026-11-25",
+   "equity": 5000000.0,
+   "kosdaq_close": 650.64
+  },
+  {
+   "date": "2026-11-26",
+   "equity": 5000000.0,
+   "kosdaq_close": 655.03
   }
  ],
  "positions": [],
