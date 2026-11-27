@@ -404,7 +404,7 @@
         '<div class="small" style="margin-top:6px">시작</div><div class="portion" style="margin-top:0">' + dateLabel(P.START, true) + '<br>' +
         '<button class="portionlink" data-act="read" data-date="' + P.START + '">' + Core.portionLabel(P.portionFor(P.START)) + '</button></div>' +
         gaeButtons(Core.chaptersOf(P.portionFor(P.START))[0].gae, '개역개정으로 미리 보기') +
-        '<button class="readbtn" data-act="read" data-date="' + P.START + '">' + esc(textName()) + '로 미리 보기 · 듣기</button>' +
+        '<button class="readbtn" data-act="read" data-date="' + P.START + '">' + esc(ro(textName())) + ' 미리 보기 · 듣기</button>' +
         // 시작 전에는 내 팀 버튼을 흐리게 미리 보여 줌 (누를 수 없음)
         (inTeam('읽기') ? '<button class="big" disabled>읽기 완료</button>' : '') +
         (inTeam('필사') ? '<button class="copybtn" disabled>✍️ 필사 완료</button>' : '') +
@@ -417,7 +417,7 @@
       h += '<div class="card"><div class="date">오늘 · ' + dateLabel(t) + '</div>' +
         '<div class="portion"><button class="portionlink" data-act="read" data-date="' + t + '">' + Core.portionLabel(p) + '</button></div>' +
         gaeButtons(Core.chaptersOf(p)[0].gae, '개역개정으로 읽기') +
-        '<button class="readbtn" data-act="read" data-date="' + t + '">' + esc(textName()) + '로 읽기 · 듣기</button>' +
+        '<button class="readbtn" data-act="read" data-date="' + t + '">' + esc(ro(textName())) + ' 읽기 · 듣기</button>' +
         (rd ? '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + t + '" data-done="' + (done ? 0 : 1) + '">' +
         (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' : '') + copyBtn(t) +
         (!rd && !inTeam('필사') ? '<div class="small" style="margin-top:8px">참여 팀 없음 · <button class="linkbtn" data-tab="set">설정</button></div>' : '') +
@@ -524,6 +524,8 @@
     };
   })();
   function textName() { return MyText.name() || '개역한글'; }
+  // '개역한글로' · '개역개정으로' (받침 있으면 '으로', ㄹ 받침·받침 없으면 '로')
+  function ro(w) { var c = w.charCodeAt(w.length - 1) - 0xAC00, j = c >= 0 && c < 11172 ? c % 28 : 0; return w + (j && j !== 8 ? '으로' : '로'); }
 
   // ── 말씀 읽기 (앱 안) ──
   var reading = null;      // 읽고 있는 날짜
@@ -859,7 +861,7 @@
     if (loadErr) h += '<div class="card miss">' + esc(loadErr) + '</div>';
     h += '<div class="text" style="font-size:' + fontSize() + 'px">';
     list.forEach(function (c, ci) {
-      h += '<h2 id="tts-' + ci + '-t"' + (Tts.at(ci, -1) ? ' class="speaking"' : '') + '><span>' + c.name + ' ' + c.chapter + '장</span><a href="' + esc(gaeHref(c.gae)) + '" target="_blank" rel="noopener">개역개정 ↗</a></h2>';
+      h += '<h2 id="tts-' + ci + '-t"' + (Tts.at(ci, -1) ? ' class="speaking"' : '') + '><span>' + c.name + ' ' + c.chapter + '장</span>' + (hasGae() ? '' : '<a href="' + esc(gaeHref(c.gae)) + '" target="_blank" rel="noopener">개역개정 ↗</a>') + '</h2>';
       var b = books[c.book];
       if (!b) { h += loadErr ? '' : '<p class="small">불러오는 중…</p>'; return; }
       b.c[c.chapter - 1].forEach(function (v, i) {
@@ -987,7 +989,10 @@
     return m ? 'https://www.bskorea.or.kr/bible/korbibReadpage.php?version=GAE&book=' + Core.GAE_CODES[+m[1] - 1] + '&chap=' + m[2] : url;
   }
   // 바이블 애플 앱으로 열기는 앱 팝업이 여러 개라 뺌 (2026-11-27 사장님). 웹으로 그날 장을 바로 엶 (팝업 한 번).
+  // 앱 안 말씀이 이미 개역개정(내 파일)이면 바깥 개역개정 연결은 숨김
+  function hasGae() { return /개역개정/.test(MyText.name()); }
   function gaeButtons(url, label) {
+    if (hasGae()) return '';
     return '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" href="' + esc(gaeHref(url)) + '" target="_blank" rel="noopener">📖 ' + label + ' ↗</a>';
   }
   // ── 찬송가·사전 ── 가사·악보·사전은 저작권이 있어 앱에 넣지 않고, 바깥 검색으로 연결만 함
@@ -1125,7 +1130,7 @@
       (MyText.name() ? '<button class="readbtn" style="margin:0" data-act="mytext-off">기본으로</button>' : '') + '</div>' +
       '<input type="file" id="mytextfile" accept=".json,application/json" style="display:none">' +
       '<div class="small" style="margin-top:6px">내가 가진 성경 파일을 넣으면 <b>이 휴대폰에서만</b> 그 번역으로 읽기·듣기·검색·묵상이 돼요. 파일은 다른 사람에게 가지 않아요.</div>');
-    h += sect('📖 개역개정 여는 곳', '<div class="chips2">' + [['goodtv', 'GOODTV'], ['bskorea', '대한성서공회']].map(function (x) {
+    if (!hasGae()) h += sect('📖 개역개정 여는 곳', '<div class="chips2">' + [['goodtv', 'GOODTV'], ['bskorea', '대한성서공회']].map(function (x) {
         return '<button class="' + (gaeSite() === x[0] ? 'on' : '') + '" data-act="gae-site" data-s="' + x[0] + '">' + x[1] + '</button>';
       }).join('') + '</div><div class="small" style="margin-top:6px">GOODTV: 폰 화면이 깔끔, 들어갈 때마다 앱 광고 창 · 대한성서공회: 광고 창 없음, 글씨가 작은 PC 화면(두 손가락으로 키우기)</div>');
     h += sect('🔤 말씀 글씨 크기', '<div class="sizes" style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
