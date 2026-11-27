@@ -965,7 +965,7 @@
         return '<button class="' + (Find.scope === x[0] ? 'on' : '') + '" data-act="find-scope" data-s="' + x[0] + '">' + x[1] + '</button>';
       }).join('') + '</div>' +
       '<button class="big" style="margin-top:8px" data-act="find-go">찾기</button>' +
-      '<button class="readbtn" style="margin-top:8px" data-act="dict-go">📚 성경 사전에서 찾기 ↗</button></div>' + hymnHtml();
+      '<button class="readbtn" style="margin-top:8px" data-act="dict-go">📚 성경 사전에서 찾기 ↗</button></div>';  // 찬송가는 뺌 (2026-11-27 사장님)
     if (Find.busy) return h + '<div class="card small">성경 불러오는 중… ' + Find.loaded + ' / 66권 (처음 한 번만)</div>';
     if (!Find.res) return h + '<div class="small" style="text-align:center">' + esc(textName()) + ' · 결과를 누르면 그 말씀으로 가요</div>';
     if (!Find.res.length) return h + '<div class="card small">「' + esc(Find.q) + '」 가 나오는 절이 없어요.</div>';
