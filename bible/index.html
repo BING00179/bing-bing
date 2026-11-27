@@ -403,7 +403,7 @@
       h += '<div class="card"><div class="date">' + dateLabel(t, true) + '</div>' +
         '<div class="small" style="margin-top:6px">시작</div><div class="portion" style="margin-top:0">' + dateLabel(P.START, true) + '<br>' +
         '<button class="portionlink" data-act="read" data-date="' + P.START + '">' + Core.portionLabel(P.portionFor(P.START)) + '</button></div>' +
-        '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="' + Core.chaptersOf(P.portionFor(P.START))[0].gae + '">📖 개역개정으로 미리 보기 ↗</a>' +
+        '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(gaeHref(Core.chaptersOf(P.portionFor(P.START))[0].gae)) + '">📖 개역개정으로 미리 보기 ↗</a>' +
         '<button class="readbtn" data-act="read" data-date="' + P.START + '">개역한글로 미리 보기 · 듣기</button>' +
         // 시작 전에는 내 팀 버튼을 흐리게 미리 보여 줌 (누를 수 없음)
         (inTeam('읽기') ? '<button class="big" disabled>읽기 완료</button>' : '') +
@@ -416,7 +416,7 @@
       var done = m.done.has(t), rd = inTeam('읽기');
       h += '<div class="card"><div class="date">오늘 · ' + dateLabel(t) + '</div>' +
         '<div class="portion"><button class="portionlink" data-act="read" data-date="' + t + '">' + Core.portionLabel(p) + '</button></div>' +
-        '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="' + Core.chaptersOf(p)[0].gae + '">📖 개역개정으로 읽기 ↗</a>' +
+        '<a class="readbtn" style="display:block;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="' + esc(gaeHref(Core.chaptersOf(p)[0].gae)) + '">📖 개역개정으로 읽기 ↗</a>' +
         '<button class="readbtn" data-act="read" data-date="' + t + '">개역한글로 읽기 · 듣기</button>' +
         (rd ? '<button class="big' + (done ? ' done' : '') + '" data-act="mark" data-date="' + t + '" data-done="' + (done ? 0 : 1) + '">' +
         (done ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' : '') + copyBtn(t) +
@@ -823,7 +823,7 @@
     if (loadErr) h += '<div class="card miss">' + esc(loadErr) + '</div>';
     h += '<div class="text" style="font-size:' + fontSize() + 'px">';
     list.forEach(function (c, ci) {
-      h += '<h2 id="tts-' + ci + '-t"' + (Tts.at(ci, -1) ? ' class="speaking"' : '') + '><span>' + c.name + ' ' + c.chapter + '장</span><a href="' + c.gae + '" target="_blank" rel="noopener">개역개정 ↗</a></h2>';
+      h += '<h2 id="tts-' + ci + '-t"' + (Tts.at(ci, -1) ? ' class="speaking"' : '') + '><span>' + c.name + ' ' + c.chapter + '장</span><a href="' + esc(gaeHref(c.gae)) + '" target="_blank" rel="noopener">개역개정 ↗</a></h2>';
       var b = books[c.book];
       if (!b) { h += loadErr ? '' : '<p class="small">불러오는 중…</p>'; return; }
       b.c[c.chapter - 1].forEach(function (v, i) {
@@ -938,6 +938,12 @@
       h += '<button class="findres" data-act="find-open" data-k="' + k + '"><b>' + esc(selLabel([k])) + '</b>' + t + '</button>';
     });
     return h + '</div>';
+  }
+  // 개역개정 링크: 안드로이드면 GOODTV 「바이블 애플」 앱(kr.co.GoodTVBible)으로 그 장을 열어 봄 (광고 창 없음).
+  //   앱이 그 주소를 못 받으면 크롬이 대신 웹(fallback)을 엶.
+  function gaeHref(url) {
+    if (!/Android/.test(navigator.userAgent)) return url;
+    return 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=kr.co.GoodTVBible;S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
   }
   // ── 찬송가·사전 ── 가사·악보·사전은 저작권이 있어 앱에 넣지 않고, 바깥 검색으로 연결만 함
   function hymnHtml() {
