@@ -22,6 +22,9 @@ function build() {
   for (const f of WEB_FILES) files[f] = fs.readFileSync(path.join(here, 'web', f));
   // 그림(있을 때만): 카톡 링크 미리보기·처음 화면
   for (const f of ['hero.jpg', 'og.jpg']) if (fs.existsSync(path.join(here, 'web', f))) files[f] = fs.readFileSync(path.join(here, 'web', f));
+  // 말씀 그림 배경 (web/bg/*.jpg, 우리가 만든 그림만)
+  const bg = path.join(here, 'web', 'bg');
+  if (fs.existsSync(bg)) for (const f of fs.readdirSync(bg)) if (/\.jpg$/.test(f)) files['bg/' + f] = fs.readFileSync(path.join(bg, f));
   return { code, files };
 }
 
@@ -29,7 +32,7 @@ function write(out) {
   fs.mkdirSync(path.join(here, 'dist'), { recursive: true });
   fs.writeFileSync(path.join(here, 'dist', 'Code.gs'), out.code);
   fs.mkdirSync(site, { recursive: true });
-  for (const [f, buf] of Object.entries(out.files)) fs.writeFileSync(path.join(site, f), buf);
+  for (const [f, buf] of Object.entries(out.files)) { fs.mkdirSync(path.dirname(path.join(site, f)), { recursive: true }); fs.writeFileSync(path.join(site, f), buf); }
 }
 
 if (require.main === module) {
