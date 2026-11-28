@@ -64,6 +64,12 @@
     border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer;
   }
   nav button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+  .imgpick { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 60; display: flex; align-items: flex-end; justify-content: center; }
+  .imgpick-in { background: var(--card); width: 100%; max-width: 520px; border-radius: 18px 18px 0 0; padding: 14px 14px 22px; max-height: 88vh; overflow: auto; }
+  .imgpick-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .imgpick-g { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .imgpick-g button { background: none; border: 0; padding: 0; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+  .imgpick-g canvas { width: 100%; height: auto; border-radius: 10px; display: block; margin-bottom: 4px; border: 1px solid var(--line); }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; }
   .date { color: var(--muted); font-size: 17px; }
   .portion { font-size: 27px; font-weight: 800; margin: 4px 0 12px; line-height: 1.25; word-break: keep-all; }
@@ -1185,19 +1191,31 @@
       .then(function () { Find.busy = false; render(); });
   }
 
-  // ── 말씀 이미지 ── 고른 절을 그림 카드(1080×1350)로 만들어 공유·저장
-  function verseImage(ks) {
-    var W = 1080, H = 1350, c = document.createElement('canvas'); c.width = W; c.height = H;
-    var g = c.getContext('2d'), img = new Image();
-    img.onload = function () { draw(true); }; img.onerror = function () { draw(false); };
-    img.src = 'hero.jpg';
+  // ── 말씀 이미지 ── 고른 절을 그림 카드(1080×1350)로. 배경을 골라서 (2026-11-28 사장님: 예쁘게)
+  //   배경은 그림(hero.jpg, 우리 것) 하나 + 직접 그리는 색 배경들 — 남의 사진을 쓰지 않음
+  var IMG_STYLES = [
+    { id: 'hero', n: '기도', photo: true, ink: '#2a2622', ref: '#6b4f2a', foot: '#8a8178' },
+    { id: 'dawn', n: '새벽', g: ['#fbe3d3', '#f3d1dc', '#d9d3ef'], ink: '#3b2f36', ref: '#8a4f5e', foot: '#8d7f86' },
+    { id: 'cream', n: '종이', g: ['#fbf6ea', '#f4ecd8'], frame: '#c9a96a', ink: '#33291e', ref: '#9a7433', foot: '#9b8f7c' },
+    { id: 'night', n: '밤하늘', g: ['#1b2440', '#2c2f5a', '#3d3566'], stars: true, ink: '#f6f1e6', ref: '#e8c987', foot: '#b8b3cc' },
+    { id: 'leaf', n: '초록', g: ['#e4efe2', '#c9dfc8', '#a9c9b1'], ink: '#203328', ref: '#3f6b4c', foot: '#5f7a66' },
+    { id: 'sky', n: '하늘', g: ['#dcecfb', '#eaf3fb', '#fdf6ec'], clouds: true, ink: '#24344a', ref: '#4a6a94', foot: '#7c8a9c' }
+  ];
+  var heroImg = null;
+  function withHero(cb) {
+    if (heroImg) { cb(heroImg.ok ? heroImg : null); return; }
+    var im = new Image(); im.onload = function () { im.ok = true; heroImg = im; cb(im); }; im.onerror = function () { heroImg = { ok: false }; cb(null); }; im.src = 'hero.jpg';
+  }
+  // 캔버스 하나에 그림. scale 은 미리보기용(작게)
+  function drawVerse(c, ks, st, img) {
+    var W = 1080, H = 1350, g = c.getContext('2d'), sc = c.width / W;
+    g.setTransform(sc, 0, 0, sc, 0, 0);
     function wrap(text, maxW) {
       var lines = [], line = '';
       text.split(' ').forEach(function (word) {
         var t = line ? line + ' ' + word : word;
         if (g.measureText(t).width <= maxW) { line = t; return; }
         if (line) lines.push(line);
-        // 낱말 하나가 줄보다 길면 글자 단위로
         line = '';
         for (var i = 0; i < word.length; i++) {
           if (g.measureText(line + word[i]).width > maxW) { lines.push(line); line = ''; }
@@ -1207,42 +1225,81 @@
       if (line) lines.push(line);
       return lines;
     }
-    function draw(ok) {
-      if (ok) { // 그림을 가득 채움 (얼굴이 위쪽에 오게)
-        var r = Math.max(W / img.width, H / img.height), iw = img.width * r, ih = img.height * r;
-        g.drawImage(img, (W - iw) / 2, 0, iw, ih);
-      } else { g.fillStyle = '#dff1ec'; g.fillRect(0, 0, W, H); }
-      // 아래쪽 흰 판 (글씨가 잘 보이게)
-      var top = H * 0.42, grd = g.createLinearGradient(0, top - 120, 0, top + 60);
+    var top = 0, bottomPad = 200;
+    if (st.photo && img) {
+      var r = Math.max(W / img.width, H / img.height), iw = img.width * r, ih = img.height * r;
+      g.drawImage(img, (W - iw) / 2, 0, iw, ih);
+      top = H * 0.42;
+      var grd = g.createLinearGradient(0, top - 120, 0, top + 60);
       grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(1, 'rgba(255,255,255,0.86)');
       g.fillStyle = grd; g.fillRect(0, top - 120, W, 180); g.fillStyle = 'rgba(255,255,255,0.86)'; g.fillRect(0, top + 60, W, H);
-      var text = ks.map(function (k) { return verseText(k); }).join(' ');
-      var size = text.length > 260 ? 38 : text.length > 160 ? 44 : text.length > 80 ? 52 : 60, lines;
-      for (;;) {
-        g.font = '500 ' + size + 'px "Noto Serif KR", "Nanum Myeongjo", serif';
-        lines = wrap(text, W - 180);
-        if (lines.length * size * 1.6 < H - top - 260 || size <= 28) break;
-        size -= 4;
+    } else {
+      var cols = st.g || ['#fbf6ea', '#f4ecd8'], lg = g.createLinearGradient(0, 0, W * 0.4, H);
+      cols.forEach(function (col, i) { lg.addColorStop(i / (cols.length - 1), col); });
+      g.fillStyle = lg; g.fillRect(0, 0, W, H);
+      if (st.stars) { // 별: 늘 같은 자리 (같은 말씀이면 같은 그림)
+        var seed = 7; function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+        for (var i = 0; i < 90; i++) { g.globalAlpha = 0.25 + rnd() * 0.6; g.fillStyle = '#fff'; g.beginPath(); g.arc(rnd() * W, rnd() * H * 0.9, 1 + rnd() * 2.4, 0, 7); g.fill(); }
+        g.globalAlpha = 1;
       }
-      g.fillStyle = '#2a2622'; g.textAlign = 'center'; g.textBaseline = 'top';
-      var lh = size * 1.6, y = top + 40 + Math.max(0, (H - top - 260 - lines.length * lh) / 2);
-      lines.forEach(function (l) { g.fillText(l, W / 2, y); y += lh; });
-      g.font = '700 40px sans-serif'; g.fillStyle = '#6b4f2a';
-      g.fillText(selLabel(ks), W / 2, y + 30);
-      g.font = '28px sans-serif'; g.fillStyle = '#8a8178';
-      g.fillText(textName() + ' · 함께 읽는 성경', W / 2, H - 70);
-      c.toBlob(function (blob) {
-        var name = 'verse-' + ks[0] + '.jpg', file = null;
-        try { file = new File([blob], name, { type: 'image/jpeg' }); } catch (e) {}
-        if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-          navigator.share({ files: [file] }).catch(function () {});
-          return;
-        }
-        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
-        document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); URL.revokeObjectURL(a.href); }, 2000);
-        toast('🖼 이미지 저장');
-      }, 'image/jpeg', 0.9);
+      if (st.clouds) {
+        g.fillStyle = 'rgba(255,255,255,0.55)';
+        [[180, 220, 120], [300, 200, 90], [820, 1150, 140], [960, 1120, 100], [700, 1180, 90]].forEach(function (q) { g.beginPath(); g.arc(q[0], q[1], q[2], 0, 7); g.fill(); });
+      }
+      if (st.frame) { g.strokeStyle = st.frame; g.lineWidth = 3; g.strokeRect(60, 60, W - 120, H - 120); g.lineWidth = 1; g.strokeRect(74, 74, W - 148, H - 148); }
+      // 가운데 작은 장식 (따옴표)
+      g.fillStyle = st.ref; g.globalAlpha = 0.5; g.font = '700 140px "Noto Serif KR", serif'; g.textAlign = 'center'; g.textBaseline = 'top';
+      g.fillText('“', W / 2, 150); g.globalAlpha = 1;
+      top = 300; bottomPad = 260;
     }
+    var text = ks.map(function (k) { return verseText(k); }).join(' ');
+    var room = H - top - bottomPad, size = text.length > 260 ? 40 : text.length > 160 ? 46 : text.length > 80 ? 54 : 64, lines;
+    for (;;) {
+      g.font = '500 ' + size + 'px "Noto Serif KR", "Nanum Myeongjo", serif';
+      lines = wrap(text, W - 200);
+      if (lines.length * size * 1.6 < room || size <= 28) break;
+      size -= 4;
+    }
+    g.fillStyle = st.ink; g.textAlign = 'center'; g.textBaseline = 'top';
+    var lh = size * 1.6, y = top + 40 + Math.max(0, (room - lines.length * lh) / 2);
+    lines.forEach(function (l) { g.fillText(l, W / 2, y); y += lh; });
+    g.font = '700 40px sans-serif'; g.fillStyle = st.ref;
+    g.fillText(selLabel(ks), W / 2, y + 30);
+    g.font = '28px sans-serif'; g.fillStyle = st.foot;
+    g.fillText(textName() + ' · 함께 읽는 성경', W / 2, H - 110);
+  }
+  function verseImage(ks) {
+    withHero(function (img) {
+      var ov = document.createElement('div');
+      ov.className = 'imgpick';
+      ov.innerHTML = '<div class="imgpick-in"><div class="imgpick-h"><b>배경 고르기</b><button class="linkbtn" data-x="1">닫기</button></div>' +
+        '<div class="imgpick-g"></div><div class="small" style="text-align:center;margin-top:8px">누르면 저장·공유돼요</div></div>';
+      var grid = ov.querySelector('.imgpick-g');
+      IMG_STYLES.forEach(function (st) {
+        var bt = document.createElement('button'), cv = document.createElement('canvas');
+        cv.width = 216; cv.height = 270; drawVerse(cv, ks, st, img);
+        bt.appendChild(cv); bt.appendChild(document.createTextNode(st.n));
+        bt.onclick = function () { ov.remove(); saveVerse(ks, st, img); };
+        grid.appendChild(bt);
+      });
+      ov.onclick = function (e) { if (e.target === ov || e.target.dataset.x) ov.remove(); };
+      document.body.appendChild(ov);
+    });
+  }
+  function saveVerse(ks, st, img) {
+    var c = document.createElement('canvas'); c.width = 1080; c.height = 1350;
+    drawVerse(c, ks, st, img);
+    c.toBlob(function (blob) {
+      var name = 'verse-' + ks[0] + '-' + st.id + '.jpg', file = null;
+      try { file = new File([blob], name, { type: 'image/jpeg' }); } catch (e) {}
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file] }).catch(function () {});
+        return;
+      }
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); URL.revokeObjectURL(a.href); }, 2000);
+      toast('🖼 이미지 저장');
+    }, 'image/jpeg', 0.9);
   }
   function settingsHtml() {
     var h = '', on = alarmChoice() === 'push', push = Push.status(), a;
