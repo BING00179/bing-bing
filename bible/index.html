@@ -1537,12 +1537,12 @@
       // 오늘만 N장, 내일부터는 원래 장 수로 (2026-11-28 사장님: 오늘은 히브리서 6~9장 4장만)
       var tp = +b.closest('.ypadj').querySelector('select').value, keep = YP.per(), td = state.today;
       if (!YP.portion(td)) { toast('오늘은 따로 통독 날이 아니에요'); return; }
-      YP.rebase(td, tp); YP.rebase(Core.addDays(td, 1), keep);
+      YP.rebase(td, tp); YP.rebase(Core.addDays(td, 1), keep); ypEdit = false;
       var pt = YP.portion(td);
       render(); toast('오늘 ' + (pt.to - pt.from + 1) + '장 · 내일부터 하루 ' + keep + '장 · ' + dateLabel(YP.end()) + ' 끝');
     }
     else if (act === 'yp-rebase') {
-      var np = +b.closest('.ypadj').querySelector('select').value; YP.rebase(Core.addDays(state.today, 1), np);
+      var np = +b.closest('.ypadj').querySelector('select').value; YP.rebase(Core.addDays(state.today, 1), np); ypEdit = false;
       render(); toast('내일부터 하루 ' + np + '장 · ' + dateLabel(YP.end()) + ' 끝');
     }
     else if (act === 'yp-off') { if (confirm('따로 통독을 그만할까요? 이 기록은 지워져요.')) { YP.off(); render(); } }
