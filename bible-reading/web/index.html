@@ -406,10 +406,11 @@
 
   // 장 수 바꾸기 줄 (오늘 화면·설정 같이 씀). 오늘만 = 오늘 N장, 내일부터 원래대로 / 내일부터 계속 = 내일부터 N장
   function ypAdjHtml() {
-    return '<div class="ypadj" style="display:flex;gap:8px;align-items:center;margin-top:8px"><select class="sel2" style="flex:1">' +
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (k) { return '<option' + (k === YP.per() ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' +
-      '<button class="readbtn" style="margin:0;flex:1.3" data-act="yp-today">오늘만</button>' +
-      '<button class="readbtn" style="margin:0;flex:2" data-act="yp-rebase">내일부터 계속</button></div>';
+    var sm = 'margin:0;width:auto;font-size:14px;padding:5px 10px;border-radius:9px';
+    return '<div class="ypadj" style="display:flex;gap:6px;align-items:center;margin-top:6px"><select class="sel2" style="font-size:14px;padding:4px 6px;width:auto">' +
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (k) { return '<option value="' + k + '"' + (k === YP.per() ? ' selected' : '') + '>' + k + '장</option>'; }).join('') + '</select>' +
+      '<button class="readbtn" style="' + sm + '" data-act="yp-today">오늘만</button>' +
+      '<button class="readbtn" style="' + sm + '" data-act="yp-rebase">내일부터 계속</button></div>';
   }
   var ypEdit = false;
   function ypCardHtml(t) {
