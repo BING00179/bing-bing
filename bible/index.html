@@ -404,6 +404,14 @@
       '<div class="small">이미 등록했으면 내 이름을 눌러 주세요. 이 휴대폰에서는 다음부터 기억해요.</div>' + list + '</div>';
   }
 
+  // 장 수 바꾸기 줄 (오늘 화면·설정 같이 씀). 오늘만 = 오늘 N장, 내일부터 원래대로 / 내일부터 계속 = 내일부터 N장
+  function ypAdjHtml() {
+    return '<div class="ypadj" style="display:flex;gap:8px;align-items:center;margin-top:8px"><select class="sel2" style="flex:1">' +
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (k) { return '<option' + (k === YP.per() ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' +
+      '<button class="readbtn" style="margin:0;flex:1.3" data-act="yp-today">오늘만</button>' +
+      '<button class="readbtn" style="margin:0;flex:2" data-act="yp-rebase">내일부터 계속</button></div>';
+  }
+  var ypEdit = false;
   function ypCardHtml(t) {
     var y = YP.get(); if (!y) return '';
     var all = YP.days(), st = YP.start(), end = YP.end(), n = all.length, dc = YP.doneCount();
@@ -418,7 +426,9 @@
         '<button class="readbtn" data-act="read" data-date="y:' + d + '">' + esc(ro(textName())) + ' 읽기 · 듣기</button>' +
         (d <= t ? '<button class="big' + (yd ? ' done' : '') + '" data-act="y-mark" data-date="' + d + '" data-done="' + (yd ? 0 : 1) + '">' + (yd ? '✅ 읽기 완료됨' : '읽기 완료') + '</button>' : '');
     } else if (dc >= n) h += '<div class="portion">🎉 다 읽었어요</div>';
-    h += '<div class="small" style="margin-top:8px">' + dc + ' / ' + n + '일 · ' + dateLabel(end) + ' 요한계시록까지</div>';
+    h += '<div class="small" style="margin-top:8px">' + dc + ' / ' + n + '일 · ' + dateLabel(end) + ' 요한계시록까지 · 하루 ' + YP.per() + '장' +
+      ' <button class="linkbtn" data-act="yp-edit">' + (ypEdit ? '닫기' : '✏️ 장 수') + '</button></div>';
+    if (ypEdit) h += ypAdjHtml();
     if (missed.length) h += '<button class="missbtn" data-act="read" data-date="y:' + missed[0] + '">밀린 날 ' + missed.length + '일 · ' + dateLabel(missed[0]) + ' 읽기 ›</button>';
     return h + '</div>';
   }
@@ -1270,9 +1280,8 @@
       '<input type="file" id="notesfile" accept=".json,application/json,text/plain" style="display:none">');
     var yy = YP.get();
     if (yy) h += sect('📅 따로 통독', '<div>' + dateLabel(YP.start()) + '부터 · 하루 ' + YP.per() + '장' + (yy.sun ? ' · 주일 쉼' : '') + ' · ' + dateLabel(YP.end()) + ' 요한계시록까지</div>' +
-      '<div class="small" style="margin:10px 0 4px">남은 장 수에 맞춰 바꾸기 (지난 날은 그대로)</div>' +
-      '<div style="display:flex;gap:8px;align-items:center"><select id="ypper2" class="sel2" style="flex:1">' + [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(function (k) { return '<option' + (k === YP.per() ? ' selected' : '') + '>' + k + '</option>'; }).join('') + '</select>' +
-      '<button class="readbtn" style="margin:0;flex:2" data-act="yp-rebase">내일부터 하루 이만큼</button></div>' +
+      '<div class="small" style="margin:10px 0 4px">장 수 바꾸기 — 장 수를 고르고 「오늘만」 또는 「내일부터 계속」 (지난 날은 그대로)</div>' +
+      ypAdjHtml() +
       '<div class="hint" style="text-align:left;margin-top:8px"><button class="linkbtn" data-act="yp-off">따로 통독 그만하기</button></div>');
     else {
       var tm = Core.addDays(state.today, 1), bo2 = Core.BOOKS.map(function (b, i) { return '<option value="' + i + '"' + (i === 57 ? ' selected' : '') + '>' + b[0] + '</option>'; }).join('');
@@ -1523,8 +1532,17 @@
       YP.set({ sun: document.getElementById('ypsun').checked, segs: [{ start: ys, from: Core.chapterIndex(Core.BOOKS[ybk][0], ych), per: yper }] });
       tab = 'today'; render(); window.scrollTo(0, 0); toast('📅 따로 통독 시작 · ' + dateLabel(ys) + '부터');
     }
+    else if (act === 'yp-edit') { ypEdit = !ypEdit; render(); }
+    else if (act === 'yp-today') {
+      // 오늘만 N장, 내일부터는 원래 장 수로 (2026-11-28 사장님: 오늘은 히브리서 6~9장 4장만)
+      var tp = +b.closest('.ypadj').querySelector('select').value, keep = YP.per(), td = state.today;
+      if (!YP.portion(td)) { toast('오늘은 따로 통독 날이 아니에요'); return; }
+      YP.rebase(td, tp); YP.rebase(Core.addDays(td, 1), keep);
+      var pt = YP.portion(td);
+      render(); toast('오늘 ' + (pt.to - pt.from + 1) + '장 · 내일부터 하루 ' + keep + '장 · ' + dateLabel(YP.end()) + ' 끝');
+    }
     else if (act === 'yp-rebase') {
-      var np = +document.getElementById('ypper2').value; YP.rebase(Core.addDays(state.today, 1), np);
+      var np = +b.closest('.ypadj').querySelector('select').value; YP.rebase(Core.addDays(state.today, 1), np);
       render(); toast('내일부터 하루 ' + np + '장 · ' + dateLabel(YP.end()) + ' 끝');
     }
     else if (act === 'yp-off') { if (confirm('따로 통독을 그만할까요? 이 기록은 지워져요.')) { YP.off(); render(); } }
